@@ -1,0 +1,7 @@
+/target
+.idea
+identifier.sqlite
+parts.txt
+res
+test.db
+pool
