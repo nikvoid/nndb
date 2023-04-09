@@ -100,15 +100,12 @@ pub fn scan_files() -> anyhow::Result<u32> {
         .collect();
 
     let elements: Vec<_> = files.into_par_iter()
-        .map(|(path, is_anim)| {
+        .map(|(path, is_anim)| -> anyhow::Result<ElementToParse> {
             let mut file = std::fs::File::open(&path)?;
 
+            // TODO: Handle animations differently
             let element = match is_anim {
-                true => {
-                    // TODO: Handle animations differently
-                    bail!("todo");
-                },
-                false => {
+                true | false => {
                     let mut data = vec![];
                     file.read_to_end(&mut data)?;
 

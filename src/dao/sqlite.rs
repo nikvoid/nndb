@@ -40,12 +40,11 @@ impl ConnectionExt for Transaction<'_> {
         })?;
 
         let imp_id: u8 = e.importer_id.into();
-        let sig = e.signature
-            .as_ref()
-            .map(|s| bytemuck::cast_slice(s));
-        
         import_stmt.execute((id, imp_id))?;
-        group_stmt.execute((id, sig))?;
+
+        if let Some(sig) = e.signature {
+            group_stmt.execute((id, bytemuck::cast_slice(&sig)))?;
+        }
         
         Ok(id as u32)
     }
