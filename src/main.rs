@@ -6,7 +6,7 @@ use std::io::Read;
 use anyhow::{Context, bail};
 use config::CONFIG;
 
-use crate::{import::ElementPrefab, service::Service, model::write::ElementToParse, dao::{STORAGE, ElementStorage}};
+use crate::{import::ElementPrefab, service::Service, dao::{STORAGE, ElementStorage}};
 
 mod model;
 mod dao;

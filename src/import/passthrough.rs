@@ -1,4 +1,4 @@
-use crate::{model::{write::ElementMetadata, read::PendingImport}, dao::StorageBackend};
+use crate::{model::{write::{ElementMetadata, ElementToParse}, read::PendingImport}, dao::StorageBackend};
 
 use super::{MetadataImporter, ElementPrefab};
 
@@ -6,11 +6,9 @@ use super::{MetadataImporter, ElementPrefab};
 pub struct Passthrough;
 
 impl MetadataImporter for Passthrough {
-    fn can_parse(&self, _: &ElementPrefab) -> Option<bool> {
-        Some(true)
-    }
+    fn can_parse(&self, _: &ElementPrefab) -> bool { true }
 
-    fn after_hash_hook(&self, _: &ElementPrefab, _: &StorageBackend) -> anyhow::Result<()> {
+    fn after_hash_hook(&self, _: &ElementToParse, _: u32, _: &StorageBackend) -> anyhow::Result<()> {
         Ok(())
     }
 

@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use crate::{dao::StorageBackend, model::{Md5Hash, write::ElementMetadata, read::PendingImport}};
+use crate::{dao::StorageBackend, model::{Md5Hash, write::{ElementMetadata, ElementToParse}, read::PendingImport}};
 use md5::{Digest, Md5};
 use num_enum::{FromPrimitive, IntoPrimitive};
 
@@ -20,16 +20,16 @@ pub enum Importer {
 impl Importer {
     /// Decide which importer to use with file
     pub fn scan(element: &ElementPrefab) -> Self  {
-        Self::Passthrough
+        [
+            Self::Passthrough,
+        ]
+        .into_iter()
+        .find(|imp| imp.get_singleton().can_parse(element))
+        // Passthrough always returns true
+        .unwrap()
     }
 
-    /// Check if importer can fetch metadata now
-    pub fn available(self) -> bool {
-        match self {
-            Importer::Passthrough => true,
-        }
-    }
-
+    /// Get singleton for chosen importer
     pub fn get_singleton(self) -> &'static dyn MetadataImporter {
         match self {
             Importer::Passthrough => &passthrough::Passthrough,
@@ -43,13 +43,12 @@ pub struct ElementPrefab {
     pub data: Vec<u8>,
 }
 
-
 pub trait MetadataImporter {
     /// Check if importer can get metadata for element
-    /// 
-    /// Return `Some(false)` if can, but not configured, `Some(true)` if can, 
-    /// `None` if cannot
-    fn can_parse(&self, element: &ElementPrefab) -> Option<bool>;
+    fn can_parse(&self, element: &ElementPrefab) -> bool;
+
+    /// Check if importer can fetch metadata now
+    fn available(&self) -> bool { true }
     
     /// Get hash based on file data or name
     fn derive_hash(
@@ -60,7 +59,7 @@ pub trait MetadataImporter {
     }
 
     /// Hook that will be called after element was hashed and inserted into DB
-    fn after_hash_hook(&self, element: &ElementPrefab, store: &StorageBackend) -> anyhow::Result<()>;
+    fn after_hash_hook(&self, element: &ElementToParse, id: u32, store: &StorageBackend) -> anyhow::Result<()>;
 
     /// Fetch metadata for pending import
     fn fetch_metadata(&self, element: PendingImport) -> anyhow::Result<ElementMetadata>;

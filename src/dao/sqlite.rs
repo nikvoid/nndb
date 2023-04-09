@@ -11,11 +11,12 @@ const SQLITE_UP: &str = include_str!("sqlite_up.sql");
 pub struct Sqlite(RefCell<Connection>);
 
 trait ConnectionExt {
-    fn add_element(&self, e: &ElementToParse) -> anyhow::Result<()>;
+    fn add_element(&self, e: &ElementToParse) -> anyhow::Result<u32>;
 }
 
 impl ConnectionExt for Transaction<'_> {
-    fn add_element(&self, e: &ElementToParse) -> anyhow::Result<()> {
+    /// Returns element id
+    fn add_element(&self, e: &ElementToParse) -> anyhow::Result<u32> {
         let mut el_stmt = self.prepare_cached( //sql
             "INSERT INTO element (filename, orig_name, hash, broken, animated)
             VALUES (:filename, :orig_name, :hash, :broken, :animated)"
@@ -44,8 +45,8 @@ impl ConnectionExt for Transaction<'_> {
         
         import_stmt.execute((id, imp_id))?;
         group_stmt.execute((id, sig))?;
-
-        Ok(())
+        
+        Ok(id as u32)
     }
 }
 
@@ -61,39 +62,47 @@ impl ElementStorage for Sqlite {
     /// Also moves element from it's original path to element pool
     fn add_elements(&self, elements: &[ElementToParse]) -> anyhow::Result<()> {
         let mut hashes = self.get_hashes()?;
-        let mut conn = self.0.borrow_mut();
         let mut o_path = PathBuf::from(&CONFIG.element_pool);
         for e in elements {
-            // Deduplication
-            match (hashes.contains(&e.hash), &CONFIG.testing_mode) {
-                (true, true) => continue,
-                (true, false) => {
-                    std::fs::remove_file(&e.path).ok();
-                },
-                _ => ()
-            };
+            let mut conn = self.0.borrow_mut(); 
+            let id: Option<u32>; 
+            {
+                // Deduplication
+                match (hashes.contains(&e.hash), &CONFIG.testing_mode) {
+                    (true, true) => continue,
+                    (true, false) => {
+                        std::fs::remove_file(&e.path).ok();
+                    },
+                    _ => ()
+                };
             
-            let tx = conn.transaction()?;
-            o_path.push(&e.filename);
-            {                
-                // log error
-                tx.add_element(&e).ok(); 
+                let tx = conn.transaction()?;
+                o_path.push(&e.filename);
+                {                
+                    // log error
+                    id = tx.add_element(&e).ok(); 
                 
-                // Move or copy elements
-                // TODO: log error
-                if CONFIG.testing_mode {
-                    std::fs::copy(&e.path, &o_path).map(|_| ())
-                } else {
-                    std::fs::rename(&e.path, &o_path)
-                }.ok();
+                    // Move or copy elements
+                    // TODO: log error
+                    if CONFIG.testing_mode {
+                        std::fs::copy(&e.path, &o_path).map(|_| ())
+                    } else {
+                        std::fs::rename(&e.path, &o_path)
+                    }.ok();
+                }
+                o_path.pop();
+                tx.commit()?;
+
+                // Add recently inserted hash
+                hashes.push(e.hash);
             }
-            o_path.pop();
-            tx.commit()?;
-
-            // Add recently inserted hash
-            hashes.push(e.hash);
+            if let Some(id) = id {
+                e.importer_id
+                    .get_singleton()
+                    .after_hash_hook(&e, id, self).ok();
+            }
         }
-
+ 
         Ok(())
     }
 
