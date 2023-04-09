@@ -20,7 +20,8 @@ pub trait ElementStorage {
     fn init(url: &str) -> Self;
 
     /// Add all elements from slice
-    fn add_elements(&self, elements: &[ElementToParse]) -> anyhow::Result<()>;
+    /// Returns count of new elements
+    fn add_elements(&self, elements: &[ElementToParse]) -> anyhow::Result<u32>;
 
     /// Get all files' hashes
     fn get_hashes(&self) -> anyhow::Result<Vec<Md5Hash>>;

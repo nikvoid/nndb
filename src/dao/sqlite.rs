@@ -1,6 +1,7 @@
 use std::{cell::RefCell, path::PathBuf};
 
 use rusqlite::{Connection, named_params, Transaction};
+use tracing::error;
 
 use crate::model::{write::ElementToParse, Md5Hash};
 
@@ -60,9 +61,11 @@ impl ElementStorage for Sqlite {
     /// Add all elements from slice.
     /// No changes will remain in DB on error.
     /// Also moves element from it's original path to element pool
-    fn add_elements(&self, elements: &[ElementToParse]) -> anyhow::Result<()> {
+    fn add_elements(&self, elements: &[ElementToParse]) -> anyhow::Result<u32> {
         let mut hashes = self.get_hashes()?;
         let mut o_path = PathBuf::from(&CONFIG.element_pool);
+        let mut count = 0;
+        
         for e in elements {
             let mut conn = self.0.borrow_mut(); 
             let id: Option<u32>; 
@@ -79,22 +82,30 @@ impl ElementStorage for Sqlite {
                 let tx = conn.transaction()?;
                 o_path.push(&e.filename);
                 {                
-                    // log error
-                    id = tx.add_element(&e).ok(); 
+                    id = match tx.add_element(&e) {
+                        Ok(id) => Some(id),
+                        Err(err) => {
+                            error!(?err, name=e.orig_filename, "failed to add element");
+                            None
+                        },
+                    }; 
                 
                     // Move or copy elements
-                    // TODO: log error
-                    if CONFIG.testing_mode {
+                    if let Err(err) = if CONFIG.testing_mode {
                         std::fs::copy(&e.path, &o_path).map(|_| ())
                     } else {
                         std::fs::rename(&e.path, &o_path)
-                    }.ok();
+                    } {
+                        error!(?err, name=e.orig_filename, "failed to move file"); 
+                    }; 
                 }
                 o_path.pop();
                 tx.commit()?;
 
                 // Add recently inserted hash
                 hashes.push(e.hash);
+
+                count += 1;
             }
             if let Some(id) = id {
                 e.importer_id
@@ -103,7 +114,7 @@ impl ElementStorage for Sqlite {
             }
         }
  
-        Ok(())
+        Ok(count)
     }
 
     fn get_hashes(&self) -> anyhow::Result<Vec<Md5Hash>> {
