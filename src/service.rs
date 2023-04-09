@@ -1,13 +1,14 @@
-use std::{fmt::Write, io::Read};
-use anyhow::{Context, bail};
+use std::{fmt::Write, io::Read, path::Path};
+use anyhow::Context;
 use rayon::prelude::*;
 use tracing::{error, info};
 use walkdir::WalkDir;
+use itertools::Itertools;
 
 use crate::{
     dao::{ElementStorage, STORAGE}, 
-    import::{ElementPrefab, Importer, ANIMATION_EXTS, IMAGE_EXTS}, 
-    model::{write::ElementToParse, SIGNATURE_LEN}, 
+    import::{ElementPrefab, Importer, ANIMATION_EXTS, IMAGE_EXTS, TAG_TRIGGER}, 
+    model::{write::{ElementToParse, self}, SIGNATURE_LEN}, 
     config::CONFIG
 };
 
@@ -68,6 +69,7 @@ pub fn hash_file(prefab: ElementPrefab) -> anyhow::Result<ElementToParse> {
     Ok(element)
 }
 
+/// Scan `CONFIG.input_folder` directory for new files and import them
 pub fn scan_files() -> anyhow::Result<u32> {
     let files: Vec<_> = WalkDir::new(&CONFIG.input_folder)
         .into_iter()
@@ -122,7 +124,7 @@ pub fn scan_files() -> anyhow::Result<u32> {
         }).collect();
 
     let elements: Vec<_> = elements
-        .into_iter()
+        .iter()
         .filter_map(|res| match res {
             Ok(r) => Some(r),
             Err(e) => {
@@ -142,3 +144,15 @@ pub fn scan_files() -> anyhow::Result<u32> {
     
     res
 }
+
+/// Extract tags from path
+pub fn get_tags_from_path(path: &Path) -> Vec<write::Tag> {
+    path.into_iter()
+        .map(|p| p.to_str())
+        .flatten()
+        .filter(|seg| seg.starts_with(TAG_TRIGGER))
+        .flat_map(|seg| seg.strip_prefix(TAG_TRIGGER).unwrap().split('.'))
+        .tuples()
+        .map(|(tag_type, tag)| write::Tag::new(tag, None, tag_type.parse().unwrap()))
+        .collect()
+} 

@@ -1,4 +1,7 @@
+use std::{str::FromStr, convert::Infallible};
+
 use chrono::{DateTime, Utc};
+use num_enum::{FromPrimitive, IntoPrimitive};
 
 pub const SIGNATURE_LEN: usize = 544;
 
@@ -24,11 +27,28 @@ pub struct AIMetadata {
 }
 
 /// Gelbooru-like types
+#[derive(Clone, Copy, FromPrimitive, IntoPrimitive)]
+#[repr(u8)]
 pub enum TagType {
     Reserved  = 0,
     Artist    = 1,
     Character = 2,
     Title     = 3,
     Metadata  = 4,
+    #[default]
     Tag       = 5,
+}
+
+impl FromStr for TagType {
+    type Err = Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "artist" => Self::Artist,
+            "character" => Self::Character,
+            "title" => Self::Title,
+            "metadata" => Self::Metadata,
+            _ => Self::Tag,
+        })
+    }
 }

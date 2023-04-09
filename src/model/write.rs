@@ -1,18 +1,58 @@
 use std::path::PathBuf;
 
+use once_cell::sync::Lazy;
+use regex::Regex;
+
 use crate::import::Importer;
 
 use super::*;
 
+static TAG_REX: Lazy<Regex> = Lazy::new(|| Regex::new(r"\s+").unwrap());
+
 /// Tag to write. Internal primary key is crc32 name hash 
 pub struct Tag {
     /// Primary name
-    pub name: String,
+    name: String,
     /// Alternative name
-    pub alt_name: Option<String>,
+    alt_name: Option<String>,
     /// Type of tag
-    pub tag_type: TagType,
+    tag_type: TagType,
 }
+
+impl Tag {
+    /// Create new tag with escaped name
+    pub fn new(name: &str, alt_name: Option<String>, tag_type: TagType) -> Self {
+        let name = TAG_REX.replace_all(name, "_").to_string();
+        Self {
+            name,
+            alt_name,
+            tag_type
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn alt_name(&self) -> Option<&str> {
+        self.alt_name.as_deref()
+    }
+    
+    pub fn tag_type(&self) -> TagType { 
+        self.tag_type 
+    }
+    
+    /// Get crc32 hash of name
+    pub fn name_hash(&self) -> u32 {
+        crc32fast::hash(self.name.as_bytes())
+    }
+}
+
+impl AsRef<Tag> for Tag {
+    fn as_ref(&self) -> &Tag {
+        self
+    }
+} 
 
 /// Element that waits for metadata parse/download
 #[derive(Debug)]
@@ -33,6 +73,12 @@ pub struct ElementToParse {
     pub signature: Option<Signature>,
     /// True if failed to read image
     pub broken: bool,
+}
+
+impl AsRef<ElementToParse> for ElementToParse {
+    fn as_ref(&self) -> &ElementToParse {
+        self
+    }
 }
 
 /// Element metadatas and tags

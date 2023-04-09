@@ -8,7 +8,6 @@ mod import;
 mod service;
 mod config; 
 
-/// Scan `CONFIG.input_folder` directory for new files and import them
 
 
 fn main() {

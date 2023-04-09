@@ -1,6 +1,6 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use crate::{dao::StorageBackend, model::{Md5Hash, write::{ElementMetadata, ElementToParse}, read::PendingImport}};
+use crate::model::{Md5Hash, write::ElementMetadata, read::PendingImport};
 use md5::{Digest, Md5};
 use num_enum::{FromPrimitive, IntoPrimitive};
 
@@ -8,6 +8,10 @@ mod passthrough;
 
 pub const IMAGE_EXTS: &[&str] = &["png", "jpeg", "jpg"];
 pub const ANIMATION_EXTS: &[&str] = &["mp4", "mov", "gif", "webm", "webp", "m4v", "avif"];
+
+/// Name directory as `TAG.<tag_type>.<tag_name>.<tag_type>.<tag_name>...`
+/// to add `<tag_name>...` to elements in this directory 
+pub const TAG_TRIGGER: &str = "TAG.";
 
 #[derive(FromPrimitive, IntoPrimitive, Clone, Copy, Debug)]
 #[repr(u8)]
@@ -57,9 +61,6 @@ pub trait MetadataImporter {
     ) -> Md5Hash {
         Md5::digest(&element.data).into()
     }
-
-    /// Hook that will be called after element was hashed and inserted into DB
-    fn after_hash_hook(&self, element: &ElementToParse, id: u32, store: &StorageBackend) -> anyhow::Result<()>;
 
     /// Fetch metadata for pending import
     fn fetch_metadata(&self, element: PendingImport) -> anyhow::Result<ElementMetadata>;
