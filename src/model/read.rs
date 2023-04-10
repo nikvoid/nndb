@@ -50,3 +50,4 @@ pub struct PendingImport {
     /// Hash of whole file
     pub hash: Md5Hash,
 }
+

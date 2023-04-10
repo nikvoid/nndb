@@ -12,6 +12,7 @@ pub type Signature = [i8; SIGNATURE_LEN];
 pub mod read;
 pub mod write;
 
+/// Generative Neural Network (SD primarily) metadata
 pub struct AIMetadata {
     pub positive_prompt: String,
     pub negative_prompt: Option<String>,
@@ -24,6 +25,16 @@ pub struct AIMetadata {
     pub seed: i64,
     pub strength: f32,
     pub noise: f32,
+}
+
+/// Metadata for element group
+pub struct GroupMetadata {
+    /// Id of the element
+    pub element_id: u32,
+    /// Image signature
+    pub signature: Signature,
+    /// Element group
+    pub group_id: Option<u32>,
 }
 
 /// Gelbooru-like types

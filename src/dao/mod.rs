@@ -4,7 +4,7 @@ use once_cell::sync::Lazy;
 pub use sqlite::Sqlite;
 use tokio::sync::Mutex;
 
-use crate::{config::CONFIG, model::{write::{ElementToParse, Tag, ElementMetadata}, Md5Hash, read::PendingImport}};
+use crate::{config::CONFIG, model::{write::{ElementToParse, Tag, ElementMetadata}, Md5Hash, read::PendingImport, Signature, GroupMetadata}};
 
 pub type StorageBackend = Sqlite;
 
@@ -37,4 +37,16 @@ pub trait ElementStorage {
     /// Add metadata for element -- and remove pending import
     fn add_metadata<M>(&self, element_id: u32, metadata: M) -> anyhow::Result<()>
     where M: AsRef<ElementMetadata>;
+
+    /// Get all image signature groups stored in db
+    fn get_groups(&self) -> anyhow::Result<Vec<GroupMetadata>>;
+
+    /// Add all elements to group (or create new group with them)
+    ///
+    /// Returns group id
+    fn add_to_group(
+        &self, 
+        element_ids: &[u32],
+        group: Option<u32>
+    ) -> anyhow::Result<u32>;
 }

@@ -7,7 +7,8 @@ use crate::import::Importer;
 
 use super::*;
 
-static TAG_REX: Lazy<Regex> = Lazy::new(|| Regex::new(r"\s+").unwrap());
+/// Tag excape regex
+static TAG_REX: Lazy<Regex> = Lazy::new(|| Regex::new(r"[\s:,.@#$*]+").unwrap());
 
 /// Tag to write. Internal primary key is crc32 name hash 
 pub struct Tag {

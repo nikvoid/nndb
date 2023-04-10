@@ -3,7 +3,7 @@ use std::{cell::RefCell, path::PathBuf};
 use rusqlite::{Connection, named_params, Transaction};
 use tracing::error;
 
-use crate::{model::{write::ElementToParse, Md5Hash}, service};
+use crate::{model::{write::ElementToParse, Md5Hash, GroupMetadata, SIGNATURE_LEN}, service};
 
 use super::*;
 
@@ -247,6 +247,52 @@ impl ElementStorage for Sqlite {
         drop(conn);
     
         Ok(())
+    }
+
+    fn get_groups(&self) -> anyhow::Result<Vec<GroupMetadata>> {
+        let res: Result<Vec<_>, _> = self.0.borrow()
+            .prepare("SELECT element_id, signature, group_id FROM group_metadata")?
+            .query_map([], |r| Ok(GroupMetadata {
+                element_id: r.get(0)?,
+                signature: {
+                    let blob: [u8; SIGNATURE_LEN] = r.get(1)?;
+                    let slice: &[i8] = bytemuck::cast_slice(&blob);
+                    slice.try_into().unwrap()
+                },
+                group_id: r.get(2)?,
+            }))?
+            .collect();
+        Ok(res?)
+    }
+
+    fn add_to_group(
+        &self, 
+        element_ids: &[u32],
+        group: Option<u32>
+    ) -> anyhow::Result<u32> {
+        let mut conn = self.0.borrow_mut();
+        let tx = conn.transaction()?;
+
+        // Create new group if needed
+        let group_id = match group {
+            None => tx.prepare_cached("INSERT INTO group_ids (id) VALUES (NULL)")?
+                .insert([])? as u32,
+            Some(id) => id,
+        };
+
+        {
+            let mut group_stmt = tx.prepare_cached(
+                "UPDATE group_metadata SET group_id = ? WHERE element_id = ?"
+            )?;
+            
+            for id in element_ids {
+                group_stmt.execute((group_id, id))?;
+            }
+        }
+
+        tx.commit()?;
+
+        Ok(group_id)
     }
 }
 

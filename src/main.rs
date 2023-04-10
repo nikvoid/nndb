@@ -22,4 +22,9 @@ async fn main() {
         .await
         .unwrap();
     info!("Updated metadata");
+    tokio::task::spawn_blocking(service::group_elements_by_signature)
+        .await
+        .unwrap()
+        .unwrap();
+    info!("Group images");
 }

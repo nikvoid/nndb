@@ -9,10 +9,14 @@ use itertools::Itertools;
 use crate::{
     dao::{ElementStorage, STORAGE}, 
     import::{ElementPrefab, Importer, ANIMATION_EXTS, IMAGE_EXTS, TAG_TRIGGER}, 
-    model::{write::{ElementToParse, self}, SIGNATURE_LEN}, 
+    model::{write::{ElementToParse, self}, SIGNATURE_LEN, Signature}, 
     config::CONFIG
 };
 
+/// Experimentaly decided optimal image signature distance 
+pub const SIGNATURE_DISTANCE_THRESHOLD: f32 = 0.35;
+
+/// TODO: Provide a way to parse metadata on this stage 
 pub fn hash_file(prefab: ElementPrefab) -> anyhow::Result<ElementToParse> {
     let importer_id = Importer::scan(&prefab);
     let importer = importer_id.get_singleton();
@@ -137,7 +141,7 @@ pub fn scan_files() -> anyhow::Result<u32> {
 
     let res = STORAGE.blocking_lock().add_elements(&elements);
 
-    // TODO: Move to outer fn
+    // TODO: Move to outer fn?
     match &res {
         Ok(count) => info!(?count, "added elements to db"),
         Err(e) => error!(?e, "failed to add elements"),
@@ -193,6 +197,85 @@ pub async fn update_metadata() -> anyhow::Result<()> {
 
     // Wait for all importers to finish
     while let Some(_) = groups.next().await {}
+    
+    Ok(())
+}
+
+/// Get distance between 2 signatures.
+/// Maximal(?) value is `100.00`
+fn get_sig_distance(sig1: &Signature, sig2: &Signature) -> f32 {
+    let sum: u32 = sig1.iter()
+        .zip(sig2)
+        .map(|(&ux, &vx)| (ux - vx).pow(2) as u32)
+        .sum();
+
+    (sum as f32).sqrt()
+}
+
+/// Group elements by their image signature
+pub fn group_elements_by_signature() -> anyhow::Result<()> {
+    // Get all signatures
+    let group_metas = STORAGE.blocking_lock().get_groups()?;
+
+    // Get elements without assigned group
+    let ungrouped = group_metas.iter()
+        .filter(|m| m.group_id.is_none())
+        .collect_vec();
+
+    /// Group registry
+    struct Groups(Vec<(u32, Vec<u32>)>);
+    impl Groups {
+        /// Add element to group (and create it if needed)
+        fn add(&mut self, group_id: u32, elem_id: u32) {
+            let grp = self.0.iter_mut().find(|g| g.0 == group_id);
+            match grp {
+                Some((_, v)) => v.push(elem_id),
+                None => self.0.push((group_id, vec![elem_id])),
+            }
+        }
+
+        /// Get group for element
+        fn get_group(&self, elem_id: u32) -> Option<u32> {
+            self.0.iter()
+                .find(|g| g.1.contains(&elem_id))
+                .map(|g| g.0)
+        }
+    }
+
+    let mut groups = Groups(vec![]);
+    
+    // Compare each signature with each other (except self)
+    for elem in &ungrouped {
+        for pot in &group_metas {
+            if elem.element_id != pot.element_id {
+                if get_sig_distance(
+                    &elem.signature,
+                    &pot.signature
+                ) < SIGNATURE_DISTANCE_THRESHOLD {
+                    let group_id = match pot.group_id {
+                        // Add to known group
+                        Some(g) => g,
+                        // Create new group
+                        None => match groups.get_group(pot.element_id) {
+                                // Get existing
+                                Some(id) => id,
+                                // Or create
+                                None => STORAGE.blocking_lock()
+                                    .add_to_group(&[pot.element_id, elem.element_id], None)?,
+                            }
+                    };
+                    groups.add(group_id, elem.element_id);
+                    groups.add(group_id, pot.element_id);
+                }
+            }
+        }
+    }
+
+    // Add remaining
+    let store = STORAGE.blocking_lock();
+    for (group_id, elem_ids) in groups.0 {
+        store.add_to_group(&elem_ids, Some(group_id))?;
+    }
     
     Ok(())
 }

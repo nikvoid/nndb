@@ -18,6 +18,13 @@ CREATE TABLE IF NOT EXISTS import (
     FOREIGN KEY (element_id) REFERENCES element (id) ON DELETE CASCADE ON UPDATE RESTRICT
 );
 
+CREATE TABLE IF NOT EXISTS group_ids (
+    id INTEGER PRIMARY KEY AUTOINCREMENT
+);
+
+-- TODO: is it better to make table for many-to-many joining similar elements?..
+-- pros: may reduce anomalies
+-- cons: may make grouping more strict (that is undesired...)
 -- table for element group metadata
 CREATE TABLE IF NOT EXISTS group_metadata (
     element_id   INTEGER PRIMARY KEY NOT NULL,
@@ -25,7 +32,8 @@ CREATE TABLE IF NOT EXISTS group_metadata (
     signature    BLOB NOT NULL,
     group_id     INTEGER,
 
-    FOREIGN KEY (element_id) REFERENCES element (id) ON DELETE CASCADE ON UPDATE RESTRICT
+    FOREIGN KEY (element_id) REFERENCES element   (id) ON DELETE CASCADE  ON UPDATE RESTRICT,
+    FOREIGN KEY (group_id)   REFERENCES group_ids (id) ON DELETE SET NULL ON UPDATE RESTRICT
 );
 
 -- Also a marker that element was processed
