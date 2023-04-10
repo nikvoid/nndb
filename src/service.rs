@@ -14,7 +14,7 @@ use crate::{
 };
 
 /// Experimentaly decided optimal image signature distance 
-pub const SIGNATURE_DISTANCE_THRESHOLD: f32 = 0.35;
+pub const SIGNATURE_DISTANCE_THRESHOLD: f32 = 35.0;
 
 /// TODO: Provide a way to parse metadata on this stage 
 pub fn hash_file(prefab: ElementPrefab) -> anyhow::Result<ElementToParse> {
