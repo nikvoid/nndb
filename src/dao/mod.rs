@@ -4,7 +4,7 @@ use once_cell::sync::Lazy;
 pub use sqlite::Sqlite;
 use tokio::sync::Mutex;
 
-use crate::{config::CONFIG, model::{write::{ElementToParse, Tag}, Md5Hash}};
+use crate::{config::CONFIG, model::{write::{ElementToParse, Tag, ElementMetadata}, Md5Hash, read::PendingImport}};
 
 pub type StorageBackend = Sqlite;
 
@@ -30,4 +30,11 @@ pub trait ElementStorage {
     /// Add all tags from slice
     fn add_tags<T>(&self, element_id: u32, tags: &[T]) -> anyhow::Result<()>
     where T: AsRef<Tag>;
+
+    /// Get all elements waiting on metadata
+    fn get_pending_imports(&self) -> anyhow::Result<Vec<PendingImport>>;
+
+    /// Add metadata for element -- and remove pending import
+    fn add_metadata<M>(&self, element_id: u32, metadata: M) -> anyhow::Result<()>
+    where M: AsRef<ElementMetadata>;
 }

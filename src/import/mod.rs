@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use crate::model::{Md5Hash, write::ElementMetadata, read::PendingImport};
+use async_trait::async_trait;
 use md5::{Digest, Md5};
 use num_enum::{FromPrimitive, IntoPrimitive};
 
@@ -13,7 +14,7 @@ pub const ANIMATION_EXTS: &[&str] = &["mp4", "mov", "gif", "webm", "webp", "m4v"
 /// to add `<tag_name>...` to elements in this directory 
 pub const TAG_TRIGGER: &str = "TAG.";
 
-#[derive(FromPrimitive, IntoPrimitive, Clone, Copy, Debug)]
+#[derive(FromPrimitive, IntoPrimitive, Clone, Copy, Debug, PartialEq)]
 #[repr(u8)]
 pub enum Importer {
     /// No specific metadata
@@ -47,6 +48,7 @@ pub struct ElementPrefab {
     pub data: Vec<u8>,
 }
 
+#[async_trait]
 pub trait MetadataImporter {
     /// Check if importer can get metadata for element
     fn can_parse(&self, element: &ElementPrefab) -> bool;
@@ -63,5 +65,8 @@ pub trait MetadataImporter {
     }
 
     /// Fetch metadata for pending import
-    fn fetch_metadata(&self, element: PendingImport) -> anyhow::Result<ElementMetadata>;
+    async fn fetch_metadata(
+        &self,
+        element: &PendingImport
+    ) -> anyhow::Result<ElementMetadata>;
 }

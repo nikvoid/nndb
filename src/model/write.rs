@@ -94,3 +94,9 @@ pub struct ElementMetadata {
     /// Tags of the element
     pub tags: Vec<Tag>,
 }  
+
+impl AsRef<ElementMetadata> for ElementMetadata {
+    fn as_ref(&self) -> &ElementMetadata {
+        self
+    }
+}

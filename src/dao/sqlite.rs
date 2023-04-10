@@ -181,5 +181,72 @@ impl ElementStorage for Sqlite {
         Ok(())
     }
 
+    /// Get elements without metadata, awaiting for import
+    /// Elements are ordered by importer_id
+    fn get_pending_imports(&self) -> anyhow::Result<Vec<PendingImport>> {
+        let v: Result<Vec<_>, _> = self.0.borrow().prepare( // sql
+            "SELECT e.id, i.importer_id, e.hash, e.orig_name
+            FROM element e, import i
+            WHERE e.id = i.element_id
+            ORDER BY i.importer_id ASC"
+        )?.query_map([], |r| Ok(PendingImport {
+            id: r.get(0)?,
+            importer_id: r.get::<_, u8>(1)?.into(),
+            orig_filename: r.get(3)?,
+            hash: r.get(2)?,
+        })
+        )?.collect();
+        
+        v.map_err(|e| e.into())
+    }
+
+    fn add_metadata<M>(&self, element_id: u32, metadata: M) -> anyhow::Result<()>
+    where M: AsRef<ElementMetadata> {
+        let m = metadata.as_ref();
+        
+        if !m.tags.is_empty() {
+            self.add_tags(element_id, &m.tags)?;
+        }
+        
+        let mut conn = self.0.borrow_mut();
+        let tx = conn.transaction()?;
+
+        {
+            tx.prepare_cached(
+                "DELETE FROM import WHERE element_id = ?"
+            )?.execute((element_id,))?;
+
+            tx.prepare_cached(
+                "INSERT INTO metadata (element_id, src_link, src_time, ext_group)
+                VALUES (?, ?, ?, ?)"
+            )?.execute((element_id, &m.src_link, m.src_time, m.group))?;
+
+            if let Some(ai) = &m.ai_meta {
+                tx.prepare_cached(
+                    "INSERT INTO ai_metadata 
+                    (element_id, positive_prompt, negative_prompt, steps, scale,
+                    sampler, seed, strength, noise)
+                    VALUES 
+                    (:element_id, :pos_prompt, :neg_prompt, :steps, :scale,
+                    :sampler, :seed, :strength, :noise)"
+                )?.execute(named_params! {
+                    ":element_id": element_id,
+                    ":pos_prompt": ai.positive_prompt,
+                    ":neg_prompt": ai.negative_prompt,
+                    ":steps": ai.steps,
+                    ":scale": ai.scale,
+                    ":sampler": ai.sampler,
+                    ":seed": ai.seed,
+                    ":strength": ai.strength,
+                    ":noise": ai.noise,
+                })?;
+            }
+        }
+        tx.commit()?;
+
+        drop(conn);
+    
+        Ok(())
+    }
 }
 

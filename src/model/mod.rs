@@ -20,8 +20,8 @@ pub struct AIMetadata {
     /// CFG scale
     pub scale: f32,
     pub sampler: String,
-    /// Not sure if u32 is sufficient
-    pub seed: u64,
+    /// Not sure if i32 is sufficient
+    pub seed: i64,
     pub strength: f32,
     pub noise: f32,
 }

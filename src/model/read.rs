@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use crate::import::Importer;
 
 use super::*;
 
@@ -39,11 +39,14 @@ pub struct Element {
 }   
 
 /// Element waiting for metadata download/parse
+#[derive(Debug)]
 pub struct PendingImport {
-    /// Full path to element
-    path: PathBuf,
+    /// Element id
+    pub id: u32, 
+    /// Importer assigned to element
+    pub importer_id: Importer,
     /// Name that file had before rename
-    orig_filename: String,
+    pub orig_filename: String,
     /// Hash of whole file
-    hash: Md5Hash,
+    pub hash: Md5Hash,
 }

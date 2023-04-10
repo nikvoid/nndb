@@ -1,5 +1,6 @@
 use std::{fmt::Write, io::Read, path::Path};
 use anyhow::Context;
+use futures::{stream::FuturesUnordered, StreamExt};
 use rayon::prelude::*;
 use tracing::{error, info};
 use walkdir::WalkDir;
@@ -156,3 +157,42 @@ pub fn get_tags_from_path(path: &Path) -> Vec<write::Tag> {
         .map(|(tag_type, tag)| write::Tag::new(tag, None, tag_type.parse().unwrap()))
         .collect()
 } 
+
+/// Fetch metadata for all pending imports
+pub async fn update_metadata() -> anyhow::Result<()> {
+    let imports = STORAGE
+        .lock()
+        .await
+        .get_pending_imports()?;
+
+    let mut groups: FuturesUnordered<_> = imports.iter()
+        .group_by(|imp| imp.importer_id)
+        .into_iter()
+        .map(|(_, group)| group.collect_vec())
+        .filter(|group| !group.is_empty())
+        // Run all importers concurrently 
+        .map(|group| async {
+            let importer = group.first().unwrap().importer_id.get_singleton();
+
+            for imp in group {
+                if importer.available() {
+                    match importer.fetch_metadata(&imp).await {
+                        Ok(meta) => match STORAGE
+                            .lock()
+                            .await
+                            .add_metadata(imp.id, meta) {
+                                Ok(_) => (),
+                                Err(e) => error!(?e, ?imp, "failed to add metadata"),
+                            }
+                        Err(e) => error!(?e, ?imp, "failed to fetch metadata"),
+                    }
+                }
+            }
+        })
+        .collect();
+
+    // Wait for all importers to finish
+    while let Some(_) = groups.next().await {}
+    
+    Ok(())
+}
