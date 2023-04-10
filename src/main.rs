@@ -5,6 +5,7 @@ mod dao;
 mod import;
 mod service;
 mod config; 
+mod util;
 
 #[tokio::main]
 async fn main() {

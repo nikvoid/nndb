@@ -4,7 +4,7 @@ use once_cell::sync::Lazy;
 pub use sqlite::Sqlite;
 use tokio::sync::Mutex;
 
-use crate::{config::CONFIG, model::{write::{ElementToParse, Tag, ElementMetadata}, Md5Hash, read::PendingImport, Signature, GroupMetadata}};
+use crate::{config::CONFIG, model::{write::{ElementToParse, Tag, ElementMetadata}, Md5Hash, read::PendingImport, GroupMetadata}};
 
 pub type StorageBackend = Sqlite;
 

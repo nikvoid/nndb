@@ -3,7 +3,7 @@ use std::{cell::RefCell, path::PathBuf};
 use rusqlite::{Connection, named_params, Transaction};
 use tracing::error;
 
-use crate::{model::{write::ElementToParse, Md5Hash, GroupMetadata, SIGNATURE_LEN}, service};
+use crate::{model::{write::ElementToParse, Md5Hash, GroupMetadata, SIGNATURE_LEN}, service, util};
 
 use super::*;
 
@@ -125,7 +125,7 @@ impl ElementStorage for Sqlite {
 
             // Add tags derived from path to file
             if let Some(id) = id {
-                let tags = service::get_tags_from_path(&e.path);
+                let tags = util::get_tags_from_path(&e.path);
                 if !tags.is_empty() {
                     self.add_tags(id, tags.as_slice())?;
                 }

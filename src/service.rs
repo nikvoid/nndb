@@ -1,5 +1,4 @@
-use std::{fmt::Write, io::Read, path::Path};
-use anyhow::Context;
+use std::io::Read;
 use futures::{stream::FuturesUnordered, StreamExt};
 use rayon::prelude::*;
 use tracing::{error, info};
@@ -8,71 +7,13 @@ use itertools::Itertools;
 
 use crate::{
     dao::{ElementStorage, STORAGE}, 
-    import::{ElementPrefab, Importer, ANIMATION_EXTS, IMAGE_EXTS, TAG_TRIGGER}, 
-    model::{write::{ElementToParse, self}, SIGNATURE_LEN, Signature}, 
-    config::CONFIG
+    import::{ElementPrefab, ANIMATION_EXTS, IMAGE_EXTS}, 
+    model::write::ElementToParse, 
+    config::CONFIG, util
 };
 
 /// Experimentaly decided optimal image signature distance 
 pub const SIGNATURE_DISTANCE_THRESHOLD: f32 = 35.0;
-
-/// TODO: Provide a way to parse metadata on this stage 
-pub fn hash_file(prefab: ElementPrefab) -> anyhow::Result<ElementToParse> {
-    let importer_id = Importer::scan(&prefab);
-    let importer = importer_id.get_singleton();
-
-    let hash = importer.derive_hash(&prefab);
-    
-    let mut new_name = String::with_capacity(48);
-
-    let filename = prefab.path.file_name()
-        .context("Expected filename")?
-        .to_str()
-        .context("Failed to convert filename")?;
-    
-    let ext = filename
-        .rsplit('.')
-        .next()
-        .context("Expected extension")?;
-
-    for byte in hash {
-        write!(new_name, "{byte:x}")?
-    }
-
-    new_name.push('.');
-    new_name.push_str(ext);
-
-    let animated = ANIMATION_EXTS.contains(&ext);   
-    let (signature, broken) = match animated {
-        false => 'blk: {
-            let mut sign = [0; SIGNATURE_LEN];
-            let img = image::load_from_memory(&prefab.data);
-            
-            if let Err(e) = img {
-                error!(?e, filename, "failed to load image");
-                break 'blk (None, true)
-            }
-            
-            let v = image_match::get_image_signature(img.unwrap());           
-            sign.clone_from_slice(&v);
-            (Some(sign), false)
-        },
-        true => (None, false),
-    };
-     
-    let element = ElementToParse {
-        filename: new_name,
-        orig_filename: filename.to_owned(),
-        hash,
-        importer_id,
-        animated,
-        signature,
-        broken,
-        path: prefab.path,
-    };
-    
-    Ok(element)
-}
 
 /// Scan `CONFIG.input_folder` directory for new files and import them
 pub fn scan_files() -> anyhow::Result<u32> {
@@ -121,7 +62,7 @@ pub fn scan_files() -> anyhow::Result<u32> {
                         data,
                     };
 
-                    hash_file(prefab)?
+                    util::hash_file(prefab)?
                 },
             };
 
@@ -150,17 +91,6 @@ pub fn scan_files() -> anyhow::Result<u32> {
     res
 }
 
-/// Extract tags from path
-pub fn get_tags_from_path(path: &Path) -> Vec<write::Tag> {
-    path.into_iter()
-        .map(|p| p.to_str())
-        .flatten()
-        .filter(|seg| seg.starts_with(TAG_TRIGGER))
-        .flat_map(|seg| seg.strip_prefix(TAG_TRIGGER).unwrap().split('.'))
-        .tuples()
-        .map(|(tag_type, tag)| write::Tag::new(tag, None, tag_type.parse().unwrap()))
-        .collect()
-} 
 
 /// Fetch metadata for all pending imports
 pub async fn update_metadata() -> anyhow::Result<()> {
@@ -201,17 +131,6 @@ pub async fn update_metadata() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Get distance between 2 signatures.
-/// Maximal(?) value is `100.00`
-fn get_sig_distance(sig1: &Signature, sig2: &Signature) -> f32 {
-    let sum: u32 = sig1.iter()
-        .zip(sig2)
-        .map(|(&ux, &vx)| (ux - vx).pow(2) as u32)
-        .sum();
-
-    (sum as f32).sqrt()
-}
-
 /// Group elements by their image signature
 pub fn group_elements_by_signature() -> anyhow::Result<()> {
     // Get all signatures
@@ -248,7 +167,7 @@ pub fn group_elements_by_signature() -> anyhow::Result<()> {
     for elem in &ungrouped {
         for pot in &group_metas {
             if elem.element_id != pot.element_id {
-                if get_sig_distance(
+                if util::get_sig_distance(
                     &elem.signature,
                     &pot.signature
                 ) < SIGNATURE_DISTANCE_THRESHOLD {
