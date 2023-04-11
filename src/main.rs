@@ -1,4 +1,9 @@
+use actix_files::Files;
+use actix_web::{HttpServer, App};
 use tracing::info;
+use tracing_actix_web::TracingLogger;
+
+use crate::config::CONFIG;
 
 mod model;
 mod dao;
@@ -6,26 +11,47 @@ mod import;
 mod service;
 mod config; 
 mod util;
+mod view;
 
-#[tokio::main]
-async fn main() {
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
     tracing_subscriber::fmt()
         .with_file(true)
         .with_line_number(true)
         .init();
-    info!("Starting service");
-    tokio::task::spawn_blocking(service::scan_files)
-        .await
-        .unwrap()
-        .unwrap();
-    info!("Scanned files");
-    service::update_metadata()
-        .await
-        .unwrap();
-    info!("Updated metadata");
-    tokio::task::spawn_blocking(service::group_elements_by_signature)
-        .await
-        .unwrap()
-        .unwrap();
-    info!("Group images");
+    info!(addr=CONFIG.bind_address, port=CONFIG.port, "Starting server");
+        
+    HttpServer::new(|| {
+        let mut app = App::new()
+            .wrap(TracingLogger::default())
+            .service(view::index_page)
+        ;
+
+        // Serve static folder if needed
+        app = match &CONFIG.static_folder {
+            Some(folder) => app.service(Files::new(&CONFIG.static_files_path, folder)),
+            None => app
+        };
+
+        app
+    })
+    .bind((CONFIG.bind_address.as_str(), CONFIG.port))?
+    .run()
+    .await
+    // info!("Starting service");
+    // tokio::task::spawn_blocking(service::scan_files)
+    //     .await
+    //     .unwrap()
+    //     .unwrap();
+    // info!("Scanned files");
+    // service::update_metadata()
+    //     .await
+    //     .unwrap();
+    // info!("Updated metadata");
+    // tokio::task::spawn_blocking(service::group_elements_by_signature)
+    //     .await
+    //     .unwrap()
+    //     .unwrap();
+    // info!("Group images");
+
 }

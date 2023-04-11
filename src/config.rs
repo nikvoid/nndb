@@ -10,6 +10,14 @@ pub struct Config {
     pub element_pool: String,
     /// Directory that will be scanned to find new element files
     pub input_folder: String,
+    /// URL Path to static files (must include trailing slash)
+    pub static_files_path: String,
+    /// IP address to bind server to
+    pub bind_address: String,
+    /// Server port
+    pub port: u16,
+    /// If Some, serve stati files from this folder
+    pub static_folder: Option<String>,
 }
 
 /// Global config
@@ -18,4 +26,8 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| Config {
     testing_mode: true,
     element_pool: "pool".to_string(),
     input_folder: "res".to_string(),
+    static_files_path: "/static/".to_string(),
+    bind_address: "127.0.0.1".to_string(),
+    port: 8080,
+    static_folder: Some("static".to_string()),
 });
