@@ -3,7 +3,7 @@ use std::{cell::RefCell, path::PathBuf};
 use rusqlite::{Connection, named_params, Transaction};
 use tracing::error;
 
-use crate::{model::{write::ElementToParse, Md5Hash, GroupMetadata, SIGNATURE_LEN}, service, util};
+use crate::{model::{Md5Hash, GroupMetadata, SIGNATURE_LEN}, util};
 
 use super::*;
 
@@ -12,26 +12,27 @@ const SQLITE_UP: &str = include_str!("sqlite_up.sql");
 pub struct Sqlite(RefCell<Connection>);
 
 trait ConnectionExt {
-    fn add_element(&self, e: &ElementToParse) -> anyhow::Result<u32>;
+    fn add_element(&self, e: &ElementWithMetadata) -> anyhow::Result<u32>;
 
     fn get_tags_hashes(&self) -> anyhow::Result<Vec<u32>>;
+    
+    fn add_tags<T>(&self, element_id: u32, tags: &[T]) -> anyhow::Result<()>
+    where T: AsRef<Tag>;
+    
+    fn add_metadata<M>(&self, element_id: u32, metadata: M) -> anyhow::Result<()>
+    where M: AsRef<ElementMetadata>;
 }
 
 impl ConnectionExt for Transaction<'_> {
     /// Returns element id
-    fn add_element(&self, e: &ElementToParse) -> anyhow::Result<u32> {
+    /// Inner method without RefCell overhead
+    fn add_element(&self, e: &ElementWithMetadata) -> anyhow::Result<u32> {
+        let ElementWithMetadata(e, m) = e; 
+        
         let mut el_stmt = self.prepare_cached( //sql
             "INSERT INTO element (filename, orig_name, hash, broken, animated)
             VALUES (:filename, :orig_name, :hash, :broken, :animated)"
         )?;
-
-        let mut import_stmt = self.prepare_cached(
-            "INSERT INTO import (element_id, importer_id) VALUES (?, ?)"
-        )?;
-
-        let mut group_stmt = self.prepare_cached(
-            "INSERT INTO group_metadata (element_id, signature) VALUES (?, ?)"
-        )?; 
 
         let id = el_stmt.insert(named_params! {
             ":filename": e.filename,
@@ -41,16 +42,34 @@ impl ConnectionExt for Transaction<'_> {
             ":animated": e.animated, 
         })?;
 
-        let imp_id: u8 = e.importer_id.into();
-        import_stmt.execute((id, imp_id))?;
+        match m {
+            // Add metadata right here
+            Some(meta) => {
+                self.add_metadata(id as u32, meta)?;
+            },
+            // Insert import row
+            None => {
+                let mut import_stmt = self.prepare_cached(
+                    "INSERT INTO import (element_id, importer_id) VALUES (?, ?)"
+                )?;
+                
+                let imp_id: u8 = e.importer_id.into();
+                import_stmt.execute((id, imp_id))?;
+            },
+        }
 
         if let Some(sig) = e.signature {
+            let mut group_stmt = self.prepare_cached(
+                "INSERT INTO group_metadata (element_id, signature) VALUES (?, ?)"
+            )?; 
+
             group_stmt.execute((id, bytemuck::cast_slice(&sig)))?;
         }
         
         Ok(id as u32)
     }
 
+    /// Inner method without RefCell overhead
     fn get_tags_hashes(&self) -> anyhow::Result<Vec<u32>> {
          let v = self
             .prepare("SELECT name_hash FROM tag")?
@@ -58,6 +77,81 @@ impl ConnectionExt for Transaction<'_> {
             .filter_map(|h| h.ok())
             .collect();
         Ok(v)
+    }
+
+    /// Inner method without RefCell overhead
+    fn add_tags<T>(&self, element_id: u32, tags: &[T]) -> anyhow::Result<()>
+    where T: AsRef<Tag> {
+        let hashes = self.get_tags_hashes()?;
+        let mut tag_stmt = self.prepare_cached( // sql
+            "INSERT INTO tag (name_hash, tag_name, alt_name, tag_type)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT (name_hash) DO NOTHING"
+        )?;
+
+        let mut join_stmt = self.prepare_cached( // sql 
+            "INSERT INTO element_tag (element_id, tag_hash)                 
+            VALUES (?, ?)
+            ON CONFLICT (element_id, tag_hash) DO NOTHING"
+        )?;
+        
+        for t in tags {
+            let t = t.as_ref();
+            let hash = t.name_hash();
+
+            // Insert if needed
+            if !hashes.contains(&hash) {
+                let typ: u8 = t.tag_type().into();
+                tag_stmt.execute((hash, t.name(), t.alt_name(), typ))?;
+                
+            }
+            
+            join_stmt.execute((element_id, hash))?;
+        }
+
+        Ok(())
+    }
+
+    /// Inner method without RefCell overhead
+    fn add_metadata<M>(&self, element_id: u32, metadata: M) -> anyhow::Result<()>
+    where M: AsRef<ElementMetadata> {
+        let m = metadata.as_ref();
+        
+        if !m.tags.is_empty() {
+            self.add_tags(element_id, &m.tags)?;
+        }
+
+        self.prepare_cached(
+            "DELETE FROM import WHERE element_id = ?"
+        )?.execute((element_id,))?;
+
+        self.prepare_cached(
+            "INSERT INTO metadata (element_id, src_link, src_time, ext_group)
+            VALUES (?, ?, ?, ?)"
+        )?.execute((element_id, &m.src_link, m.src_time, m.group))?;
+
+        if let Some(ai) = &m.ai_meta {
+            self.prepare_cached(
+                "INSERT INTO ai_metadata 
+                (element_id, positive_prompt, negative_prompt, steps, scale,
+                sampler, seed, strength, noise)
+                VALUES 
+                (:element_id, :pos_prompt, :neg_prompt, :steps, :scale,
+                :sampler, :seed, :strength, :noise)"
+            )?.execute(named_params! {
+                ":element_id": element_id,
+                ":pos_prompt": ai.positive_prompt,
+                ":neg_prompt": ai.negative_prompt,
+                ":steps": ai.steps,
+                ":scale": ai.scale,
+                ":sampler": ai.sampler,
+                ":seed": ai.seed,
+                ":strength": ai.strength,
+                ":noise": ai.noise,
+            })?;
+        }
+
+        Ok(())
     }
 }
 
@@ -72,13 +166,13 @@ impl ElementStorage for Sqlite {
     /// No changes will remain in DB on error.
     /// Also moves element from it's original path to element pool
     fn add_elements<E>(&self, elements: &[E]) -> anyhow::Result<u32>
-    where E: AsRef<ElementToParse> {
+    where E: AsRef<ElementWithMetadata> {
         let mut hashes = self.get_hashes()?;
         let mut o_path = PathBuf::from(&CONFIG.element_pool);
         let mut count = 0;
         
-        for e in elements {
-            let e = e.as_ref();
+        for elem in elements {
+            let ElementWithMetadata(e, _) = elem.as_ref();
             
             let mut conn = self.0.borrow_mut(); 
             let id: Option<u32>; 
@@ -95,7 +189,7 @@ impl ElementStorage for Sqlite {
             let tx = conn.transaction()?;
             o_path.push(&e.filename);
             {                
-                id = match tx.add_element(&e) {
+                id = match tx.add_element(elem.as_ref()) {
                     Ok(id) => Some(id),
                     Err(err) => {
                         error!(?err, name=e.orig_filename, "failed to add element");
@@ -112,6 +206,7 @@ impl ElementStorage for Sqlite {
                     error!(?err, name=e.orig_filename, "failed to move file"); 
                 }; 
             }
+            
             o_path.pop();
             tx.commit()?;
 
@@ -147,36 +242,8 @@ impl ElementStorage for Sqlite {
     fn add_tags<T>(&self, element_id: u32, tags: &[T]) -> anyhow::Result<()>
     where T: AsRef<Tag> {
         let mut conn = self.0.borrow_mut();
-        
         let tx = conn.transaction()?;
-        let hashes = tx.get_tags_hashes()?;
-        {
-            let mut tag_stmt = tx.prepare_cached( // sql
-                "INSERT INTO tag (name_hash, tag_name, alt_name, tag_type)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT (name_hash) DO NOTHING"
-            )?;
-
-            let mut join_stmt = tx.prepare_cached( // sql 
-                "INSERT INTO element_tag (element_id, tag_hash)                 
-                VALUES (?, ?)
-                ON CONFLICT (element_id, tag_hash) DO NOTHING"
-            )?;
-            
-            for t in tags {
-                let t = t.as_ref();
-                let hash = t.name_hash();
-
-                // Insert if needed
-                if !hashes.contains(&hash) {
-                    let typ: u8 = t.tag_type().into();
-                    tag_stmt.execute((hash, t.name(), t.alt_name(), typ))?;
-                    
-                }
-                
-                join_stmt.execute((element_id, hash))?;
-            }
-        } 
+        tx.add_tags(element_id, tags)?;
         tx.commit()?;
         Ok(())
     }
@@ -202,50 +269,10 @@ impl ElementStorage for Sqlite {
 
     fn add_metadata<M>(&self, element_id: u32, metadata: M) -> anyhow::Result<()>
     where M: AsRef<ElementMetadata> {
-        let m = metadata.as_ref();
-        
-        if !m.tags.is_empty() {
-            self.add_tags(element_id, &m.tags)?;
-        }
-        
         let mut conn = self.0.borrow_mut();
         let tx = conn.transaction()?;
-
-        {
-            tx.prepare_cached(
-                "DELETE FROM import WHERE element_id = ?"
-            )?.execute((element_id,))?;
-
-            tx.prepare_cached(
-                "INSERT INTO metadata (element_id, src_link, src_time, ext_group)
-                VALUES (?, ?, ?, ?)"
-            )?.execute((element_id, &m.src_link, m.src_time, m.group))?;
-
-            if let Some(ai) = &m.ai_meta {
-                tx.prepare_cached(
-                    "INSERT INTO ai_metadata 
-                    (element_id, positive_prompt, negative_prompt, steps, scale,
-                    sampler, seed, strength, noise)
-                    VALUES 
-                    (:element_id, :pos_prompt, :neg_prompt, :steps, :scale,
-                    :sampler, :seed, :strength, :noise)"
-                )?.execute(named_params! {
-                    ":element_id": element_id,
-                    ":pos_prompt": ai.positive_prompt,
-                    ":neg_prompt": ai.negative_prompt,
-                    ":steps": ai.steps,
-                    ":scale": ai.scale,
-                    ":sampler": ai.sampler,
-                    ":seed": ai.seed,
-                    ":strength": ai.strength,
-                    ":noise": ai.noise,
-                })?;
-            }
-        }
+        tx.add_metadata(element_id, metadata)?;
         tx.commit()?;
-
-        drop(conn);
-    
         Ok(())
     }
 

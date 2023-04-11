@@ -101,3 +101,10 @@ impl AsRef<ElementMetadata> for ElementMetadata {
         self
     }
 }
+
+pub struct ElementWithMetadata(pub ElementToParse, pub Option<ElementMetadata>); 
+impl AsRef<ElementWithMetadata> for ElementWithMetadata {
+    fn as_ref(&self) -> &ElementWithMetadata {
+        self
+    }
+}

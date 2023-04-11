@@ -3,7 +3,7 @@ use anyhow::Context;
 use tracing::error;
 use std::fmt::Write;
 use itertools::Itertools;
-use crate::{model::{Signature, write::{self, ElementToParse}, SIGNATURE_LEN}, import::{TAG_TRIGGER, ElementPrefab, Importer, ANIMATION_EXTS}};
+use crate::{model::{Signature, write::{self, ElementToParse, ElementWithMetadata}, SIGNATURE_LEN}, import::{TAG_TRIGGER, ElementPrefab, Importer, ANIMATION_EXTS}};
 
 
 /// Get distance between 2 signatures.
@@ -29,8 +29,8 @@ pub fn get_tags_from_path(path: &Path) -> Vec<write::Tag> {
         .collect()
 } 
 
-/// TODO: Provide a way to parse metadata on this stage 
-pub fn hash_file(prefab: ElementPrefab) -> anyhow::Result<ElementToParse> {
+/// Derive file hash, signature, and, if possible, metadata
+pub fn hash_file(prefab: ElementPrefab) -> anyhow::Result<ElementWithMetadata> {
     let importer_id = Importer::scan(&prefab);
     let importer = importer_id.get_singleton();
 
@@ -72,6 +72,11 @@ pub fn hash_file(prefab: ElementPrefab) -> anyhow::Result<ElementToParse> {
         },
         true => (None, false),
     };
+
+    let metadata = match importer.can_parse_in_place() {
+        true => Some(importer.parse_metadata(&prefab)?),
+        false => None,
+    };
      
     let element = ElementToParse {
         filename: new_name,
@@ -84,5 +89,5 @@ pub fn hash_file(prefab: ElementPrefab) -> anyhow::Result<ElementToParse> {
         path: prefab.path,
     };
     
-    Ok(element)
+    Ok(ElementWithMetadata(element, metadata))
 }

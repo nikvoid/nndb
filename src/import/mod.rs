@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use crate::model::{Md5Hash, write::ElementMetadata, read::PendingImport};
+use anyhow::bail;
 use async_trait::async_trait;
 use md5::{Digest, Md5};
 use num_enum::{FromPrimitive, IntoPrimitive};
@@ -64,7 +65,16 @@ pub trait MetadataImporter {
         Md5::digest(&element.data).into()
     }
 
-    /// Fetch metadata for pending import
+    /// Check if importer can parse file on hash deriving stage
+    fn can_parse_in_place(&self) -> bool;
+
+    /// Parse metadata on hash deriving stage, provided access to file data
+    fn parse_metadata(
+        &self, 
+        element: &ElementPrefab
+    ) -> anyhow::Result<ElementMetadata>;
+
+    /// Fetch metadata for pending import (network access implied)
     async fn fetch_metadata(
         &self,
         element: &PendingImport

@@ -1,3 +1,4 @@
+use anyhow::bail;
 use async_trait::async_trait;
 
 
@@ -12,11 +13,12 @@ pub struct Passthrough;
 impl MetadataImporter for Passthrough {
     fn can_parse(&self, _: &ElementPrefab) -> bool { true }
 
-    async fn fetch_metadata(
-        &self,
-        _: &PendingImport
+    fn can_parse_in_place(&self) -> bool { true }
+    
+    fn parse_metadata(
+        &self, 
+        _: &ElementPrefab
     ) -> anyhow::Result<ElementMetadata> {
-        
         Ok(ElementMetadata {
             src_link: None,
             src_time: None,
@@ -24,5 +26,12 @@ impl MetadataImporter for Passthrough {
             group: None,
             tags: vec![Tag::new("unknown_source", None, TagType::Metadata)],
         })
+    }
+    
+    async fn fetch_metadata(
+        &self,
+        _: &PendingImport
+    ) -> anyhow::Result<ElementMetadata> {
+        bail!("unimplemented")
     }
 }

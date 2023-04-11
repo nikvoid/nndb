@@ -8,7 +8,7 @@ use itertools::Itertools;
 use crate::{
     dao::{ElementStorage, STORAGE}, 
     import::{ElementPrefab, ANIMATION_EXTS, IMAGE_EXTS}, 
-    model::write::ElementToParse, 
+    model::write::ElementWithMetadata, 
     config::CONFIG, util
 };
 
@@ -48,7 +48,7 @@ pub fn scan_files() -> anyhow::Result<u32> {
         .collect();
 
     let elements: Vec<_> = files.into_par_iter()
-        .map(|(path, is_anim)| -> anyhow::Result<ElementToParse> {
+        .map(|(path, is_anim)| -> anyhow::Result<ElementWithMetadata> {
             let mut file = std::fs::File::open(&path)?;
 
             // TODO: Handle animations differently

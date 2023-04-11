@@ -4,7 +4,7 @@ use once_cell::sync::Lazy;
 pub use sqlite::Sqlite;
 use tokio::sync::Mutex;
 
-use crate::{config::CONFIG, model::{write::{ElementToParse, Tag, ElementMetadata}, Md5Hash, read::PendingImport, GroupMetadata}};
+use crate::{config::CONFIG, model::{write::{Tag, ElementMetadata, ElementWithMetadata}, Md5Hash, read::PendingImport, GroupMetadata}};
 
 pub type StorageBackend = Sqlite;
 
@@ -19,10 +19,10 @@ pub trait ElementStorage {
     /// Connect to url and init storage
     fn init(url: &str) -> Self;
 
-    /// Add all elements from slice
+    /// Add all elements from slice (optionally with metadata)
     /// Returns count of new elements
     fn add_elements<E>(&self, elements: &[E]) -> anyhow::Result<u32>
-    where E: AsRef<ElementToParse>;
+    where E: AsRef<ElementWithMetadata>;
 
     /// Get all files' hashes
     fn get_hashes(&self) -> anyhow::Result<Vec<Md5Hash>>;
