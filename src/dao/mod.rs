@@ -4,7 +4,7 @@ use once_cell::sync::Lazy;
 pub use sqlite::Sqlite;
 use tokio::sync::Mutex;
 
-use crate::{config::CONFIG, model::{write::{Tag, ElementMetadata, ElementWithMetadata}, Md5Hash, read::PendingImport, GroupMetadata}};
+use crate::{config::CONFIG, model::{write::{Tag, ElementMetadata, ElementWithMetadata}, Md5Hash, read::{PendingImport, self}, GroupMetadata}};
 
 pub type StorageBackend = Sqlite;
 
@@ -49,4 +49,12 @@ pub trait ElementStorage {
         element_ids: &[u32],
         group: Option<u32>
     ) -> anyhow::Result<u32>;
+
+    /// TODO: Add tag search capabilities
+    /// Fetch elements from db, with offset and limit
+    fn get_elements(
+        &self, 
+        offset: u32, 
+        limit: u32
+    ) -> anyhow::Result<Vec<read::Element>>;
 }

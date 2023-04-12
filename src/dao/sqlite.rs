@@ -321,5 +321,35 @@ impl ElementStorage for Sqlite {
 
         Ok(group_id)
     }
+
+    fn get_elements(
+        &self, 
+        offset: u32, 
+        limit: u32
+    ) -> anyhow::Result<Vec<read::Element>> {
+        // Fail if one of elements failed to fetch
+        let v: Result<Vec<_>, _> = self.0.borrow().prepare( // sql
+            "SELECT 
+            e.id, e.filename, e.orig_name, e.broken, e.has_thumb, e.animated,
+            g.group_id,
+            m.ext_group
+            FROM element e, group_metadata g, metadata m
+            WHERE e.id = g.element_id AND e.id = m.element_id
+            ORDER BY e.add_time DESC
+            LIMIT ? OFFSET ?"
+        )?.query_map((limit, offset), |r| Ok(read::Element {
+            id: r.get(0)?,
+            filename: r.get(1)?,
+            orig_filename: r.get(2)?,
+            broken: r.get(3)?,
+            has_thumb: r.get(4)?,
+            animated: r.get(5)?,
+            group_id: r.get(6)?,
+            group: r.get(7)?,
+        }))?    
+        .collect();
+
+        Ok(v?)
+    }
 }
 

@@ -21,6 +21,21 @@ async fn main() -> std::io::Result<()> {
         .init();
     info!(addr=CONFIG.bind_address, port=CONFIG.port, "Starting server");
         
+    tokio::task::spawn_blocking(service::scan_files)
+        .await
+        .unwrap()
+        .unwrap();
+    info!("Scanned files");
+    service::update_metadata()
+        .await
+        .unwrap();
+    info!("Updated metadata");
+    tokio::task::spawn_blocking(service::group_elements_by_signature)
+        .await
+        .unwrap()
+        .unwrap();
+    info!("Group images");
+
     HttpServer::new(|| {
         let mut app = App::new()
             .wrap(TracingLogger::default())
@@ -29,7 +44,9 @@ async fn main() -> std::io::Result<()> {
 
         // Serve static folder if needed
         app = match &CONFIG.static_folder {
-            Some(folder) => app.service(Files::new(&CONFIG.static_files_path, folder)),
+            Some(folder) => app
+                .service(Files::new(&CONFIG.static_files_path, folder))
+                .service(Files::new(&CONFIG.elements_path, &CONFIG.element_pool)),
             None => app
         };
 
@@ -38,20 +55,4 @@ async fn main() -> std::io::Result<()> {
     .bind((CONFIG.bind_address.as_str(), CONFIG.port))?
     .run()
     .await
-    // info!("Starting service");
-    // tokio::task::spawn_blocking(service::scan_files)
-    //     .await
-    //     .unwrap()
-    //     .unwrap();
-    // info!("Scanned files");
-    // service::update_metadata()
-    //     .await
-    //     .unwrap();
-    // info!("Updated metadata");
-    // tokio::task::spawn_blocking(service::group_elements_by_signature)
-    //     .await
-    //     .unwrap()
-    //     .unwrap();
-    // info!("Group images");
-
 }
