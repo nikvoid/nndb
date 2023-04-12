@@ -1,5 +1,5 @@
 use actix_files::Files;
-use actix_web::{HttpServer, App};
+use actix_web::{HttpServer, App, web::redirect};
 use tracing::info;
 use tracing_actix_web::TracingLogger;
 
@@ -39,6 +39,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(|| {
         let mut app = App::new()
             .wrap(TracingLogger::default())
+            .service(redirect("/", "/index"))
             .service(view::index_page)
         ;
 

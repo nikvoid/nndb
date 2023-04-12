@@ -113,6 +113,7 @@ where
     }
 }
 
+
 /// Base template for any other page
 #[derive(Default)]
 struct BaseContainer<'a> {
@@ -138,7 +139,7 @@ impl<'a> Render for BaseContainer<'a> {
                     #upnav {
                         span.head-span { (Button(resolve!(index), "Index")) }
                         span.head-span {
-                            form autocomplete="off" action=(resolve!(index)) method="get" {
+                            form autocomplete="off" action=(resolve!(/index)) method="get" {
                                 input #search-box type="text" 
                                     name="query" value=(self.query)
                                     // TODO: Enable scripts
@@ -156,7 +157,7 @@ impl<'a> Render for BaseContainer<'a> {
                 }
                 footer {
                     .footer-container {
-                        (Button(resolve!(admin), "Administration"))
+                        (Button(resolve!(/admin), "Administration"))
                     }
                     @if let Some(f) = &self.footer { (f) }
                 }

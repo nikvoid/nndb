@@ -51,10 +51,11 @@ pub trait ElementStorage {
     ) -> anyhow::Result<u32>;
 
     /// TODO: Add tag search capabilities
-    /// Fetch elements from db, with offset and limit
+    /// Fetch elements from db, with offset and limit.
+    /// Returns `(elements, count_in_db)`
     fn get_elements(
         &self, 
         offset: u32, 
         limit: u32
-    ) -> anyhow::Result<Vec<read::Element>>;
+    ) -> anyhow::Result<(Vec<read::Element>, u32)>;
 }

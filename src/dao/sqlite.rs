@@ -326,9 +326,11 @@ impl ElementStorage for Sqlite {
         &self, 
         offset: u32, 
         limit: u32
-    ) -> anyhow::Result<Vec<read::Element>> {
+    ) -> anyhow::Result<(Vec<read::Element>, u32)> {
+        let conn = self.0.borrow();
+        
         // Fail if one of elements failed to fetch
-        let v: Result<Vec<_>, _> = self.0.borrow().prepare( // sql
+        let v: Result<Vec<_>, _> = conn.prepare( // sql
             "SELECT 
             e.id, e.filename, e.orig_name, e.broken, e.has_thumb, e.animated,
             g.group_id,
@@ -349,7 +351,12 @@ impl ElementStorage for Sqlite {
         }))?    
         .collect();
 
-        Ok(v?)
+        let count: u32 = conn.query_row(
+            "SELECT count(id) FROM element", 
+            [], |r| r.get(0)
+        )?;
+
+        Ok((v?, count))
     }
 }
 
