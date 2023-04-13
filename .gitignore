@@ -7,3 +7,4 @@ test.db
 pool
 helix.txt
 _res
+static/script.js

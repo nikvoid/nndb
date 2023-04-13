@@ -4,6 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[build-dependencies]
+swc_common = { version = "0.31.1", features = ["tty-emitter"] }
+swc_ecma_codegen = "0.138.5"
+swc_ecma_parser = "0.133.4"
+swc_ecma_transforms_base = "0.126.5"
+swc_ecma_transforms_typescript = "0.176.6"
+swc_ecma_visit = "0.89.1"
 
 [dependencies]
 actix-files = "0.6.2"

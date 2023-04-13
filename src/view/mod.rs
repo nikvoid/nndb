@@ -78,7 +78,7 @@ impl Render for HtmlHead {
                 head {
                     meta charset="UTF-8";
                     link rel="stylesheet" href=(Static("styles.css"));
-                    // script
+                    script src=(Static("script.js")) {}
                     title { "nndb" }
                 }
             }
@@ -101,6 +101,7 @@ where
     }
 }
 
+/// Compose link from url and get query
 struct Link<Url, QueryS>(Url, QueryS);
 impl<Url, QueryS> Render for Link<Url, QueryS> 
 where 
@@ -145,7 +146,7 @@ impl<'a> Render for BaseContainer<'a> {
                                     // TODO: Enable scripts
                                     onKeyUp=""; 
                                 input type="submit" value="Search";
-                                div.result #head-result hidden {}
+                                .result #head-result hidden {}
                             } 
                             @if let Some(h) = &self.after_header { (h) };
                         }
