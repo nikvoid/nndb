@@ -1,6 +1,7 @@
 use std::{str::FromStr, convert::Infallible};
 
 use chrono::{DateTime, Utc};
+use enum_iterator::Sequence;
 use num_enum::{FromPrimitive, IntoPrimitive};
 
 pub const SIGNATURE_LEN: usize = 544;
@@ -38,7 +39,7 @@ pub struct GroupMetadata {
 }
 
 /// Gelbooru-like types
-#[derive(Clone, Copy, FromPrimitive, IntoPrimitive)]
+#[derive(Clone, Copy, FromPrimitive, IntoPrimitive, Sequence, PartialEq)]
 #[repr(u8)]
 pub enum TagType {
     Reserved  = 0,
@@ -48,6 +49,20 @@ pub enum TagType {
     Metadata  = 4,
     #[default]
     Tag       = 5,
+}
+
+impl TagType {
+    /// Get name of tag type
+    pub fn label(self) -> &'static str {
+        match self {
+            TagType::Reserved => "service",
+            TagType::Artist => "artist",
+            TagType::Character => "character",
+            TagType::Title => "title",
+            TagType::Metadata => "metadata",
+            TagType::Tag => "tag",
+        }
+    }
 }
 
 impl FromStr for TagType {

@@ -1,9 +1,11 @@
 use maud::{Render, html, DOCTYPE, Markup, html_to};
 use serde::Serialize;
+use enum_iterator::all;
 
-use crate::config::CONFIG;
+use crate::{config::CONFIG, model::{read::Tag, TagType}};
 
 mod index;
+
 
 /// Wrapper for ergonomic interfacing serde_qs with maud
 /// # Panics
@@ -101,7 +103,7 @@ where
     }
 }
 
-/// Compose link from url and get query
+/// Compose link from url and GET query
 struct Link<Url, QueryS>(Url, QueryS);
 impl<Url, QueryS> Render for Link<Url, QueryS> 
 where 
@@ -150,10 +152,10 @@ impl<'a> Render for BaseContainer<'a> {
                             } 
                             @if let Some(h) = &self.after_header { (h) };
                         }
-                        @if let Some(cont) = &self.content { (cont) };
-                        section.aside {
-                            @if let Some(aside) = &self.aside { (aside) }
-                        }                        
+                    }
+                    @if let Some(cont) = &self.content { (cont) };
+                    section.aside {
+                        @if let Some(aside) = &self.aside { (aside) }
                     }
                 }
                 footer {
@@ -167,3 +169,31 @@ impl<'a> Render for BaseContainer<'a> {
     }
 }
 
+/// Block with tags aside of element list/element page
+struct AsideTags<'a>(&'a [Tag]);
+impl Render for AsideTags<'_> {
+    fn render_to(&self, buffer: &mut String) {
+        // Group tags by types (create iterator for each non-empty type)
+        let types = all::<TagType>()
+            .map(|typ| (typ, self.0.iter().filter(move |t| t.tag_type == typ)))
+            .filter(|(_, iter)| iter.clone().next().is_some())
+        ;
+        
+        html_to! { buffer,
+            @for (typ, tags) in types {
+                .tag { (typ.label()) }
+                @for tag in tags {
+                    .tag-container-grid {
+                        a.tag.tag-hash href=(resolve!(/tag/t.name)) { "#" }
+                        a.tag.tag-block href=(Link(resolve!(/index), index::Request {
+                            query: Some(&tag.name),
+                            page: None
+                        })) {
+                            (tag.name) " " (tag.count)
+                        }
+                    }
+                }
+            } 
+        }
+    }
+}

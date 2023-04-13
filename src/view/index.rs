@@ -4,12 +4,16 @@ use crate::{dao::{STORAGE, ElementStorage}, resolve};
 
 use super::*;
 
-use actix_web::{Responder, get, web};
+use actix_web::{Responder, get, web, error::ErrorInternalServerError};
 use maud::html;
 use serde::{Deserialize, Serialize};
+use tracing::error;
 
 const ELEMENTS_ON_PAGE: u32 = 50;
 const PAGES_LOOKAROUND: u32 = 5;
+/// Count of tags for element selection, that will be shown 
+/// in [AsideTags] 
+const SELECTION_TAGS_COUNT: u32 = 50;
 
 /// Get range of pages (buttons) to display
 fn get_pages(max_page: u32, current: u32) -> RangeInclusive<u32> {
@@ -41,8 +45,8 @@ impl Render for PageButtons<'_> {
 // Get request for index (element list) page
 #[derive(Serialize, Deserialize)]
 pub struct Request<S> where S: AsRef<str> {
-    query: Option<S>,
-    page: Option<u32>,
+    pub query: Option<S>,
+    pub page: Option<u32>,
 }
 
 #[get("/index")]
@@ -52,14 +56,29 @@ pub async fn index_page(query: web::Query<Request<String>>) -> impl Responder {
         None => 1
     };
 
-    let offset = (page - 1) * ELEMENTS_ON_PAGE;
-    let (elements, count) = STORAGE.lock()
-        .await
-        .get_elements(offset, ELEMENTS_ON_PAGE)
-        .unwrap();
-    let maxpage = (count / ELEMENTS_ON_PAGE) + 1;
+    let query_str = match &query.0.query {
+        Some(q) => q,
+        None => ""
+    };
 
-    BaseContainer {
+    let offset = (page - 1) * ELEMENTS_ON_PAGE;
+    let (elements, tags, count) = match STORAGE.lock()
+        .await
+        .search_elements(
+            query_str,
+            offset, 
+            ELEMENTS_ON_PAGE, 
+            SELECTION_TAGS_COUNT
+        ) {
+            Ok(out) => out,
+            Err(e) => {
+                error!(?e, "failed to perform search");
+                return Err(ErrorInternalServerError("failed to perform search"))
+            }
+        };
+    let maxpage = (count / ELEMENTS_ON_PAGE) + 1;
+    
+    let answ = BaseContainer {
         content: Some(html! {
             (PageButtons(maxpage, page, query.0.query.as_deref()))
             .index-main {
@@ -80,6 +99,10 @@ pub async fn index_page(query: web::Query<Request<String>>) -> impl Responder {
             }
             (PageButtons(maxpage, page, query.0.query.as_deref()))
         }),
+        aside: Some(AsideTags(&tags).render()),
+        query: query_str, 
         ..Default::default()
-    }.render()
+    }.render();
+
+    Ok(answ)
 }

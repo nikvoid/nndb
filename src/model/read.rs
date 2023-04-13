@@ -7,10 +7,12 @@ pub struct Tag {
     pub name: String,
     /// Alternative name
     pub alt_name: Option<String>,
+    /// Tag type
+    pub tag_type: TagType,
     /// Count of elements with this tag
     pub count: u32,
     /// Group id of similar tags/aliases
-    pub group_id: u32,
+    pub group_id: Option<u32>,
 }
 
 pub struct Element {

@@ -1,6 +1,7 @@
-use std::{cell::RefCell, path::PathBuf};
+use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
-use rusqlite::{Connection, named_params, Transaction};
+use itertools::Itertools;
+use rusqlite::{Connection, named_params, Transaction, types::Value, vtab};
 use tracing::error;
 
 use crate::{model::{Md5Hash, GroupMetadata, SIGNATURE_LEN}, util};
@@ -158,6 +159,7 @@ impl ConnectionExt for Transaction<'_> {
 impl ElementStorage for Sqlite {
     fn init(url: &str) -> Self {
         let conn = Connection::open(url).unwrap();
+        vtab::array::load_module(&conn).unwrap();
         conn.execute_batch(SQLITE_UP).unwrap();
         Self(RefCell::new(conn))
     }
@@ -322,24 +324,39 @@ impl ElementStorage for Sqlite {
         Ok(group_id)
     }
 
-    fn get_elements(
+    /// TODO: Add tag search capabilities
+    fn search_elements<Q>(
         &self, 
+        query: Q,
         offset: u32, 
-        limit: u32
-    ) -> anyhow::Result<(Vec<read::Element>, u32)> {
+        limit: u32,
+        tag_limit: u32,
+    ) -> anyhow::Result<(Vec<read::Element>, Vec<read::Tag>, u32)>
+    where Q: AsRef<str> {
+        let start = std::time::Instant::now();
+        
         let conn = self.0.borrow();
+
+        // Map ids to Rc<Vec<Value::Integer>> to use them in rarray()
+        let ids: Result<Vec<_>, _> = conn.prepare_cached(
+            // TODO: Where clause
+            "SELECT id FROM element"
+        )?.query_map([], |r| Ok(Value::Integer(r.get(0)?)))?
+        .collect();
+        let ids = Rc::new(ids?);
         
         // Fail if one of elements failed to fetch
-        let v: Result<Vec<_>, _> = conn.prepare( // sql
+        let elems: Result<Vec<_>, _> = conn.prepare_cached( // sql
             "SELECT 
             e.id, e.filename, e.orig_name, e.broken, e.has_thumb, e.animated,
             g.group_id,
             m.ext_group
             FROM element e, group_metadata g, metadata m
             WHERE e.id = g.element_id AND e.id = m.element_id
+                AND e.id in rarray(?)
             ORDER BY e.add_time DESC
             LIMIT ? OFFSET ?"
-        )?.query_map((limit, offset), |r| Ok(read::Element {
+        )?.query_map((&ids, limit, offset), |r| Ok(read::Element {
             id: r.get(0)?,
             filename: r.get(1)?,
             orig_filename: r.get(2)?,
@@ -351,12 +368,34 @@ impl ElementStorage for Sqlite {
         }))?    
         .collect();
 
-        let count: u32 = conn.query_row(
-            "SELECT count(id) FROM element", 
-            [], |r| r.get(0)
-        )?;
+        let elems = elems?;
 
-        Ok((v?, count))
+        let tags: Result<Vec<_>, _> = conn.prepare_cached( // sql
+            "SELECT t.tag_name, t.alt_name, t.tag_type, t.group_id,
+            (
+                SELECT count(et.element_id) FROM element_tag et
+                WHERE et.tag_hash = t.name_hash    
+            ) as tag_count
+            FROM tag t
+            WHERE t.hidden = 0 AND t.name_hash IN (
+                SELECT tag_hash FROM element_tag
+                WHERE element_id in rarray(?) 
+            )
+            ORDER BY tag_count DESC
+            LIMIT ?"
+        )?.query_map((&ids, tag_limit,), |r| Ok(read::Tag {
+            name: r.get(0)?,
+            alt_name: r.get(1)?,
+            tag_type: {
+                let raw: u8 = r.get(2)?;       
+                raw.into()
+            },
+            group_id: r.get(3)?,
+            count: r.get(4)?,
+        }))?
+        .collect();
+            
+        Ok((elems, tags?, ids.len() as u32))
     }
 }
 

@@ -34,7 +34,7 @@ async fn main() -> std::io::Result<()> {
         .await
         .unwrap()
         .unwrap();
-    info!("Group images");
+    info!("Grouped images");
 
     HttpServer::new(|| {
         let mut app = App::new()
