@@ -90,7 +90,7 @@ pub async fn index_page(query: web::Query<Request<String>>) -> impl Responder {
                                 (Link(resolve!(/element/e.id), &query.0)) 
                             } {  
                                 // TODO: Thumbnails, error handling, animation
-                                img.def-img.image-list-element src=(ElementLink(&e.filename))
+                                img.def-img.image-list-element src=(ElementLink(&e))
                                 ;
                             }
                         }

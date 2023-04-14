@@ -1,10 +1,9 @@
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
-use itertools::Itertools;
 use rusqlite::{Connection, named_params, Transaction, types::Value, vtab};
 use tracing::error;
 
-use crate::{model::{Md5Hash, GroupMetadata, SIGNATURE_LEN}, util};
+use crate::{model::{Md5Hash, GroupMetadata, SIGNATURE_LEN, AIMetadata}, util};
 
 use super::*;
 
@@ -132,7 +131,7 @@ impl ConnectionExt for Transaction<'_> {
         )?.execute((element_id, &m.src_link, m.src_time, m.group))?;
 
         if let Some(ai) = &m.ai_meta {
-            self.prepare_cached(
+            self.prepare_cached( // sql
                 "INSERT INTO ai_metadata 
                 (element_id, positive_prompt, negative_prompt, steps, scale,
                 sampler, seed, strength, noise)
@@ -333,8 +332,6 @@ impl ElementStorage for Sqlite {
         tag_limit: u32,
     ) -> anyhow::Result<(Vec<read::Element>, Vec<read::Tag>, u32)>
     where Q: AsRef<str> {
-        let start = std::time::Instant::now();
-        
         let conn = self.0.borrow();
 
         // Map ids to Rc<Vec<Value::Integer>> to use them in rarray()
@@ -351,9 +348,10 @@ impl ElementStorage for Sqlite {
             e.id, e.filename, e.orig_name, e.broken, e.has_thumb, e.animated,
             g.group_id,
             m.ext_group
-            FROM element e, group_metadata g, metadata m
-            WHERE e.id = g.element_id AND e.id = m.element_id
-                AND e.id in rarray(?)
+            FROM element e
+            LEFT JOIN group_metadata g ON g.element_id = e.id
+            LEFT JOIN metadata m ON m.element_id = e.id
+            WHERE e.id in rarray(?)
             ORDER BY e.add_time DESC
             LIMIT ? OFFSET ?"
         )?.query_map((&ids, limit, offset), |r| Ok(read::Element {
@@ -396,6 +394,91 @@ impl ElementStorage for Sqlite {
         .collect();
             
         Ok((elems, tags?, ids.len() as u32))
+    }
+
+    fn get_element_data(
+        &self, 
+        id: u32,
+    ) -> anyhow::Result<Option<(read::Element, read::ElementMetadata)>> {
+        let conn = self.0.borrow();
+
+        let data = conn.prepare_cached( //sql
+            "SELECT e.filename, e.orig_name, e.broken, e.has_thumb, e.animated, e.add_time,
+            gm.group_id, m.src_link, m.src_time, m.ext_group, 
+            a.element_id, a.positive_prompt, a.negative_prompt, a.steps, a.scale,
+            a.sampler, a.seed, a.strength, a.noise
+            FROM element e
+            LEFT JOIN group_metadata gm ON gm.element_id = e.id
+            LEFT JOIN metadata m ON m.element_id = e.id
+            LEFT JOIN ai_metadata a ON a.element_id = e.id
+            WHERE e.id = ?"
+        )?.query_map((id,), |r| {
+            let elem = read::Element {
+                id,
+                filename: r.get(0)?,
+                orig_filename: r.get(1)?,
+                broken: r.get(2)?,
+                has_thumb: r.get(3)?,
+                animated: r.get(4)?,
+                group_id: r.get(6)?,
+                group: r.get(10)?,
+            };
+
+            // Get ai metadata if it exists for element
+            let ai_meta_id: Option<u32> = r.get(11)?;
+            let ai_meta = match ai_meta_id {
+                Some(_) => Some(AIMetadata {
+                    positive_prompt: r.get(12)?,
+                    negative_prompt: r.get(13)?,
+                    steps: r.get(14)?,
+                    scale: r.get(15)?,
+                    sampler: r.get(16)?,
+                    seed: r.get(17)?,
+                    strength: r.get(18)?,
+                    noise: r.get(19)?,
+                }),
+                None => None,
+            };
+
+            let meta = read::ElementMetadata {
+                src_link: r.get(7)?,
+                src_time: r.get(8)?,
+                ai_meta,
+                tags: vec![],
+                add_time: r.get(5)?,
+            };
+
+            Ok((elem, meta))
+        })?.next();
+
+        match data {
+            Some(data) => {
+                let (elem, mut meta) = data?;
+                
+                let tags: Result<Vec<_>, _> = conn.prepare_cached( // sql
+                    "SELECT t.tag_name, t.alt_name, t.tag_type, t.group_id
+                    FROM tag t, element_tag et
+                    WHERE t.name_hash = et.tag_hash AND et.element_id = ?"
+                )?.query_map((id,), |r| Ok(read::Tag {
+                    name: r.get(0)?,
+                    alt_name: r.get(1)?,
+                    tag_type: {
+                        let raw: u8 = r.get(2)?;
+                        raw.into()        
+                    },
+                    // TODO: Count
+                    count: 0,
+                    group_id: r.get(3)?,
+                }))?
+                .collect();
+
+                meta.tags = tags?;
+                Ok(Some((elem, meta)))
+            }
+            None => {
+                Ok(None)
+            }
+        }
     }
 }
 

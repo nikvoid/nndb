@@ -1,11 +1,14 @@
-use maud::{Render, html, DOCTYPE, Markup, html_to};
+use maud::{Render, DOCTYPE, Markup, html_to};
 use serde::Serialize;
 use enum_iterator::all;
 
-use crate::{config::CONFIG, model::{read::Tag, TagType}};
+use crate::{config::CONFIG, model::{read::{Tag, Element, ElementMetadata}, TagType}};
 
 mod index;
+mod element;
 
+pub use index::index_page;
+pub use element::element_page;
 
 /// Wrapper for ergonomic interfacing serde_qs with maud
 /// # Panics
@@ -34,7 +37,7 @@ where F: Fn(&mut String) {
 #[macro_export]
 macro_rules! html_in {
     ($($tt:tt)*) => {
-        $crate::view::MaudFnWrapper(|buf: &mut String| html_to!{ buf, $($tt)* })
+        $crate::view::MaudFnWrapper(|buf: &mut String| maud::html_to!{ buf, $($tt)* })
     };
 }
 
@@ -50,8 +53,6 @@ macro_rules! resolve {
     ($($tt:tt)*) => { stringify!($($tt)*) };
 }
 
-pub use index::index_page;
-
 /// Static content 
 struct Static<'a>(&'a str);
 impl<'a> Render for Static<'a> {
@@ -62,11 +63,11 @@ impl<'a> Render for Static<'a> {
 }
 
 /// Link to element in pool
-struct ElementLink<'a>(&'a str);
+struct ElementLink<'a>(&'a Element);
 impl<'a> Render for ElementLink<'a> {
     fn render_to(&self, buffer: &mut String) {
         buffer.push_str(&CONFIG.elements_path);
-        buffer.push_str(self.0);
+        buffer.push_str(&self.0.filename);
     }
 }
 
@@ -140,7 +141,7 @@ impl<'a> Render for BaseContainer<'a> {
             body {
                 #base-container { 
                     #upnav {
-                        span.head-span { (Button(resolve!(index), "Index")) }
+                        span.head-span { (Button(resolve!(/index), "Index")) }
                         span.head-span {
                             form autocomplete="off" action=(resolve!(/index)) method="get" {
                                 input #search-box type="text" 
@@ -189,11 +190,96 @@ impl Render for AsideTags<'_> {
                             query: Some(&tag.name),
                             page: None
                         })) {
-                            (tag.name) " " (tag.count)
+                            (tag.name) " " (tag.count) 
+                            @if let Some(alt) = &tag.alt_name {
+                                br; (alt)
+                            }
                         }
                     }
                 }
             } 
+        }
+    }
+}
+
+/// Tag input form with autocomplete (TODO: Not yet) (action, id, submit_name)
+struct TagEditForm<'a, Action>(Action, &'a str, &'a str);
+impl<Action> Render for TagEditForm<'_, Action>
+where Action: Render {
+    fn render_to(&self, buffer: &mut String) {
+        html_to! { buffer,
+            form action=(self.0) {
+                input name="tag" type="text"
+                // TODO: Script  
+                ;
+                input type="submit" value=(self.2);
+                .result #(self.1) hidden {}
+            }            
+        }
+    }
+}
+
+/// Aside block that displays element metadata
+struct AsideMetadata<'a>(&'a ElementMetadata);
+impl Render for AsideMetadata<'_> {
+    fn render_to(&self, buffer: &mut String) {
+        /// # param_name
+        /// param_data
+        ///
+        /// Helper
+        struct Param<'a, R>(&'a str, R);
+        impl<R> Render for Param<'_, R>
+        where R: Render {
+            fn render_to(&self, buffer: &mut String) {
+                html_to! { buffer,
+                    .tag-container-grid {
+                        @if !self.0.is_empty() {
+                            .tag.tag-hash { (self.0) }
+                        }
+                        .tag.tag-block { (self.1) }
+                    }
+                }
+            }
+        }
+        
+        html_to! { buffer,
+            .tag { "Time" }
+            .tag-container-grid {
+                b.tag.tag-block { "Added at " (self.0.add_time) }
+            }
+            @if let Some(time) = self.0.src_time {
+                .tag-container-grid {
+                    b.tag.tag-block { "Source: " (time) }
+                }
+            }
+            @if let Some(link) = &self.0.src_link {
+                .tag { "Source" }
+                .tag-container-grid {
+                    a.tag.tag-block href=(link) { (link) }
+                }
+            }
+            @if let Some(ai) = &self.0.ai_meta {
+                .tag { "NN Metadata" }
+                (Param("", html_in! { "Positive prompt" br; (ai.positive_prompt) }))
+                @if let Some(neg) = &ai.negative_prompt {
+                    (Param("", html_in! { "Negative prompt" br; (neg) }))
+                }
+                (Param("Sampler", &ai.sampler))
+                (Param("Seed", ai.seed))
+                (Param("Steps", ai.steps))
+                (Param("Scale", ai.scale))
+                (Param("Strength", ai.strength))
+                (Param("Noise", ai.noise))
+            }
+            @else if !self.0.tags.is_empty() {
+                .tag { "Generated prompt" }
+                (Param("", html_in! {
+                    // compose prompt from tags
+                    @for tag in &self.0.tags {
+                        (tag.name) ", "
+                    }
+                }))
+            }
         }
     }
 }

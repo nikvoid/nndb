@@ -47,3 +47,16 @@ pub struct PendingImport {
     pub hash: Md5Hash,
 }
 
+/// Element metadatas and tags
+pub struct ElementMetadata {
+    /// Link to source (if was imported from other sources)
+    pub src_link: Option<String>,
+    /// Time when element was added to other source (if present)
+    pub src_time: Option<UtcDateTime>,
+    /// Time when element was added to db
+    pub add_time: UtcDateTime,
+    /// Stable Diffusion/etc metadata
+    pub ai_meta: Option<AIMetadata>,
+    /// Tags of the element
+    pub tags: Vec<Tag>,
+}  

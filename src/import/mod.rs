@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 use crate::model::{Md5Hash, write::ElementMetadata, read::PendingImport};
-use anyhow::bail;
 use async_trait::async_trait;
 use md5::{Digest, Md5};
 use num_enum::{FromPrimitive, IntoPrimitive};

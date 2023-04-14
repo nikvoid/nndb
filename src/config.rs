@@ -30,7 +30,7 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| Config {
     input_folder: "res".to_string(),
     static_files_path: "/static/".to_string(),
     elements_path: "/pool/".to_string(),
-    bind_address: "127.0.0.1".to_string(),
+    bind_address: "0.0.0.0".to_string(),
     port: 8080,
     static_folder: Some("static".to_string()),
 });

@@ -60,4 +60,10 @@ pub trait ElementStorage {
         tag_limit: u32,
     ) -> anyhow::Result<(Vec<read::Element>, Vec<read::Tag>, u32)>
     where Q: AsRef<str>;
+
+    /// Get element data and metadata
+    fn get_element_data(
+        &self, 
+        id: u32,
+    ) -> anyhow::Result<Option<(read::Element, read::ElementMetadata)>>;
 }

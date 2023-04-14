@@ -41,6 +41,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(TracingLogger::default())
             .service(redirect("/", "/index"))
             .service(view::index_page)
+            .service(view::element_page)
         ;
 
         // Serve static folder if needed
