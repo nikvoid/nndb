@@ -369,17 +369,13 @@ impl ElementStorage for Sqlite {
         let elems = elems?;
 
         let tags: Result<Vec<_>, _> = conn.prepare_cached( // sql
-            "SELECT t.tag_name, t.alt_name, t.tag_type, t.group_id,
-            (
-                SELECT count(et.element_id) FROM element_tag et
-                WHERE et.tag_hash = t.name_hash    
-            ) as tag_count
+            "SELECT t.tag_name, t.alt_name, t.tag_type, t.group_id, t.count
             FROM tag t
             WHERE t.hidden = 0 AND t.name_hash IN (
                 SELECT tag_hash FROM element_tag
                 WHERE element_id in rarray(?) 
             )
-            ORDER BY tag_count DESC
+            ORDER BY t.count DESC
             LIMIT ?"
         )?.query_map((&ids, tag_limit,), |r| Ok(read::Tag {
             name: r.get(0)?,
@@ -456,7 +452,7 @@ impl ElementStorage for Sqlite {
                 let (elem, mut meta) = data?;
                 
                 let tags: Result<Vec<_>, _> = conn.prepare_cached( // sql
-                    "SELECT t.tag_name, t.alt_name, t.tag_type, t.group_id
+                    "SELECT t.tag_name, t.alt_name, t.tag_type, t.group_id, t.count
                     FROM tag t, element_tag et
                     WHERE t.name_hash = et.tag_hash AND et.element_id = ?"
                 )?.query_map((id,), |r| Ok(read::Tag {
@@ -466,9 +462,8 @@ impl ElementStorage for Sqlite {
                         let raw: u8 = r.get(2)?;
                         raw.into()        
                     },
-                    // TODO: Count
-                    count: 0,
                     group_id: r.get(3)?,
+                    count: r.get(4)?,
                 }))?
                 .collect();
 
@@ -480,5 +475,15 @@ impl ElementStorage for Sqlite {
             }
         }
     }
+
+    /// Update count of elements with tag for each tag
+    fn update_tag_count(&self) -> anyhow::Result<()> {
+        self.0.borrow().execute_batch( // sql
+            "UPDATE tag SET count = (
+                SELECT count(*) FROM element_tag WHERE tag_hash = name_hash
+            )"
+        )?;
+        Ok(())
+    }   
 }
 

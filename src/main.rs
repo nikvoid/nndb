@@ -35,6 +35,11 @@ async fn main() -> std::io::Result<()> {
         .unwrap()
         .unwrap();
     info!("Grouped images");
+    tokio::task::spawn_blocking(service::update_tag_count)
+        .await
+        .unwrap()
+        .unwrap();
+    info!("Updated tag counts");
 
     HttpServer::new(|| {
         let mut app = App::new()

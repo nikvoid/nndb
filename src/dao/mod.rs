@@ -66,4 +66,7 @@ pub trait ElementStorage {
         &self, 
         id: u32,
     ) -> anyhow::Result<Option<(read::Element, read::ElementMetadata)>>;
+
+    /// Update count of elements with tag for each tag
+    fn update_tag_count(&self) -> anyhow::Result<()>;
 }

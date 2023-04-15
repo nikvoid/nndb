@@ -198,3 +198,8 @@ pub fn group_elements_by_signature() -> anyhow::Result<()> {
     
     Ok(())
 }
+
+/// Update count of elements with tag for each tag
+pub fn update_tag_count() -> anyhow::Result<()> {
+    STORAGE.blocking_lock().update_tag_count()
+}

@@ -69,6 +69,8 @@ CREATE TABLE IF NOT EXISTS tag (
     -- id of alias group, NULL for tag not in group
     group_id  INTEGER,
     tag_type  INTEGER NOT NULL,
+    -- cached count of elements with this tag
+    count     INTEGER NOT NULL DEFAULT 0,
     hidden    INTEGER NOT NULL DEFAULT 0
 );
 
