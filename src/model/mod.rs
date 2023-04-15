@@ -3,6 +3,7 @@ use std::{str::FromStr, convert::Infallible};
 use chrono::{DateTime, Utc};
 use enum_iterator::Sequence;
 use num_enum::{FromPrimitive, IntoPrimitive};
+use serde::Serialize;
 
 pub const SIGNATURE_LEN: usize = 544;
 
@@ -39,7 +40,7 @@ pub struct GroupMetadata {
 }
 
 /// Gelbooru-like types
-#[derive(Clone, Copy, FromPrimitive, IntoPrimitive, Sequence, PartialEq)]
+#[derive(Clone, Copy, FromPrimitive, IntoPrimitive, Sequence, PartialEq, Serialize)]
 #[repr(u8)]
 pub enum TagType {
     Reserved  = 0,

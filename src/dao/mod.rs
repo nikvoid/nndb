@@ -69,4 +69,8 @@ pub trait ElementStorage {
 
     /// Update count of elements with tag for each tag
     fn update_tag_count(&self) -> anyhow::Result<()>;
+
+    /// Tag autocompletion
+    fn get_tag_completions<I>(&self, input: I, limit: u32) -> anyhow::Result<Vec<read::Tag>>
+    where I: AsRef<str>;  
 }

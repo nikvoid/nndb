@@ -1,7 +1,10 @@
+use serde::Serialize;
+
 use crate::import::Importer;
 
 use super::*;
 
+#[derive(Serialize)]
 pub struct Tag {
     /// Primary name
     pub name: String,

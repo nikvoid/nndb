@@ -6,9 +6,11 @@ use crate::{config::CONFIG, model::{read::{Tag, Element, ElementMetadata}, TagTy
 
 mod index;
 mod element;
+mod api;
 
 pub use index::index_page;
 pub use element::element_page;
+pub use api::tag_autocomplete;
 
 /// Wrapper for ergonomic interfacing serde_qs with maud
 /// # Panics
@@ -161,8 +163,8 @@ impl<'a> Render for BaseContainer<'a> {
                             form autocomplete="off" action=(resolve!(/index)) method="get" {
                                 input #search-box type="text" 
                                     name="query" value=(self.query)
-                                    // TODO: Enable scripts
-                                    onKeyUp=""; 
+                                    onKeyUp="getCompletions(this, 'head-result')" 
+                                    onclick="getCompletions(this, 'head-result')";
                                 input type="submit" value="Search";
                                 .result #head-result hidden {}
                             } 

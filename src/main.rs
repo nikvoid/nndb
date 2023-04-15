@@ -47,6 +47,7 @@ async fn main() -> std::io::Result<()> {
             .service(redirect("/", "/index"))
             .service(view::index_page)
             .service(view::element_page)
+            .service(view::tag_autocomplete)
         ;
 
         // Serve static folder if needed

@@ -484,6 +484,29 @@ impl ElementStorage for Sqlite {
             )"
         )?;
         Ok(())
+    }
+
+    fn get_tag_completions<I>(&self, input: I, limit: u32) -> anyhow::Result<Vec<read::Tag>>
+    where I: AsRef<str> {
+        let fmt = format!("%{}%", input.as_ref());
+        let v: Result<Vec<_>, _> = self.0.borrow().prepare_cached( //sql
+            "SELECT tag_name, alt_name, tag_type, group_id, count
+            FROM tag WHERE tag_name LIKE ?
+            ORDER BY count DESC
+            LIMIT ?"
+        )?.query_map((fmt, limit), |r| Ok(read::Tag {
+            name: r.get(0)?,
+            alt_name: r.get(1)?,
+            tag_type: {
+                let raw: u8 = r.get(2)?;
+                raw.into()        
+            },
+            group_id: r.get(3)?,
+            count: r.get(4)?,
+        }))?
+        .collect();
+        
+        Ok(v?)
     }   
 }
 
