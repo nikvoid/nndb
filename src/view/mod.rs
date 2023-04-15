@@ -104,6 +104,21 @@ where
     }
 }
 
+/// A button that calls script
+struct ScriptButton<Script, Text>(Script, Text);
+impl<Script, Text> Render for ScriptButton<Script, Text>
+where 
+    Script: Render, 
+    Text: Render {
+    fn render_to(&self, buffer: &mut String) {
+        html_to! { buffer,
+            a.button onclick=(self.0) href="?" {
+                (self.1)
+            }       
+        }
+    }
+}
+
 /// Compose link from url and GET query
 struct Link<Url, QueryS>(Url, QueryS);
 impl<Url, QueryS> Render for Link<Url, QueryS> 

@@ -1,17 +1,11 @@
 use actix_web::{Responder, get, web, error::{ErrorNotFound, ErrorInternalServerError}};
 use maud::{Render, html};
-use serde::{Deserialize, Serialize};
 use tracing::error;
 
-use crate::{dao::{STORAGE, ElementStorage}, view::{BaseContainer, AsideTags, Button, Link, ElementLink, TagEditForm, AsideMetadata}, resolve};
-
-#[derive(Deserialize, Serialize)]
-pub struct Request {
-    pub full: Option<bool>
-}
+use crate::{dao::{STORAGE, ElementStorage}, view::{BaseContainer, AsideTags, ElementLink, TagEditForm, AsideMetadata, ScriptButton}};
 
 #[get("/element/{id}")]
-pub async fn element_page(id: web::Path<u32>, query: web::Query<Request>) -> impl Responder {
+pub async fn element_page(id: web::Path<u32>) -> impl Responder {
     let id = *id;
     
     let (elem, meta) = match STORAGE
@@ -25,17 +19,15 @@ pub async fn element_page(id: web::Path<u32>, query: web::Query<Request>) -> imp
                 return Err(ErrorInternalServerError("failed to fetch element data"));
             }
         };
-    let full = query.full.unwrap_or(false);
+    
     let page = BaseContainer {
-        after_header: match full {
-            true => None,
+        after_header: match elem.animated {
             false => Some(html! {
                 span.head-span {
-                    (Button(Link(resolve!(/element/id), &Request { 
-                        full: Some(true) 
-                    }), "Full size"))
+                    (ScriptButton("return fullSize(this);", "Full size"))
                 }
-            })
+            }),
+            true => None
         },
         content: Some(html! {
             .index-main {
@@ -46,7 +38,7 @@ pub async fn element_page(id: web::Path<u32>, query: web::Query<Request>) -> imp
                         }
                     }
                     false => {
-                        img.page-container.page-container-full[full]
+                        img.page-container #element
                             src=(ElementLink(&elem)) alt="image";
                         // div {} // TODO: ???
                     }
