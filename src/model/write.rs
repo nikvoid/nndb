@@ -8,7 +8,9 @@ use crate::import::Importer;
 use super::*;
 
 /// Tag excape regex
-static TAG_REX: Lazy<Regex> = Lazy::new(|| Regex::new(r"[\s:,.@#$*]+").unwrap());
+pub static TAG_REX: Lazy<Regex> = Lazy::new(|| 
+    Regex::new(r#"[\s:,.@#$*'"`|%]+"#).unwrap()
+);
 
 /// Tag to write. Internal primary key is crc32 name hash 
 pub struct Tag {
@@ -21,14 +23,25 @@ pub struct Tag {
 }
 
 impl Tag {
-    /// Create new tag with escaped name
-    pub fn new(name: &str, alt_name: Option<String>, tag_type: TagType) -> Self {
-        let name = TAG_REX.replace_all(name, "_").to_string();
-        Self {
+    /// Create new tag with escaped name.
+    /// Returns `None` only is `name` is empty
+    pub fn new(
+        name: &str, 
+        alt_name: Option<String>, 
+        tag_type: TagType
+    ) -> Option<Self> {
+        if name.is_empty() {
+            return None
+        }
+        
+        let name = TAG_REX.replace_all(name, "_")
+            .trim_matches('_')
+            .to_lowercase();
+        Some(Self {
             name,
             alt_name,
             tag_type
-        }
+        })
     }
 
     pub fn name(&self) -> &str {

@@ -1417,10 +1417,12 @@ dependencies = [
  "md-5",
  "num_enum",
  "once_cell",
+ "png",
  "rayon",
  "regex",
  "rusqlite",
  "serde",
+ "serde_json",
  "serde_qs",
  "swc_common",
  "swc_ecma_codegen",
@@ -1987,9 +1989,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.95"
+version = "1.0.96"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d721eca97ac802aa7777b701877c8004d950fc142651367300d21c1cc0194744"
+checksum = "057d394a50403bcac12672b2b18fb387ab6d289d957dab67dd201875391e52f1"
 dependencies = [
  "itoa",
  "ryu",

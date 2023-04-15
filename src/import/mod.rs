@@ -6,6 +6,7 @@ use md5::{Digest, Md5};
 use num_enum::{FromPrimitive, IntoPrimitive};
 
 mod passthrough;
+mod novelai;
 
 pub const IMAGE_EXTS: &[&str] = &["png", "jpeg", "jpg"];
 pub const ANIMATION_EXTS: &[&str] = &["mp4", "mov", "gif", "webm", "webp", "m4v", "avif"];
@@ -20,24 +21,24 @@ pub enum Importer {
     /// No specific metadata
     #[default]
     Passthrough = 0,
+    // Novel AI generations
+    NovelAI = 1,
 }
 
 impl Importer {
     /// Decide which importer to use with file
     pub fn scan(element: &ElementPrefab) -> Self  {
-        [
-            Self::Passthrough,
-        ]
-        .into_iter()
-        .find(|imp| imp.get_singleton().can_parse(element))
-        // Passthrough always returns true
-        .unwrap()
+        match () {
+            _ if novelai::NovelAI.can_parse(element) => Self::NovelAI,
+            _ => Self::Passthrough
+        }
     }
 
     /// Get singleton for chosen importer
     pub fn get_singleton(self) -> &'static dyn MetadataImporter {
         match self {
             Importer::Passthrough => &passthrough::Passthrough,
+            Importer::NovelAI => &novelai::NovelAI,
         }
     }
 }

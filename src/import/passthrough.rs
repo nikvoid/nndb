@@ -24,7 +24,7 @@ impl MetadataImporter for Passthrough {
             src_time: None,
             ai_meta: None,
             group: None,
-            tags: vec![Tag::new("unknown_source", None, TagType::Metadata)],
+            tags: vec![Tag::new("unknown_source", None, TagType::Metadata).unwrap()],
         })
     }
     

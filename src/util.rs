@@ -25,7 +25,8 @@ pub fn get_tags_from_path(path: &Path) -> Vec<write::Tag> {
         .filter(|seg| seg.starts_with(TAG_TRIGGER))
         .flat_map(|seg| seg.strip_prefix(TAG_TRIGGER).unwrap().split('.'))
         .tuples()
-        .map(|(tag_type, tag)| write::Tag::new(tag, None, tag_type.parse().unwrap()))
+        .filter(|(_, tag)| !tag.is_empty())
+        .map(|(tag_type, tag)| write::Tag::new(tag, None, tag_type.parse().unwrap()).unwrap())
         .collect()
 } 
 

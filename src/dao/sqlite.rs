@@ -421,21 +421,21 @@ impl ElementStorage for Sqlite {
                 has_thumb: r.get(3)?,
                 animated: r.get(4)?,
                 group_id: r.get(6)?,
-                group: r.get(10)?,
+                group: r.get(9)?,
             };
 
             // Get ai metadata if it exists for element
-            let ai_meta_id: Option<u32> = r.get(11)?;
+            let ai_meta_id: Option<u32> = r.get(10)?;
             let ai_meta = match ai_meta_id {
                 Some(_) => Some(AIMetadata {
-                    positive_prompt: r.get(12)?,
-                    negative_prompt: r.get(13)?,
-                    steps: r.get(14)?,
-                    scale: r.get(15)?,
-                    sampler: r.get(16)?,
-                    seed: r.get(17)?,
-                    strength: r.get(18)?,
-                    noise: r.get(19)?,
+                    positive_prompt: r.get(11)?,
+                    negative_prompt: r.get(12)?,
+                    steps: r.get(13)?,
+                    scale: r.get(14)?,
+                    sampler: r.get(15)?,
+                    seed: r.get(16)?,
+                    strength: r.get(17)?,
+                    noise: r.get(18)?,
                 }),
                 None => None,
             };
