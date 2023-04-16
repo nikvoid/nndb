@@ -233,7 +233,10 @@ impl Render for AsideTags<'_> {
                             query: Some(&tag.name),
                             page: None
                         })) {
-                            (tag.name) " " (tag.count) 
+                            @for part in tag.name.split("_") {
+                                (part) " "     
+                            }
+                            (tag.count) 
                             @if let Some(alt) = &tag.alt_name {
                                 br; (alt)
                             }
