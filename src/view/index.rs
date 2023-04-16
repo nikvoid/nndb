@@ -85,15 +85,7 @@ pub async fn index_page(query: web::Query<Request<String>>) -> impl Responder {
                 // FIXME: Fix typo in class
                 .list-constainer {
                     @for e in elements {
-                        .image-container-list {
-                            a href={ 
-                                (Link(resolve!(/element/e.id), &query.0)) 
-                            } {  
-                                // TODO: Thumbnails, error handling, animation
-                                img.def-img.image-list-element src=(ElementLink(&e))
-                                ;
-                            }
-                        }
+                        (ElementListContainer(&e))
                     }
                 }
             }

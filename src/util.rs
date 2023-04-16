@@ -92,3 +92,31 @@ pub fn hash_file(prefab: ElementPrefab) -> anyhow::Result<ElementWithMetadata> {
     
     Ok(ElementWithMetadata(element, metadata))
 }
+
+/// Make thumnbnail for image `src`.
+/// Preserve aspect ratio
+pub fn make_thumbnail(
+    src: &Path, 
+    thumb_out: &Path, 
+    (max_width, max_height): (u32, u32) 
+) -> anyhow::Result<()> {
+    let img = image::open(src)?;    
+
+    let ratio = img.width() as f32 / img.height() as f32;
+
+    let (width, height) = 
+    if ratio > 1.0 {
+        (max_width, (max_height as f32 / ratio) as u32)
+    } else {
+        ((max_width as f32 * ratio) as u32, max_height)
+    };
+    
+    let thumb = image::imageops::thumbnail(
+        &img, 
+        width.clamp(0, max_width), 
+        height.clamp(0, max_height)
+    );
+    
+    thumb.save(thumb_out)?;
+    Ok(())
+}

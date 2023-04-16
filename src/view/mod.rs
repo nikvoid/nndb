@@ -57,7 +57,7 @@ macro_rules! resolve {
 
 /// Static content 
 struct Static<'a>(&'a str);
-impl<'a> Render for Static<'a> {
+impl Render for Static<'_> {
     fn render_to(&self, buffer: &mut String) {
         buffer.push_str(&CONFIG.static_files_path);
         buffer.push_str(self.0);
@@ -66,10 +66,36 @@ impl<'a> Render for Static<'a> {
 
 /// Link to element in pool
 struct ElementLink<'a>(&'a Element);
-impl<'a> Render for ElementLink<'a> {
+impl Render for ElementLink<'_> {
     fn render_to(&self, buffer: &mut String) {
         buffer.push_str(&CONFIG.elements_path);
         buffer.push_str(&self.0.filename);
+    }
+}
+
+/// Link to element thumbnail in pool
+struct ElementThumbnail<'a>(&'a Element);
+impl Render for ElementThumbnail<'_> {
+    fn render_to(&self, buffer: &mut String) {
+        buffer.push_str(&CONFIG.thumbnails_path);
+        buffer.push_str(&self.0.filename.split('.').next().unwrap());
+        buffer.push_str(".jpeg");
+    }
+}
+
+/// Element list unit
+struct ElementListContainer<'a>(&'a Element);
+impl Render for ElementListContainer<'_> {
+    fn render_to(&self, buffer: &mut String) {
+        html_to! { buffer,
+            .image-container-list {
+                a href=(resolve!(/element/self.0.id)) {
+                    // TODO: Error handling, animation
+                    img.def-img.image-list-element src=(ElementThumbnail(self.0))
+                        alt="no image";
+                }
+            }
+        }
     }
 }
 

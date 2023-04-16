@@ -40,6 +40,11 @@ async fn main() -> std::io::Result<()> {
         .unwrap()
         .unwrap();
     info!("Updated tag counts");
+    tokio::task::spawn_blocking(service::make_thumbnails)
+        .await
+        .unwrap()
+        .unwrap();
+    info!("Made thumbnails");
 
     HttpServer::new(|| {
         let mut app = App::new()
@@ -54,6 +59,7 @@ async fn main() -> std::io::Result<()> {
         app = match &CONFIG.static_folder {
             Some(folder) => app
                 .service(Files::new(&CONFIG.static_files_path, folder))
+                .service(Files::new(&CONFIG.thumbnails_path, &CONFIG.thumbnails_folder))
                 .service(Files::new(&CONFIG.elements_path, &CONFIG.element_pool)),
             None => app
         };

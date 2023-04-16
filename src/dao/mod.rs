@@ -73,4 +73,7 @@ pub trait ElementStorage {
     /// Tag autocompletion
     fn get_tag_completions<I>(&self, input: I, limit: u32) -> anyhow::Result<Vec<read::Tag>>
     where I: AsRef<str>;  
+
+    /// Mark that `element_ids` have thumbnails
+    fn add_thumbnails(&self, element_ids: &[u32]) -> anyhow::Result<()>;
 }

@@ -1,7 +1,7 @@
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
 use itertools::Itertools;
-use rusqlite::{Connection, named_params, Transaction, types::{Value, ToSqlOutput, ValueRef}, vtab, ToSql};
+use rusqlite::{Connection, named_params, Transaction, types::{Value, ToSqlOutput}, vtab, ToSql};
 use tracing::error;
 
 use crate::{model::{Md5Hash, GroupMetadata, SIGNATURE_LEN, AIMetadata}, util};
@@ -510,6 +510,22 @@ impl ElementStorage for Sqlite {
         .collect();
         
         Ok(v?)
+    }
+
+    fn add_thumbnails(&self, element_ids: &[u32]) -> anyhow::Result<()> {
+        let ids = element_ids.iter()
+            .copied()
+            .map(|id| Value::Integer(id as i64))
+            .collect_vec();
+
+        let ids = Rc::new(ids);
+                
+        self.0.borrow().execute(
+            "UPDATE element SET has_thumb = 1 
+            WHERE id in rarray(?)",
+            (ids,), 
+        )?;
+        Ok(())
     }   
 }
 

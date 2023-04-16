@@ -1,4 +1,4 @@
-use std::io::Read;
+use std::{io::Read, path::PathBuf};
 use anyhow::Context;
 use futures::{stream::FuturesUnordered, StreamExt};
 use rayon::prelude::*;
@@ -15,6 +15,9 @@ use crate::{
 
 /// Experimentaly decided optimal image signature distance 
 pub const SIGNATURE_DISTANCE_THRESHOLD: f32 = 35.0;
+
+/// Width and height of thumbnails
+pub const THUMBNAIL_SIZE: (u32, u32) = (256, 256);
 
 /// Scan `CONFIG.input_folder` directory for new files and import them
 pub fn scan_files() -> anyhow::Result<u32> {
@@ -204,4 +207,40 @@ pub fn group_elements_by_signature() -> anyhow::Result<()> {
 /// Update count of elements with tag for each tag
 pub fn update_tag_count() -> anyhow::Result<()> {
     STORAGE.blocking_lock().update_tag_count()
+}
+
+/// Make thumbnails for all files that don't have one
+pub fn make_thumbnails() -> anyhow::Result<()> {
+    let elems: Vec<_> = STORAGE.blocking_lock()
+        .search_elements("", 0, 1000000, 0)?
+        .0.into_par_iter()
+        // TODO: Thumbs for animated
+        .filter(|e| !e.has_thumb && !e.animated)
+        .map_with(
+            (PathBuf::from(&CONFIG.element_pool), PathBuf::from(&CONFIG.thumbnails_folder)),
+            |(pool, thumb), e| {
+                pool.push(&e.filename);
+                thumb.push(&e.filename);
+                thumb.set_extension("jpeg");
+            
+                let err = util::make_thumbnail(&pool, &thumb, THUMBNAIL_SIZE);
+                
+                pool.pop();
+                thumb.pop();
+
+                match err {
+                    Ok(_) => Some(e.id),
+                    Err(err) => {
+                        error!(?err, e=e.filename, "failed to make thumbnail");
+                        None
+                    }
+                }
+            }
+        )
+        .filter_map(|opt| opt)
+        .collect();
+
+    STORAGE.blocking_lock().add_thumbnails(&elems)?;
+
+    Ok(())
 }

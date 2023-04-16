@@ -1,25 +1,14 @@
 use actix_web::{Responder, get, web, error::{ErrorNotFound, ErrorInternalServerError}};
-use maud::{Render, html, html_to};
+use maud::{Render, html};
 use tracing::error;
 
-use crate::{dao::{STORAGE, ElementStorage}, view::{BaseContainer, AsideTags, ElementLink, TagEditForm, AsideMetadata, ScriptButton}, model::read::Element, resolve};
-
-struct ElementGroup<'a>(&'a [Element]);
-impl Render for ElementGroup<'_> {
-    fn render_to(&self, buffer: &mut String) {
-        html_to! { buffer,
-            @for e in self.0 {
-                .image-container-list {
-                    a href=(resolve!(/element/e.id)) {
-                        img.def-img.image-list-element 
-                            // TODO: Thumbnail
-                            src=(ElementLink(e)) alt="image";
-                    }
-                }
-            }
-        }
-    }
-}
+use crate::{
+    dao::{STORAGE, ElementStorage}, 
+    view::{
+        BaseContainer, AsideTags, ElementLink, 
+        TagEditForm, AsideMetadata, ScriptButton, 
+        ElementListContainer
+    }};
 
 #[get("/element/{id}")]
 pub async fn element_page(id: web::Path<u32>) -> impl Responder {
@@ -83,7 +72,11 @@ pub async fn element_page(id: web::Path<u32>) -> impl Responder {
                 }
             } 
             @if let Some(elems) = associated {
-                .index-side { (ElementGroup(&elems)) }
+                .index-side { 
+                    @for e in elems {
+                        (ElementListContainer(&e))
+                    } 
+                }
             }
         }),
         aside: Some(html! {

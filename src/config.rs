@@ -10,15 +10,19 @@ pub struct Config {
     pub element_pool: String,
     /// Directory that will be scanned to find new element files
     pub input_folder: String,
+    /// Serve thumbnails from this folder
+    pub thumbnails_folder: String,
     /// URL Path to static files (must include trailing slash)
     pub static_files_path: String,
-    /// URL Path to elements
+    /// URL Path to elements (must include trailing slash)
     pub elements_path: String,
+    /// URL Path to thumbnails (must include trailing slash)
+    pub thumbnails_path: String,
     /// IP address to bind server to
     pub bind_address: String,
     /// Server port
     pub port: u16,
-    /// If Some, serve stati files from this folder
+    /// If Some, serve static files from this folder
     pub static_folder: Option<String>,
 }
 
@@ -28,8 +32,10 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| Config {
     testing_mode: true,
     element_pool: "pool".to_string(),
     input_folder: "res".to_string(),
+    thumbnails_folder: "thumbs".to_string(),
     static_files_path: "/static/".to_string(),
     elements_path: "/pool/".to_string(),
+    thumbnails_path: "/thumbs/".to_string(),
     bind_address: "0.0.0.0".to_string(),
     port: 8080,
     static_folder: Some("static".to_string()),
