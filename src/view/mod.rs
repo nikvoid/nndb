@@ -88,11 +88,18 @@ struct ElementListContainer<'a>(&'a Element);
 impl Render for ElementListContainer<'_> {
     fn render_to(&self, buffer: &mut String) {
         html_to! { buffer,
-            .image-container-list {
+            .image-container-list.image-container-list-video[self.0.animated] {
                 a href=(resolve!(/element/self.0.id)) {
-                    // TODO: Error handling, animation
                     img.def-img.image-list-element src=(ElementThumbnail(self.0))
-                        alt="no image";
+                        alt={ @if self.0.broken { "broken" } @else { "no image" } }
+                        onerror = { 
+                            @if !self.0.animated {
+                                "elementListOnError(this, '"
+                                (ElementLink(self.0))
+                                "');"
+                            } 
+                        }
+                    ;
                 }
             }
         }

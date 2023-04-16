@@ -8,8 +8,8 @@ use num_enum::{FromPrimitive, IntoPrimitive};
 mod passthrough;
 mod novelai;
 
-pub const IMAGE_EXTS: &[&str] = &["png", "jpeg", "jpg"];
-pub const ANIMATION_EXTS: &[&str] = &["mp4", "mov", "gif", "webm", "webp", "m4v", "avif"];
+pub const IMAGE_EXTS: &[&str] = &["png", "jpeg", "jpg", "gif", "avif", "webp"];
+pub const ANIMATION_EXTS: &[&str] = &["mp4", "mov", "webm", "m4v"];
 
 /// Name directory as `TAG.<tag_type>.<tag_name>.<tag_type>.<tag_name>...`
 /// to add `<tag_name>...` to elements in this directory 
