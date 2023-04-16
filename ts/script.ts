@@ -8,7 +8,8 @@ function fullSize(btn: HTMLElement): boolean {
 }
 
 /// Get term under cursor
-function getSelected(box: HTMLInputElement): [string, number, number] | null {
+function getSelected(box: HTMLInputElement): [string | null, string, number, number] | null {
+  const PREFIXES = ["!"];
   const cursor = box.selectionStart!;
 
   let start = box.value.lastIndexOf(" ", cursor - 1);
@@ -22,15 +23,24 @@ function getSelected(box: HTMLInputElement): [string, number, number] | null {
   if (end == -1) {
     end = box.value.length;
   }
+
+  let prefix;
+  if (PREFIXES.includes(box.value[start])) {
+    prefix = box.value[start];
+    start += 1;
+  } else {
+    prefix = null;
+  }
+  const term = box.value.substring(start, end);
   
-  return [box.value.substring(start, end), start, end]
+  return [prefix, term, start, end]
 }
 
 /// Query db for tag completions
 function getCompletions(textbox: HTMLInputElement, selectorId: string) {
   let selector = document.getElementById(selectorId)!;
 
-  let [term, start, end] = getSelected(textbox)!;
+  let [pref, term, start, end] = getSelected(textbox)!;
 
   if (term.length == 0) {
     selector.hidden = true;
@@ -49,8 +59,14 @@ function getCompletions(textbox: HTMLInputElement, selectorId: string) {
 
       const json: Array<Tag> = JSON.parse(request.responseText);
 
+      if (json.length == 0) {
+        selector.hidden = true;
+        return;
+      }
+
       const list = json.map(compl => {
         const alt_name = compl.alt_name === null? "" : compl.alt_name;
+        const prefix = pref === null? "" : pref;
         return `
           <li onclick="onCompletionClick(
             '${textbox.id}', 
@@ -59,7 +75,7 @@ function getCompletions(textbox: HTMLInputElement, selectorId: string) {
             ${start}, 
             ${end}
           );">
-            <div class="cand-name">${compl.name}</div>
+            <div class="cand-name">${prefix}${compl.name}</div>
             <div class="cand-info">${alt_name} ${compl.tag_type.toLowerCase()} ${compl.count}</div>
           </li>`
       }).join("");

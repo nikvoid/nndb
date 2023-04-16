@@ -1,6 +1,7 @@
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
-use rusqlite::{Connection, named_params, Transaction, types::Value, vtab};
+use itertools::Itertools;
+use rusqlite::{Connection, named_params, Transaction, types::{Value, ToSqlOutput, ValueRef}, vtab, ToSql};
 use tracing::error;
 
 use crate::{model::{Md5Hash, GroupMetadata, SIGNATURE_LEN, AIMetadata}, util};
@@ -323,7 +324,6 @@ impl ElementStorage for Sqlite {
         Ok(group_id)
     }
 
-    /// TODO: Add tag search capabilities
     fn search_elements<Q>(
         &self, 
         query: Q,
@@ -334,11 +334,15 @@ impl ElementStorage for Sqlite {
     where Q: AsRef<str> {
         let conn = self.0.borrow();
 
+        let (clause, params) = query_transform(query.as_ref());
+        let params = params.iter()
+            .map(|p| p as &dyn ToSql)
+            .collect_vec();
+        
         // Map ids to Rc<Vec<Value::Integer>> to use them in rarray()
         let ids: Result<Vec<_>, _> = conn.prepare_cached(
-            // TODO: Where clause
-            "SELECT id FROM element"
-        )?.query_map([], |r| Ok(Value::Integer(r.get(0)?)))?
+            &clause
+        )?.query_map(&params[..], |r| Ok(Value::Integer(r.get(0)?)))?
         .collect();
         let ids = Rc::new(ids?);
         
@@ -352,7 +356,6 @@ impl ElementStorage for Sqlite {
             LEFT JOIN group_metadata g ON g.element_id = e.id
             LEFT JOIN metadata m ON m.element_id = e.id
             WHERE e.id in rarray(?)
-            ORDER BY e.add_time DESC
             LIMIT ? OFFSET ?"
         )?.query_map((&ids, limit, offset), |r| Ok(read::Element {
             id: r.get(0)?,
@@ -388,7 +391,7 @@ impl ElementStorage for Sqlite {
             count: r.get(4)?,
         }))?
         .collect();
-            
+        
         Ok((elems, tags?, ids.len() as u32))
     }
 
@@ -508,5 +511,83 @@ impl ElementStorage for Sqlite {
         
         Ok(v?)
     }   
+}
+
+
+/// Transform query from plaintext to SQL that yields IDs as first column and parameters
+fn query_transform<'a>(query: &'a str) -> (String, Vec<ToSqlOutput<'a>>) {
+    // Base set
+    let mut clause = String::from(
+        "SELECT e.id FROM element e
+        "
+    );
+
+    let mut params = vec![];
+
+    enum Ordering {
+        AddTime
+    }
+
+    let ord = Ordering::AddTime;
+
+    // Terms that are not simple tags
+    for meta_term in query.split_whitespace().filter(|t| t.contains(":")) {
+        let Some((left, right)) = meta_term
+            .split(':')
+            .tuples()
+            .next()
+        else { continue };
+
+        match (left, right) {
+            ("group", id) => if let Some(id) = id.parse::<u32>().ok() {
+                clause.push_str(
+                    "INTERSECT
+                    SELECT e.id FROM element e
+                    INNER JOIN group_metadata g ON g.element_id = e.id
+                    WHERE g.group_id = ?
+                    "
+                );
+                params.push(ToSqlOutput::Owned(Value::Integer(id as i64)))
+            }
+            _ => ()
+        }
+    }
+
+    // Simple tags
+    for term in query.split_whitespace().filter(|t| !t.contains(":"))  {
+        // Negative term, exclude this set
+        let term = if term.starts_with('!') {
+            clause.push_str("EXCEPT");
+            &term[1..]
+        } else {
+            clause.push_str("INTERSECT");
+            term
+        };
+        
+        clause.push_str(
+            "
+            SELECT e.id FROM element e
+            LEFT JOIN element_tag et ON et.element_id = e.id
+            LEFT JOIN tag t ON t.name_hash = et.tag_hash
+            WHERE et.tag_hash = ?
+            "
+        );
+        let hash = crc32fast::hash(term.as_bytes());
+        params.push(ToSqlOutput::Owned(Value::Integer(hash as i64)));
+    }
+
+    // Wrap clause into subquery to avoid selecting columns other than id
+    // multiple times
+    let mut clause = format!( 
+        "SELECT id.id, e.add_time FROM ({clause}) as id
+        INNER JOIN element e ON id.id = e.id 
+        "
+    );
+    
+    clause.push_str(match ord {
+        Ordering::AddTime => "ORDER BY e.add_time DESC",
+    });
+
+    (clause, params)
 }
 
