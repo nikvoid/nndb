@@ -1,4 +1,5 @@
 use std::io::Read;
+use anyhow::Context;
 use futures::{stream::FuturesUnordered, StreamExt};
 use rayon::prelude::*;
 use tracing::{error, info};
@@ -58,11 +59,12 @@ pub fn scan_files() -> anyhow::Result<u32> {
                     file.read_to_end(&mut data)?;
 
                     let prefab = ElementPrefab {
-                        path,
+                        path: path.clone(),
                         data,
                     };
 
-                    util::hash_file(prefab)?
+                    util::hash_file(prefab)
+                        .context(path.display().to_string())?
                 },
             };
 

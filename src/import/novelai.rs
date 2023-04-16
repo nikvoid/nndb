@@ -18,7 +18,7 @@ struct Metadata<'a> {
     strength: f32,
     noise: f32,
     scale: f32,
-    uc: &'a str
+    uc: Cow<'a, str>
 }
 
 /// NovelAI Tag syntax
@@ -152,7 +152,7 @@ impl MetadataImporter for NovelAI {
             group: None,
             ai_meta: Some(AIMetadata {
                 positive_prompt: prompt.to_string(),
-                negative_prompt: Some(meta.uc.to_owned()),
+                negative_prompt: Some(meta.uc.to_string()),
                 steps: meta.steps,
                 scale: meta.scale,
                 sampler: meta.sampler.to_owned(),
