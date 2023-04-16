@@ -197,7 +197,8 @@ impl<'a> Render for BaseContainer<'a> {
                                 input #search-box type="text" 
                                     name="query" value=(self.query)
                                     onKeyUp="getCompletions(this, 'head-result')" 
-                                    onclick="getCompletions(this, 'head-result')";
+                                    onclick="getCompletions(this, 'head-result')"
+                                    onchange="searchBoxHook(this)";
                                 input type="submit" value="Search";
                                 .result #head-result hidden {}
                             } 
