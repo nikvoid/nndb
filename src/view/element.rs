@@ -1,4 +1,4 @@
-use actix_web::{Responder, get, web, error::{ErrorNotFound, ErrorInternalServerError}};
+use actix_web::{Responder, get, web, error::ErrorNotFound};
 use maud::{Render, html};
 use tracing::error;
 
@@ -8,7 +8,7 @@ use crate::{
         BaseContainer, AsideTags, ElementLink, 
         TagEditForm, AsideMetadata, ScriptButton, 
         ElementListContainer
-    }, html_in};
+    }, html_in, log_n_bail};
 
 #[get("/element/{id}")]
 pub async fn element_page(id: web::Path<u32>) -> impl Responder {
@@ -20,10 +20,7 @@ pub async fn element_page(id: web::Path<u32>) -> impl Responder {
         .get_element_data(id) {
             Ok(Some(data)) => data,
             Ok(None) => return Err(ErrorNotFound("no such element")),
-            Err(e) => {
-                error!(?e, "failed to fetch element data");
-                return Err(ErrorInternalServerError("failed to fetch element data"));
-            }
+            Err(e) => log_n_bail!("failed to fetch element data", ?e),
         };
     
     let associated = match elem.group_id {

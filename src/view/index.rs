@@ -1,13 +1,12 @@
 use std::ops::RangeInclusive;
 
-use crate::{dao::{STORAGE, ElementStorage}, resolve};
+use crate::{dao::{STORAGE, ElementStorage}, resolve, log_n_bail};
 
 use super::*;
 
-use actix_web::{Responder, get, web, error::ErrorInternalServerError};
+use actix_web::{Responder, get, web};
 use maud::html;
 use serde::{Deserialize, Serialize};
-use tracing::error;
 
 const ELEMENTS_ON_PAGE: u32 = 50;
 const PAGES_LOOKAROUND: u32 = 5;
@@ -71,10 +70,7 @@ pub async fn index_page(query: web::Query<Request<String>>) -> impl Responder {
             SELECTION_TAGS_COUNT
         ) {
             Ok(out) => out,
-            Err(e) => {
-                error!(?e, "failed to perform search");
-                return Err(ErrorInternalServerError("failed to perform search"))
-            }
+            Err(e) => log_n_bail!("failed to perform search", ?e)
         };
     let maxpage = (count / ELEMENTS_ON_PAGE) + 1;
     
