@@ -8,7 +8,7 @@ use crate::{
         BaseContainer, AsideTags, ElementLink, 
         TagEditForm, AsideMetadata, ScriptButton, 
         ElementListContainer
-    }};
+    }, html_in};
 
 #[get("/element/{id}")]
 pub async fn element_page(id: web::Path<u32>) -> impl Responder {
@@ -82,8 +82,11 @@ pub async fn element_page(id: web::Path<u32>) -> impl Responder {
         aside: Some(html! {
             (AsideTags(&meta.tags))
             (AsideMetadata(&meta))
-            // TODO: Replace GET-query based updates with typescript onclicks
-            (TagEditForm("", "add_tag", "Add tag"))
+            (TagEditForm(
+                html_in! { "addTagOnSubmit(event, this, " (elem.id) ")" }, 
+                "add_tag_compl", 
+                "Add tag"
+            ))
         }),
         ..Default::default()
     };

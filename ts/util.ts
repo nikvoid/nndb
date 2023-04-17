@@ -23,3 +23,33 @@ function elementListOnError(img: HTMLImageElement & ErrorState, full: string) {
     img.onerror = () => {}
   }
 }
+
+/// Send tags to api enpoint on click, display alert on fail
+function addTagOnSubmit(event: Event, form: HTMLFormElement, elementId: number) {
+  let input = form.getElementsByClassName('tag-field')[0]!;
+  if (input instanceof HTMLInputElement) {
+
+    let payload = {
+      element_id: elementId,
+      tags: input.value,
+    };
+    
+    let request = new XMLHttpRequest();
+    request.onreadystatechange = () => {
+      if (request.readyState == 4) {
+        if (request.status == 200) {
+          input.value = "";
+          location.reload();
+        } else {
+          alert(request.status + " " + request.response);
+        }
+      }
+    }
+    
+    request.open('POST', "/api/write/add_tags", true);
+    request.setRequestHeader("Content-Type", "application/json");
+    request.send(JSON.stringify(payload));
+  }
+  event.preventDefault();
+  return false;
+}

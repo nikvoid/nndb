@@ -79,3 +79,23 @@ impl FromStr for TagType {
         })
     }
 }
+
+impl rusqlite::ToSql for TagType {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
+        use rusqlite::types::{ToSqlOutput, Value};
+
+        let raw: u8 = (*self).into();
+        Ok(ToSqlOutput::Owned(Value::Integer(raw as i64)))
+    }
+}
+
+impl rusqlite::types::FromSql for TagType {
+    fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
+        use rusqlite::types::{ValueRef, FromSqlError};
+        
+        match value {
+            ValueRef::Integer(i) => Ok(Self::from(i as u8)),
+            _ => Err(FromSqlError::InvalidType)
+        }
+    }
+}

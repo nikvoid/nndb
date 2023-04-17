@@ -77,7 +77,7 @@ function getCompletions(textbox: HTMLInputElement, selectorId: string) {
     }
   }
 
-  request.open("GET", `/api/autocomplete?input=${term}`, true);
+  request.open("GET", `/api/read/autocomplete?input=${term}`, true);
   request.send();
 }
 

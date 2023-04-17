@@ -53,6 +53,7 @@ async fn main() -> std::io::Result<()> {
             .service(view::index_page)
             .service(view::element_page)
             .service(view::tag_autocomplete)
+            .service(view::add_tags)
         ;
 
         // Serve static folder if needed

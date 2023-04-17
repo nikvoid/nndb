@@ -11,6 +11,36 @@ mod api;
 pub use index::index_page;
 pub use element::element_page;
 pub use api::tag_autocomplete;
+pub use api::add_tags;
+
+/// Helper for writing nested html_to!
+#[macro_export]
+macro_rules! html_in {
+    ($($tt:tt)*) => {
+        $crate::view::MaudFnWrapper(|buf: &mut String| maud::html_to!{ buf, $($tt)* })
+    };
+}
+
+/// Compile-time url resolver.
+/// We can't use expressions in #[get] macro, so this is better than 
+/// writing each url by hand
+#[macro_export]
+macro_rules! resolve {
+    // Index page
+    (/index) => { "/index" };
+    // Element page (not yet)
+    (/element/$eid:expr) => { $crate::html_in!("/element/" ($eid) ) };
+    ($($tt:tt)*) => { stringify!($($tt)*) };
+}
+
+/// Log error and return 500 status to client
+#[macro_export]
+macro_rules! log_n_bail {
+    ($lit:literal, $($tt:tt)*) => {{
+        tracing::error!($($tt)*);
+        return Err(actix_web::error::ErrorInternalServerError($lit));
+    }};
+}
 
 /// Wrapper for ergonomic interfacing serde_qs with maud
 /// # Panics
@@ -33,26 +63,6 @@ where F: Fn(&mut String) {
     fn render_to(&self, buffer: &mut String) {
         self.0(buffer)
     }
-}
-
-/// Helper for writing nested html_to!
-#[macro_export]
-macro_rules! html_in {
-    ($($tt:tt)*) => {
-        $crate::view::MaudFnWrapper(|buf: &mut String| maud::html_to!{ buf, $($tt)* })
-    };
-}
-
-/// Compile-time url resolver.
-/// We can't use expressions in #[get] macro, so this is better than 
-/// writing each url by hand
-#[macro_export]
-macro_rules! resolve {
-    // Index page
-    (/index) => { "/index" };
-    // Element page (not yet)
-    (/element/$eid:expr) => { $crate::html_in!("/element/" ($eid) ) };
-    ($($tt:tt)*) => { stringify!($($tt)*) };
 }
 
 /// Static content 
@@ -257,15 +267,15 @@ impl Render for AsideTags<'_> {
 }
 
 /// Tag input form with autocomplete (TODO: Not yet) (action, id, submit_name)
-struct TagEditForm<'a, Action>(Action, &'a str, &'a str);
-impl<Action> Render for TagEditForm<'_, Action>
-where Action: Render {
+struct TagEditForm<'a, OnSubmit>(OnSubmit, &'a str, &'a str);
+impl<OnSubmit> Render for TagEditForm<'_, OnSubmit>
+where OnSubmit: Render {
     fn render_to(&self, buffer: &mut String) {
         html_to! { buffer,
-            form action=(self.0) {
-                input name="tag" type="text"
-                // TODO: Script  
-                ;
+            form onsubmit=(self.0) {
+                input.tag-field #{ (self.0) "_input" } name="tag" type="text"
+                    onKeyUp={ "getCompletions(this, '" (self.1) "')" } 
+                    onclick={ "getCompletions(this, '" (self.1) "')" };
                 input type="submit" value=(self.2);
                 .result #(self.1) hidden {}
             }            

@@ -102,9 +102,7 @@ impl ConnectionExt for Transaction<'_> {
 
             // Insert if needed
             if !hashes.contains(&hash) {
-                let typ: u8 = t.tag_type().into();
-                tag_stmt.execute((hash, t.name(), t.alt_name(), typ))?;
-                
+                tag_stmt.execute((hash, t.name(), t.alt_name(), t.tag_type()))?;
             }
             
             join_stmt.execute((element_id, hash))?;
@@ -383,10 +381,7 @@ impl ElementStorage for Sqlite {
         )?.query_map((&ids, tag_limit,), |r| Ok(read::Tag {
             name: r.get(0)?,
             alt_name: r.get(1)?,
-            tag_type: {
-                let raw: u8 = r.get(2)?;       
-                raw.into()
-            },
+            tag_type: r.get(2)?,
             group_id: r.get(3)?,
             count: r.get(4)?,
         }))?
@@ -461,10 +456,7 @@ impl ElementStorage for Sqlite {
                 )?.query_map((id,), |r| Ok(read::Tag {
                     name: r.get(0)?,
                     alt_name: r.get(1)?,
-                    tag_type: {
-                        let raw: u8 = r.get(2)?;
-                        raw.into()        
-                    },
+                    tag_type: r.get(2)?,
                     group_id: r.get(3)?,
                     count: r.get(4)?,
                 }))?
@@ -500,10 +492,7 @@ impl ElementStorage for Sqlite {
         )?.query_map((fmt, limit), |r| Ok(read::Tag {
             name: r.get(0)?,
             alt_name: r.get(1)?,
-            tag_type: {
-                let raw: u8 = r.get(2)?;
-                raw.into()        
-            },
+            tag_type: r.get(2)?,
             group_id: r.get(3)?,
             count: r.get(4)?,
         }))?
@@ -526,7 +515,7 @@ impl ElementStorage for Sqlite {
             (ids,), 
         )?;
         Ok(())
-    }   
+    }
 }
 
 
