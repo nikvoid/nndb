@@ -2,6 +2,7 @@ use actix_files::Files;
 use actix_web::{HttpServer, App, web::redirect};
 use tracing::info;
 use tracing_actix_web::TracingLogger;
+use tracing_subscriber::fmt::writer::Tee;
 
 use crate::config::CONFIG;
 
@@ -16,7 +17,13 @@ mod search;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    let log_file = std::fs::File::options()
+        .append(true)
+        .create(true)
+        .open(&CONFIG.log_file)?;
+    
     tracing_subscriber::fmt()
+        .with_writer(Tee::new(std::io::stdout, log_file))
         .with_file(true)
         .with_line_number(true)
         .init();

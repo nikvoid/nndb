@@ -24,6 +24,8 @@ pub struct Config {
     pub port: u16,
     /// If Some, serve static files from this folder
     pub static_folder: Option<String>,
+    /// File to write logs
+    pub log_file: String,
 }
 
 /// Global config
@@ -39,4 +41,5 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| Config {
     bind_address: "0.0.0.0".to_string(),
     port: 8080,
     static_folder: Some("static".to_string()),
+    log_file: "log.txt".to_string(),
 });
