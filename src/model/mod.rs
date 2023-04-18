@@ -39,6 +39,14 @@ pub struct GroupMetadata {
     pub group_id: Option<u32>,
 }
 
+/// Database summary
+pub struct Summary {
+    /// Count of tags in DB
+    pub tag_count: u32,
+    /// Count of elements in DB
+    pub element_count: u32,
+}
+
 /// Gelbooru-like types
 #[derive(Clone, Copy, FromPrimitive, IntoPrimitive, Sequence, PartialEq, Serialize, Deserialize)]
 #[repr(u8)]

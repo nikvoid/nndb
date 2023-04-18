@@ -8,14 +8,17 @@ mod index;
 mod element;
 mod tag;
 mod api;
+mod dashboard;
 
 pub use index::index_page;
 pub use element::element_page;
 pub use tag::tag_page;
+pub use dashboard::dashboard_page;
 pub use api::tag_autocomplete;
 pub use api::add_tags;
 pub use api::delete_tag;
 pub use api::edit_tag;
+pub use api::read_log;
 
 /// Helper for writing nested html_to!
 #[macro_export]
@@ -36,6 +39,8 @@ macro_rules! resolve {
     (/element/$eid:expr) => { $crate::html_in! { "/element/" ($eid) }};
     // Tag page
     (/tag/$name:expr) => { $crate::html_in! { "/tag/" ($name) }};
+    // Dashboard page
+    (/dashboard) => { "/dashboard" };
     ($($tt:tt)*) => { stringify!($($tt)*) };
 }
 
@@ -228,7 +233,7 @@ impl<'a> Render for BaseContainer<'a> {
                 }
                 footer {
                     .footer-container {
-                        (Button(resolve!(/admin), "Administration"))
+                        (Button(resolve!(/dashboard), "Dashboard"))
                     }
                     @if let Some(f) = &self.footer { (f) }
                 }

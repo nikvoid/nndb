@@ -666,5 +666,18 @@ impl ElementStorage for Sqlite {
 
         Ok(())
     }
+
+    fn get_summary(&self) -> anyhow::Result<Summary> {
+        let res = self.0.borrow().prepare(
+            "SELECT t.*, e.*
+            FROM (SELECT count(*) FROM tag) t, 
+                 (SELECT count(*) FROM element) e"
+        )?.query_row([], |r| Ok(Summary {
+            tag_count: r.get(0)?,
+            element_count: r.get(1)?,
+        }))?;
+
+        Ok(res)
+    }
     
 }

@@ -79,7 +79,7 @@ footer {
 
 @font-face {
     font-family: 'JetMonoMedium';
-    src:  url('/static/site/jetmono.woff2') format('woff2');
+    src:  url('/static/jetmono.woff2') format('woff2');
 }
 
 .log-window-inner {
@@ -91,6 +91,9 @@ footer {
     height: 97%;
     resize: none;
     background: #262626;
+    overflow-x: auto;
+    overflow-y: auto;
+    max-height: 85vh;
 }
 
 .code {

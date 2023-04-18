@@ -4,7 +4,7 @@ use once_cell::sync::Lazy;
 pub use sqlite::Sqlite;
 use tokio::sync::Mutex;
 
-use crate::{config::CONFIG, model::{write::{Tag, ElementMetadata, ElementWithMetadata}, Md5Hash, read::{PendingImport, self}, GroupMetadata}};
+use crate::{config::CONFIG, model::{write::{Tag, ElementMetadata, ElementWithMetadata}, Md5Hash, read::{PendingImport, self}, GroupMetadata, Summary}};
 
 pub type StorageBackend = Sqlite;
 
@@ -88,4 +88,6 @@ pub trait ElementStorage {
     /// Update tag data
     fn update_tag<T>(&self, tag: T, hidden: bool) -> anyhow::Result<()>
     where T: AsRef<Tag>;
+
+    fn get_summary(&self) -> anyhow::Result<Summary>;
 }

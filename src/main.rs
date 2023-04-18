@@ -61,10 +61,12 @@ async fn main() -> std::io::Result<()> {
             .service(view::index_page)
             .service(view::element_page)
             .service(view::tag_autocomplete)
-            .service(view::add_tags)
+            .service(view::dashboard_page)
             .service(view::tag_page)
+            .service(view::add_tags)
             .service(view::delete_tag)
             .service(view::edit_tag)
+            .service(view::read_log)
         ;
 
         // Serve static folder if needed

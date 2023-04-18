@@ -1,9 +1,10 @@
-use std::path::Path;
+use std::{path::Path, io::SeekFrom};
 use anyhow::Context;
+use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tracing::error;
 use std::fmt::Write;
 use itertools::Itertools;
-use crate::{model::{Signature, write::{self, ElementToParse, ElementWithMetadata}, SIGNATURE_LEN}, import::{TAG_TRIGGER, ElementPrefab, Importer, ANIMATION_EXTS}};
+use crate::{model::{Signature, write::{self, ElementToParse, ElementWithMetadata}, SIGNATURE_LEN}, import::{TAG_TRIGGER, ElementPrefab, Importer, ANIMATION_EXTS}, config::CONFIG};
 
 /// Derive crc32
 pub trait Crc32Hash {
@@ -130,4 +131,13 @@ pub fn make_thumbnail(
     
     thumb.save(thumb_out)?;
     Ok(())
+}
+
+/// Read log tail to buf
+pub async fn get_log_tail(buf: &mut [u8]) -> anyhow::Result<usize> {
+    let mut f = tokio::fs::File::open(&CONFIG.log_file).await?;
+    let size = f.seek(SeekFrom::End(0)).await?;
+    f.seek(SeekFrom::Start(size.saturating_sub(buf.len() as u64))).await?;
+    let read = f.read(buf).await?;
+    Ok(read)
 }
