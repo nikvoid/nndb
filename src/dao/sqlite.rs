@@ -206,8 +206,7 @@ impl ConnectionExt for Connection {
             clause.push_str(
                 "
                 SELECT e.id FROM element e
-                LEFT JOIN element_tag et ON et.element_id = e.id
-                LEFT JOIN tag t ON t.name_hash = et.tag_hash
+                JOIN element_tag et ON et.element_id = e.id
                 WHERE et.tag_hash = ?
                 "
             );
@@ -217,24 +216,28 @@ impl ConnectionExt for Connection {
 
         // Subtract from set all elements except ones that have their tags unmasked 
         clause.push_str( // sql
-            "INTERSECT
+            "EXCEPT
             SELECT e.id FROM element e
-            LEFT JOIN element_tag et ON et.element_id = e.id
-            LEFT JOIN tag t ON t.name_hash = et.tag_hash
-            WHERE t.hidden = 0 AND t.name_hash NOT IN rarray(?)  
+            JOIN element_tag et ON et.element_id = e.id
+            JOIN tag t ON t.name_hash = et.tag_hash AND t.hidden = 1 
+            WHERE e.id NOT IN (
+                SELECT e.id FROM element e
+                JOIN element_tag et ON et.element_id = e.id AND et.tag_hash in rarray(?)
+            )
             "
         );
-        
+
+        params.push(ToSqlOutput::Array(Rc::new(unmasked)));
         // Wrap clause into subquery to avoid selecting columns other than id
         // multiple times
         let clause = format!( 
             "SELECT id.id, e.add_time FROM ({clause}) as id
-            INNER JOIN element e ON id.id = e.id 
+            JOIN element e ON id.id = e.id 
             ORDER BY e.add_time DESC"
         );
         
-        let unmasked = Rc::new(unmasked);
-        params.push(ToSqlOutput::Array(unmasked));
+        // let unmasked = Rc::new(unmasked);
+        // params.push(ToSqlOutput::Array(unmasked));
 
         let params = params.iter()
             .map(|p| p as &dyn ToSql)
