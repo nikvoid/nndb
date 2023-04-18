@@ -10,15 +10,25 @@ use serde::{Deserialize, Serialize};
 
 const ELEMENTS_ON_PAGE: u32 = 50;
 const PAGES_LOOKAROUND: u32 = 5;
+const PAGES_JUMP: u32 = 2;
 /// Count of tags for element selection, that will be shown 
 /// in [AsideTags] 
 const SELECTION_TAGS_COUNT: u32 = 50;
 
 /// Get range of pages (buttons) to display
-fn get_pages(max_page: u32, current: u32) -> RangeInclusive<u32> {
+fn get_pages(max_page: u32, current: u32) -> impl Iterator<Item = u32> {
     let left = current.saturating_sub(PAGES_LOOKAROUND).clamp(1, max_page);
+
+    let left_off = PAGES_JUMP.clamp(0, left.saturating_sub(1));
+    let left_jump = 1 + left_off;
+    
     let right = (current + PAGES_LOOKAROUND).clamp(1, max_page);
-    left..=right
+
+    let right_off = PAGES_JUMP.clamp(0, max_page - right); 
+    let right_jump = max_page - right_off + 1; 
+    (1..left_jump)
+        .chain(left..=right)
+        .chain(right_jump..=max_page)
 }
 
 /// Page buttons row (maxpage, current, query)
