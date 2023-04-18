@@ -199,6 +199,10 @@ footer {
     grid-column: 1;
 }
 
+.tag-hidden {
+    text-decoration: line-through;
+}
+
 .tag-alt-name {
     font-size: 0.95em;
     font-style: italic;

@@ -12,6 +12,7 @@ mod service;
 mod config; 
 mod util;
 mod view;
+mod search;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {

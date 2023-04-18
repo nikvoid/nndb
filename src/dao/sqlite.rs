@@ -1,10 +1,11 @@
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
+use anyhow::Context;
 use itertools::Itertools;
 use rusqlite::{Connection, named_params, Transaction, types::{Value, ToSqlOutput}, vtab, ToSql};
 use tracing::error;
 
-use crate::{model::{Md5Hash, GroupMetadata, SIGNATURE_LEN, AIMetadata}, util};
+use crate::{model::{Md5Hash, GroupMetadata, SIGNATURE_LEN, AIMetadata}, util::{self, Crc32Hash}, search::{self, Term}};
 
 use super::*;
 
@@ -12,7 +13,7 @@ const SQLITE_UP: &str = include_str!("sqlite_up.sql");
 
 pub struct Sqlite(RefCell<Connection>);
 
-trait ConnectionExt {
+trait TransactionExt {
     fn add_element(&self, e: &ElementWithMetadata) -> anyhow::Result<u32>;
 
     fn get_tags_hashes(&self) -> anyhow::Result<Vec<u32>>;
@@ -24,7 +25,7 @@ trait ConnectionExt {
     where M: AsRef<ElementMetadata>;
 }
 
-impl ConnectionExt for Transaction<'_> {
+impl TransactionExt for Transaction<'_> {
     /// Returns element id
     /// Inner method without RefCell overhead
     fn add_element(&self, e: &ElementWithMetadata) -> anyhow::Result<u32> {
@@ -151,6 +152,117 @@ impl ConnectionExt for Transaction<'_> {
         }
 
         Ok(())
+    }
+}
+
+trait ConnectionExt {
+    fn search_element_ids(&self, query: &str) -> anyhow::Result<Vec<u32>>; 
+    fn get_tag_data(&self, name: &str) -> anyhow::Result<Option<read::Tag>>;
+}
+
+impl ConnectionExt for Connection {
+    /// Get ids of elements that this search query should get
+    fn search_element_ids(&self, query: &str) -> anyhow::Result<Vec<u32>> {
+        // Base set
+        let mut clause = String::from(
+            "SELECT e.id FROM element e
+            "
+        );
+
+        let mut unmasked = vec![];
+        let mut params = vec![];
+
+        for meta in search::parse_query(query) {
+            match meta {
+                Term::Tag(..) => continue,
+                Term::Group(id) => {
+                    clause.push_str(
+                        "INTERSECT
+                        SELECT e.id FROM element e
+                        INNER JOIN group_metadata g ON g.element_id = e.id
+                        WHERE g.group_id = ?
+                        "
+                    );
+                    params.push(ToSqlOutput::Owned(Value::Integer(id as i64)))
+                }
+            }
+        }
+
+        for tag in search::parse_query(query) {
+            let Term::Tag(pos, name) = tag else { continue };
+            let hash = name.crc32();
+
+            // If one of tags not in db, we can immediately return empty vec
+            let Some(data) = self.get_tag_data(name)? else {
+                return Ok(vec![])
+            };            
+            
+            if data.hidden {
+                unmasked.push(Value::Integer(hash as i64));
+            }
+
+            // If tag is positive, intersect with set, otherwise subtract it
+            clause.push_str(if pos { "INTERSECT" } else { "EXCEPT" });
+            clause.push_str(
+                "
+                SELECT e.id FROM element e
+                LEFT JOIN element_tag et ON et.element_id = e.id
+                LEFT JOIN tag t ON t.name_hash = et.tag_hash
+                WHERE et.tag_hash = ?
+                "
+            );
+
+            params.push(ToSqlOutput::Owned(Value::Integer(hash as i64)))            
+        }
+
+        // Subtract from set all elements except ones that have their tags unmasked 
+        clause.push_str( // sql
+            "INTERSECT
+            SELECT e.id FROM element e
+            LEFT JOIN element_tag et ON et.element_id = e.id
+            LEFT JOIN tag t ON t.name_hash = et.tag_hash
+            WHERE t.hidden = 0 AND t.name_hash NOT IN rarray(?)  
+            "
+        );
+        
+        // Wrap clause into subquery to avoid selecting columns other than id
+        // multiple times
+        let clause = format!( 
+            "SELECT id.id, e.add_time FROM ({clause}) as id
+            INNER JOIN element e ON id.id = e.id 
+            ORDER BY e.add_time DESC"
+        );
+        
+        let unmasked = Rc::new(unmasked);
+        params.push(ToSqlOutput::Array(unmasked));
+
+        let params = params.iter()
+            .map(|p| p as &dyn ToSql)
+            .collect_vec();
+        
+        let v: Result<Vec<_>, _> = self.prepare_cached(&clause)?
+            .query_map(&params[..], |r| r.get::<_, u32>(0))?
+            .collect();
+
+        Ok(v?)
+    }
+
+    /// Inner method
+    fn get_tag_data(&self, name: &str) -> anyhow::Result<Option<read::Tag>> {
+        let res = self.prepare_cached( // sql
+            "SELECT tag_name, alt_name, tag_type, count, group_id, hidden
+            FROM tag
+            WHERE name_hash = ?"
+        )?.query_map((name.crc32(),), |r| Ok(read::Tag {
+            name: r.get(0)?,
+            alt_name: r.get(1)?,
+            tag_type: r.get(2)?,
+            count: r.get(3)?,
+            group_id: r.get(4)?,
+            hidden: r.get(5)?,
+        }))?.next();
+
+        Ok(res.transpose()?)
     }
 }
 
@@ -332,17 +444,12 @@ impl ElementStorage for Sqlite {
     where Q: AsRef<str> {
         let conn = self.0.borrow();
 
-        let (clause, params) = query_transform(query.as_ref());
-        let params = params.iter()
-            .map(|p| p as &dyn ToSql)
+        let ids = conn.search_element_ids(query.as_ref())?
+            .into_iter()
+            .map(|id| Value::Integer(id as i64))
             .collect_vec();
-        
-        // Map ids to Rc<Vec<Value::Integer>> to use them in rarray()
-        let ids: Result<Vec<_>, _> = conn.prepare_cached(
-            &clause
-        )?.query_map(&params[..], |r| Ok(Value::Integer(r.get(0)?)))?
-        .collect();
-        let ids = Rc::new(ids?);
+
+        let ids = Rc::new(ids);
         
         // Fail if one of elements failed to fetch
         let elems: Result<Vec<_>, _> = conn.prepare_cached( // sql
@@ -370,9 +477,9 @@ impl ElementStorage for Sqlite {
         let elems = elems?;
 
         let tags: Result<Vec<_>, _> = conn.prepare_cached( // sql
-            "SELECT t.tag_name, t.alt_name, t.tag_type, t.group_id, t.count
+            "SELECT t.tag_name, t.alt_name, t.tag_type, t.group_id, t.count, t.hidden
             FROM tag t
-            WHERE t.hidden = 0 AND t.name_hash IN (
+            WHERE t.name_hash IN (
                 SELECT tag_hash FROM element_tag
                 WHERE element_id in rarray(?) 
             )
@@ -384,7 +491,7 @@ impl ElementStorage for Sqlite {
             tag_type: r.get(2)?,
             group_id: r.get(3)?,
             count: r.get(4)?,
-            hidden: false,
+            hidden: r.get(5)?,
         }))?
         .collect();
         
@@ -522,26 +629,13 @@ impl ElementStorage for Sqlite {
 
     fn get_tag_data<N>(&self, name: N) -> anyhow::Result<Option<read::Tag>>
     where N: AsRef<str> {
-        let res = self.0.borrow().prepare_cached( // sql
-            "SELECT tag_name, alt_name, tag_type, count, group_id, hidden
-            FROM tag
-            WHERE name_hash = ?"
-        )?.query_map((crc32fast::hash(name.as_ref().as_bytes()),), |r| Ok(read::Tag {
-            name: r.get(0)?,
-            alt_name: r.get(1)?,
-            tag_type: r.get(2)?,
-            count: r.get(3)?,
-            group_id: r.get(4)?,
-            hidden: r.get(5)?,
-        }))?.next();
-
-        Ok(res.transpose()?)
+        self.0.borrow().get_tag_data(name.as_ref())
     }
 
     fn remove_tag_from_element<N>(&self, element_id: u32, tag_name: N) -> anyhow::Result<()>
     where N: AsRef<str> {
         let conn = self.0.borrow();
-        let hash = crc32fast::hash(tag_name.as_ref().as_bytes());
+        let hash = tag_name.as_ref().crc32();
 
         let rows = conn.execute(
             "DELETE FROM element_tag WHERE element_id = ? AND tag_hash = ?",
@@ -571,82 +665,3 @@ impl ElementStorage for Sqlite {
     }
     
 }
-
-// TODO: Hiding
-/// Transform query from plaintext to SQL that yields IDs as first column and parameters
-fn query_transform<'a>(query: &'a str) -> (String, Vec<ToSqlOutput<'a>>) {
-    // Base set
-    let mut clause = String::from(
-        "SELECT e.id FROM element e
-        "
-    );
-
-    let mut params = vec![];
-
-    enum Ordering {
-        AddTime
-    }
-
-    let ord = Ordering::AddTime;
-
-    // Terms that are not simple tags
-    for meta_term in query.split_whitespace().filter(|t| t.contains(":")) {
-        let Some((left, right)) = meta_term
-            .split(':')
-            .tuples()
-            .next()
-        else { continue };
-
-        match (left, right) {
-            ("group", id) => if let Some(id) = id.parse::<u32>().ok() {
-                clause.push_str(
-                    "INTERSECT
-                    SELECT e.id FROM element e
-                    INNER JOIN group_metadata g ON g.element_id = e.id
-                    WHERE g.group_id = ?
-                    "
-                );
-                params.push(ToSqlOutput::Owned(Value::Integer(id as i64)))
-            }
-            _ => ()
-        }
-    }
-
-    // Simple tags
-    for term in query.split_whitespace().filter(|t| !t.contains(":"))  {
-        // Negative term, exclude this set
-        let term = if term.starts_with('!') {
-            clause.push_str("EXCEPT");
-            &term[1..]
-        } else {
-            clause.push_str("INTERSECT");
-            term
-        };
-        
-        clause.push_str(
-            "
-            SELECT e.id FROM element e
-            LEFT JOIN element_tag et ON et.element_id = e.id
-            LEFT JOIN tag t ON t.name_hash = et.tag_hash
-            WHERE et.tag_hash = ?
-            "
-        );
-        let hash = crc32fast::hash(term.as_bytes());
-        params.push(ToSqlOutput::Owned(Value::Integer(hash as i64)));
-    }
-
-    // Wrap clause into subquery to avoid selecting columns other than id
-    // multiple times
-    let mut clause = format!( 
-        "SELECT id.id, e.add_time FROM ({clause}) as id
-        INNER JOIN element e ON id.id = e.id 
-        "
-    );
-    
-    clause.push_str(match ord {
-        Ordering::AddTime => "ORDER BY e.add_time DESC",
-    });
-
-    (clause, params)
-}
-

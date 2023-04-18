@@ -5,6 +5,17 @@ use std::fmt::Write;
 use itertools::Itertools;
 use crate::{model::{Signature, write::{self, ElementToParse, ElementWithMetadata}, SIGNATURE_LEN}, import::{TAG_TRIGGER, ElementPrefab, Importer, ANIMATION_EXTS}};
 
+/// Derive crc32
+pub trait Crc32Hash {
+    /// Derive crc32
+    fn crc32(&self) -> u32;
+}
+
+impl Crc32Hash for str {
+    fn crc32(&self) -> u32 {
+        crc32fast::hash(self.as_bytes())
+    }
+}
 
 /// Get distance between 2 signatures.
 /// Maximal(?) value is `100.00`

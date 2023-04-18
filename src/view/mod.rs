@@ -257,7 +257,8 @@ impl Render for AsideTags<'_> {
                         })) {
                             "#" 
                         }
-                        a.tag.tag-block href=(Link(resolve!(/index), index::Request {
+                        a.tag.tag-block.tag-hidden[tag.hidden] href=(Link(resolve!(/index), 
+                        index::Request {
                             query: Some(&tag.name),
                             page: None
                         })) {
