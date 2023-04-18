@@ -77,7 +77,7 @@ pub async fn element_page(id: web::Path<u32>) -> impl Responder {
             }
         }),
         aside: Some(html! {
-            (AsideTags(&meta.tags))
+            (AsideTags(&meta.tags, Some(&elem)))
             (AsideMetadata(&meta))
             (TagEditForm(
                 html_in! { "addTagOnSubmit(event, this, " (elem.id) ")" }, 

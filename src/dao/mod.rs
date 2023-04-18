@@ -76,4 +76,16 @@ pub trait ElementStorage {
 
     /// Mark that `element_ids` have thumbnails
     fn add_thumbnails(&self, element_ids: &[u32]) -> anyhow::Result<()>;
+
+    /// Get full data for tag by it's primary name
+    fn get_tag_data<N>(&self, name: N) -> anyhow::Result<Option<read::Tag>>
+    where N: AsRef<str>; 
+
+    /// Remove tag from element
+    fn remove_tag_from_element<N>(&self, element_id: u32, tag_name: N) -> anyhow::Result<()>
+    where N: AsRef<str>;
+
+    /// Update tag data
+    fn update_tag<T>(&self, tag: T, hidden: bool) -> anyhow::Result<()>
+    where T: AsRef<Tag>;
 }

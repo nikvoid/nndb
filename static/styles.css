@@ -199,6 +199,12 @@ footer {
     grid-column: 1;
 }
 
+.tag-alt-name {
+    font-size: 0.95em;
+    font-style: italic;
+    color: #eeeeee;
+}
+
 .tags {
     margin-top: 4px;
     margin-bottom: 4px;

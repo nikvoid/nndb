@@ -3,7 +3,7 @@ use std::{str::FromStr, convert::Infallible};
 use chrono::{DateTime, Utc};
 use enum_iterator::Sequence;
 use num_enum::{FromPrimitive, IntoPrimitive};
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 
 pub const SIGNATURE_LEN: usize = 544;
 
@@ -40,14 +40,20 @@ pub struct GroupMetadata {
 }
 
 /// Gelbooru-like types
-#[derive(Clone, Copy, FromPrimitive, IntoPrimitive, Sequence, PartialEq, Serialize)]
+#[derive(Clone, Copy, FromPrimitive, IntoPrimitive, Sequence, PartialEq, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum TagType {
-    Reserved  = 0,
+    #[serde(alias = "service")]
+    Service   = 0,
+    #[serde(alias = "artist")]
     Artist    = 1,
+    #[serde(alias = "character")]
     Character = 2,
+    #[serde(alias = "title")]
     Title     = 3,
+    #[serde(alias = "metadata")]
     Metadata  = 4,
+    #[serde(alias = "tag")]
     #[default]
     Tag       = 5,
 }
@@ -56,7 +62,7 @@ impl TagType {
     /// Get name of tag type
     pub fn label(self) -> &'static str {
         match self {
-            TagType::Reserved => "service",
+            TagType::Service => "service",
             TagType::Artist => "artist",
             TagType::Character => "character",
             TagType::Title => "title",

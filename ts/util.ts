@@ -53,3 +53,60 @@ function addTagOnSubmit(event: Event, form: HTMLFormElement, elementId: number) 
   event.preventDefault();
   return false;
 }
+
+/// Delete tag from element onclick handler
+function deleteTagOnClick(elem_id: number, tag_name: string) {
+  let payload = {
+    element_id: elem_id,
+    tag_name: tag_name
+  };
+
+  let request = new XMLHttpRequest();
+  request.onreadystatechange = () => {
+    if (request.readyState == 4) {
+      if (request.status == 200) {
+        location.replace(`/element/${elem_id}`);
+      } else {
+        alert(request.status + " " + request.response);
+      }
+    }
+  }
+  
+  request.open('POST', "/api/write/delete_tag", true);
+  request.setRequestHeader("Content-Type", "application/json");
+  request.send(JSON.stringify(payload));
+  return false;
+}
+
+/// Edit tag onclick handler
+function editTagOnClick(event: Event, form: HTMLFormElement, tag_name: string) {
+  let type_select = form.getElementsByClassName("set-type")[0]!;
+  let alt_name_text = form.getElementsByClassName("alt-name")[0]!;
+  let hidden_box = form.getElementsByClassName("is-hidden")[0]!;
+
+  if (type_select instanceof HTMLSelectElement 
+    && alt_name_text instanceof HTMLInputElement
+    && hidden_box instanceof HTMLInputElement) {
+
+    let payload = {
+      tag_name: tag_name,
+      alt_name: alt_name_text.value.length == 0? null : alt_name_text.value,
+      tag_type: type_select.selectedOptions[0].value,
+      hidden: hidden_box.checked
+    };
+
+    let request = new XMLHttpRequest();
+    request.onerror = () => {
+      alert(request.status + " " + request.response);
+    };
+    request.onloadend = () => {
+      location.reload();
+    };
+    
+    request.open('POST', "/api/write/edit_tag", true);
+    request.setRequestHeader("Content-Type", "application/json");
+    request.send(JSON.stringify(payload));
+  }
+  event.preventDefault();
+  return false;
+}

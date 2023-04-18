@@ -87,7 +87,7 @@ pub async fn index_page(query: web::Query<Request<String>>) -> impl Responder {
             }
             (PageButtons(maxpage, page, query.0.query.as_deref()))
         }),
-        aside: Some(AsideTags(&tags).render()),
+        aside: Some(AsideTags(&tags, None).render()),
         query: query_str, 
         ..Default::default()
     }.render();

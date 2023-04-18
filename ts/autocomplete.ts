@@ -57,7 +57,8 @@ function getCompletions(textbox: HTMLInputElement, selectorId: string) {
       }
 
       const list = json.map(compl => {
-        const alt_name = compl.alt_name === null? "" : compl.alt_name;
+        const alt_name = compl.alt_name === null? "" : 
+          `<span class="tag-alt-name">${compl.alt_name}</span>`;
         const prefix = pref === null? "" : pref;
         return `
           <li onclick="onCompletionClick(
@@ -67,8 +68,8 @@ function getCompletions(textbox: HTMLInputElement, selectorId: string) {
             ${start}, 
             ${end}
           );">
-            <div class="cand-name">${prefix}${compl.name}</div>
-            <div class="cand-info">${alt_name} ${compl.tag_type.toLowerCase()} ${compl.count}</div>
+            <div class="cand-name">${prefix}${compl.name}   ${alt_name}</div>
+            <div class="cand-info">${compl.tag_type.toLowerCase()} ${compl.count}</div>
           </li>`
       }).join("");
 

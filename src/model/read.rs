@@ -16,6 +16,8 @@ pub struct Tag {
     pub count: u32,
     /// Group id of similar tags/aliases
     pub group_id: Option<u32>,
+    /// Is tag hidden
+    pub hidden: bool,
 }
 
 pub struct Element {

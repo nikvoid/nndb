@@ -384,6 +384,7 @@ impl ElementStorage for Sqlite {
             tag_type: r.get(2)?,
             group_id: r.get(3)?,
             count: r.get(4)?,
+            hidden: false,
         }))?
         .collect();
         
@@ -450,7 +451,7 @@ impl ElementStorage for Sqlite {
                 let (elem, mut meta) = data?;
                 
                 let tags: Result<Vec<_>, _> = conn.prepare_cached( // sql
-                    "SELECT t.tag_name, t.alt_name, t.tag_type, t.group_id, t.count
+                    "SELECT t.tag_name, t.alt_name, t.tag_type, t.group_id, t.count, t.hidden
                     FROM tag t, element_tag et
                     WHERE t.name_hash = et.tag_hash AND et.element_id = ?"
                 )?.query_map((id,), |r| Ok(read::Tag {
@@ -459,6 +460,7 @@ impl ElementStorage for Sqlite {
                     tag_type: r.get(2)?,
                     group_id: r.get(3)?,
                     count: r.get(4)?,
+                    hidden: r.get(5)?,
                 }))?
                 .collect();
 
@@ -486,7 +488,7 @@ impl ElementStorage for Sqlite {
         let fmt = format!("%{}%", input.as_ref());
         let v: Result<Vec<_>, _> = self.0.borrow().prepare_cached( //sql
             "SELECT tag_name, alt_name, tag_type, group_id, count
-            FROM tag WHERE tag_name LIKE ?
+            FROM tag WHERE tag_name LIKE ? AND hidden = 0
             ORDER BY count DESC
             LIMIT ?"
         )?.query_map((fmt, limit), |r| Ok(read::Tag {
@@ -495,6 +497,7 @@ impl ElementStorage for Sqlite {
             tag_type: r.get(2)?,
             group_id: r.get(3)?,
             count: r.get(4)?,
+            hidden: false,
         }))?
         .collect();
         
@@ -516,9 +519,60 @@ impl ElementStorage for Sqlite {
         )?;
         Ok(())
     }
+
+    fn get_tag_data<N>(&self, name: N) -> anyhow::Result<Option<read::Tag>>
+    where N: AsRef<str> {
+        let res = self.0.borrow().prepare_cached( // sql
+            "SELECT tag_name, alt_name, tag_type, count, group_id, hidden
+            FROM tag
+            WHERE name_hash = ?"
+        )?.query_map((crc32fast::hash(name.as_ref().as_bytes()),), |r| Ok(read::Tag {
+            name: r.get(0)?,
+            alt_name: r.get(1)?,
+            tag_type: r.get(2)?,
+            count: r.get(3)?,
+            group_id: r.get(4)?,
+            hidden: r.get(5)?,
+        }))?.next();
+
+        Ok(res.transpose()?)
+    }
+
+    fn remove_tag_from_element<N>(&self, element_id: u32, tag_name: N) -> anyhow::Result<()>
+    where N: AsRef<str> {
+        let conn = self.0.borrow();
+        let hash = crc32fast::hash(tag_name.as_ref().as_bytes());
+
+        let rows = conn.execute(
+            "DELETE FROM element_tag WHERE element_id = ? AND tag_hash = ?",
+            (element_id, hash)
+        )?;
+
+        if rows > 0 {
+            conn.execute(
+                "UPDATE tag SET count = count - 1 WHERE name_hash = ?",
+                (hash,) 
+            )?;
+        }
+
+        Ok(())
+    }
+
+    fn update_tag<T>(&self, tag: T, hidden: bool) -> anyhow::Result<()>
+    where T: AsRef<Tag> {
+        let tag = tag.as_ref();
+        self.0.borrow().execute(
+            "UPDATE tag SET alt_name = ?, tag_type = ?, hidden = ?
+            WHERE name_hash = ?", 
+            (tag.alt_name(), tag.tag_type(), hidden, tag.name_hash())
+        )?;
+
+        Ok(())
+    }
+    
 }
 
-
+// TODO: Hiding
 /// Transform query from plaintext to SQL that yields IDs as first column and parameters
 fn query_transform<'a>(query: &'a str) -> (String, Vec<ToSqlOutput<'a>>) {
     // Base set

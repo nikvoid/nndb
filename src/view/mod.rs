@@ -6,12 +6,16 @@ use crate::{config::CONFIG, model::{read::{Tag, Element, ElementMetadata}, TagTy
 
 mod index;
 mod element;
+mod tag;
 mod api;
 
 pub use index::index_page;
 pub use element::element_page;
+pub use tag::tag_page;
 pub use api::tag_autocomplete;
 pub use api::add_tags;
+pub use api::delete_tag;
+pub use api::edit_tag;
 
 /// Helper for writing nested html_to!
 #[macro_export]
@@ -28,8 +32,10 @@ macro_rules! html_in {
 macro_rules! resolve {
     // Index page
     (/index) => { "/index" };
-    // Element page (not yet)
-    (/element/$eid:expr) => { $crate::html_in!("/element/" ($eid) ) };
+    // Element page
+    (/element/$eid:expr) => { $crate::html_in! { "/element/" ($eid) }};
+    // Tag page
+    (/tag/$name:expr) => { $crate::html_in! { "/tag/" ($name) }};
     ($($tt:tt)*) => { stringify!($($tt)*) };
 }
 
@@ -232,7 +238,7 @@ impl<'a> Render for BaseContainer<'a> {
 }
 
 /// Block with tags aside of element list/element page
-struct AsideTags<'a>(&'a [Tag]);
+struct AsideTags<'a>(&'a [Tag], Option<&'a Element>);
 impl Render for AsideTags<'_> {
     fn render_to(&self, buffer: &mut String) {
         // Group tags by types (create iterator for each non-empty type)
@@ -246,7 +252,11 @@ impl Render for AsideTags<'_> {
                 .tag { (typ.label()) }
                 @for tag in tags {
                     .tag-container-grid {
-                        a.tag.tag-hash href=(resolve!(/tag/t.name)) { "#" }
+                        a.tag.tag-hash href=(Link(resolve!(/tag/tag.name), tag::Request {
+                            element_ref: (self.1.map(|e| e.id))
+                        })) {
+                            "#" 
+                        }
                         a.tag.tag-block href=(Link(resolve!(/index), index::Request {
                             query: Some(&tag.name),
                             page: None
@@ -256,7 +266,7 @@ impl Render for AsideTags<'_> {
                             }
                             (tag.count) 
                             @if let Some(alt) = &tag.alt_name {
-                                br; (alt)
+                                br; span.tag-alt-name { (alt) }
                             }
                         }
                     }
@@ -283,29 +293,30 @@ where OnSubmit: Render {
     }
 }
 
+/// param_name   param_data
+/// 
+/// For different parameters that usually rendered aside
+struct BlockParam<'a, R>(&'a str, R);
+impl<R> Render for BlockParam<'_, R>
+where R: Render {
+    fn render_to(&self, buffer: &mut String) {
+
+        html_to! { buffer,
+            .tag-container-grid {
+                @if !self.0.is_empty() {
+                    .tag.tag-hash { (self.0) }
+                }
+                .tag.tag-block { (self.1) }
+            }
+        }
+
+    }
+}
+
 /// Aside block that displays element metadata
 struct AsideMetadata<'a>(&'a ElementMetadata);
 impl Render for AsideMetadata<'_> {
     fn render_to(&self, buffer: &mut String) {
-        /// # param_name
-        /// param_data
-        ///
-        /// Helper
-        struct Param<'a, R>(&'a str, R);
-        impl<R> Render for Param<'_, R>
-        where R: Render {
-            fn render_to(&self, buffer: &mut String) {
-                html_to! { buffer,
-                    .tag-container-grid {
-                        @if !self.0.is_empty() {
-                            .tag.tag-hash { (self.0) }
-                        }
-                        .tag.tag-block { (self.1) }
-                    }
-                }
-            }
-        }
-        
         html_to! { buffer,
             .tag { "Time" }
             .tag-container-grid {
@@ -324,20 +335,20 @@ impl Render for AsideMetadata<'_> {
             }
             @if let Some(ai) = &self.0.ai_meta {
                 .tag { "NN Metadata" }
-                (Param("", html_in! { "Positive prompt" br; (ai.positive_prompt) }))
+                (BlockParam("", html_in! { "Positive prompt" br; (ai.positive_prompt) }))
                 @if let Some(neg) = &ai.negative_prompt {
-                    (Param("", html_in! { "Negative prompt" br; (neg) }))
+                    (BlockParam("", html_in! { "Negative prompt" br; (neg) }))
                 }
-                (Param("Sampler", &ai.sampler))
-                (Param("Seed", ai.seed))
-                (Param("Steps", ai.steps))
-                (Param("Scale", ai.scale))
-                (Param("Strength", ai.strength))
-                (Param("Noise", ai.noise))
+                (BlockParam("Sampler", &ai.sampler))
+                (BlockParam("Seed", ai.seed))
+                (BlockParam("Steps", ai.steps))
+                (BlockParam("Scale", ai.scale))
+                (BlockParam("Strength", ai.strength))
+                (BlockParam("Noise", ai.noise))
             }
             @else if !self.0.tags.is_empty() {
                 .tag { "Generated prompt" }
-                (Param("", html_in! {
+                (BlockParam("", html_in! {
                     // compose prompt from tags
                     @for tag in &self.0.tags {
                         (tag.name) ", "
