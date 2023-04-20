@@ -10,7 +10,7 @@ use crate::{
     dao::{ElementStorage, STORAGE}, 
     import::{ElementPrefab, ANIMATION_EXTS, IMAGE_EXTS}, 
     model::write::ElementWithMetadata, 
-    config::CONFIG, util
+    config::CONFIG, util::{self, AutoBool}
 };
 
 /// Experimentaly decided optimal image signature distance 
@@ -19,8 +19,23 @@ pub const SIGNATURE_DISTANCE_THRESHOLD: f32 = 35.0;
 /// Width and height of thumbnails
 pub const THUMBNAIL_SIZE: (u32, u32) = (256, 256);
 
-/// Scan `CONFIG.input_folder` directory for new files and import them
+/// Indicate state of scan_files()
+pub static SCAN_FILES_LOCK: AutoBool = AutoBool::new();
+/// Indicate state of update_metadata()
+pub static UPDATE_METADATA_LOCK: AutoBool = AutoBool::new();
+/// Indicate state of group_elements_by_signature()
+pub static GROUP_ELEMENTS_LOCK: AutoBool = AutoBool::new();
+/// Indicate state of make_thumbnails()
+pub static MAKE_THUMBNAILS_LOCK: AutoBool = AutoBool::new();
+
+/// Scan `CONFIG.input_folder` directory for new files and import them.
+/// Will do nothing if already running
 pub fn scan_files() -> anyhow::Result<u32> {
+    let _guard = match SCAN_FILES_LOCK.acquire() {
+        Some(guard) => guard,
+        None => return Ok(0)
+    };
+    
     let files: Vec<_> = WalkDir::new(&CONFIG.input_folder)
         .into_iter()
         .filter_map(|e| {
@@ -85,20 +100,17 @@ pub fn scan_files() -> anyhow::Result<u32> {
         })
         .collect();
 
-    let res = STORAGE.blocking_lock().add_elements(&elements);
-
-    // TODO: Move to outer fn?
-    match &res {
-        Ok(count) => info!(?count, "added elements to db"),
-        Err(e) => error!(?e, "failed to add elements"),
-    }
-    
-    res
+    STORAGE.blocking_lock().add_elements(&elements)
 }
 
 
-/// Fetch metadata for all pending imports
+/// Fetch metadata for all pending imports.
+/// Will do nothing if already running
 pub async fn update_metadata() -> anyhow::Result<()> {
+    let _guard = match UPDATE_METADATA_LOCK.acquire() {
+        Some(guard) => guard,
+        None => return Ok(())
+    };
     let imports = STORAGE
         .lock()
         .await
@@ -136,10 +148,18 @@ pub async fn update_metadata() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Group elements by their image signature
-pub fn group_elements_by_signature() -> anyhow::Result<()> {
+/// Group elements by their image signature.
+/// Will do nothing if already running
+pub async fn group_elements_by_signature() -> anyhow::Result<()> {
+    let _guard = match GROUP_ELEMENTS_LOCK.acquire() {
+        Some(guard) => guard,
+        None => return Ok(())
+    };
     // Get all signatures
-    let group_metas = STORAGE.blocking_lock().get_groups()?;
+    let group_metas = STORAGE
+        .lock()
+        .await
+        .get_groups()?;
 
     // Get elements without assigned group
     let ungrouped = group_metas.iter()
@@ -184,7 +204,9 @@ pub fn group_elements_by_signature() -> anyhow::Result<()> {
                                 // Get existing
                                 Some(id) => id,
                                 // Or create
-                                None => STORAGE.blocking_lock()
+                                None => STORAGE
+                                    .lock()
+                                    .await
                                     .add_to_group(&[pot.element_id, elem.element_id], None)?,
                             }
                     };
@@ -196,7 +218,7 @@ pub fn group_elements_by_signature() -> anyhow::Result<()> {
     }
 
     // Add remaining
-    let store = STORAGE.blocking_lock();
+    let store = STORAGE.lock().await;
     for (group_id, elem_ids) in groups.0 {
         store.add_to_group(&elem_ids, Some(group_id))?;
     }
@@ -209,8 +231,13 @@ pub fn update_tag_count() -> anyhow::Result<()> {
     STORAGE.blocking_lock().update_tag_count()
 }
 
-/// Make thumbnails for all files that don't have one
+/// Make thumbnails for all files that don't have one.
+/// Will do nothing if already running
 pub fn make_thumbnails() -> anyhow::Result<()> {
+    let _guard = match MAKE_THUMBNAILS_LOCK.acquire() {
+        Some(guard) => guard,
+        None => return Ok(())
+    };
     let elems: Vec<_> = STORAGE.blocking_lock()
         .search_elements("", 0, 1000000, 0)?
         .0.into_par_iter()

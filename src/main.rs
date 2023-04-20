@@ -1,6 +1,8 @@
+use std::time::Duration;
+
 use actix_files::Files;
 use actix_web::{HttpServer, App, web::redirect};
-use tracing::info;
+use tracing::{info, error};
 use tracing_actix_web::TracingLogger;
 use tracing_subscriber::fmt::writer::Tee;
 
@@ -15,45 +17,59 @@ mod util;
 mod view;
 mod search;
 
+/// Spawn periodic import tasks
+async fn import_spawner() {
+    // Different delays are used here to drive tasks out of sync
+    // TODO: Random delays?..
+    
+    util::blocking_task_with_interval(|| match service::scan_files() {
+        Ok(count) => info!(count, "added elements to db"),
+        Err(e) => error!(?e, "failed to scan files"),
+    }, Duration::from_secs(300)).await;
+
+    util::task_with_interval(|| async {
+        match service::update_metadata().await {
+            Ok(_) => info!("updated metadata"),
+            Err(e) => error!(?e, "failed to update metadata"),
+        }        
+    }, Duration::from_secs(310)).await;
+
+    util::task_with_interval(|| async {
+        match service::group_elements_by_signature().await {
+            Ok(_) => info!("grouped elements"),
+            Err(e) => error!(?e, "failed to group elements"),
+        }        
+    }, Duration::from_secs(320)).await;
+
+    util::blocking_task_with_interval(|| match service::update_tag_count() {
+        Ok(_) => info!("updated tag count"),
+        Err(e) => error!(?e, "failed to update tag count"),
+    }, Duration::from_secs(325)).await;
+
+    util::blocking_task_with_interval(|| match service::make_thumbnails() {
+        Ok(_) => info!("made thumbnails"),
+        Err(e) => error!(?e, "failed to make thumbnails"),
+    }, Duration::from_secs(330)).await;
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let log_file = std::fs::File::options()
         .append(true)
         .create(true)
         .open(&CONFIG.log_file)?;
+
     
     tracing_subscriber::fmt()
         .with_writer(Tee::new(std::io::stdout, log_file))
         .with_file(true)
         .with_line_number(true)
         .init();
-    info!(addr=CONFIG.bind_address, port=CONFIG.port, "Starting server");
-        
-    tokio::task::spawn_blocking(service::scan_files)
-        .await
-        .unwrap()
-        .unwrap();
-    info!("Scanned files");
-    service::update_metadata()
-        .await
-        .unwrap();
-    info!("Updated metadata");
-    tokio::task::spawn_blocking(service::group_elements_by_signature)
-        .await
-        .unwrap()
-        .unwrap();
-    info!("Grouped images");
-    tokio::task::spawn_blocking(service::update_tag_count)
-        .await
-        .unwrap()
-        .unwrap();
-    info!("Updated tag counts");
-    tokio::task::spawn_blocking(service::make_thumbnails)
-        .await
-        .unwrap()
-        .unwrap();
-    info!("Made thumbnails");
 
+    info!("Spawning import tasks");
+    tokio::spawn(import_spawner()).await.unwrap();
+
+    info!(addr=CONFIG.bind_address, port=CONFIG.port, "Starting server");
     HttpServer::new(|| {
         let mut app = App::new()
             .wrap(TracingLogger::default())

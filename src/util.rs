@@ -1,5 +1,6 @@
-use std::{path::Path, io::SeekFrom};
+use std::{path::Path, io::SeekFrom, sync::atomic::AtomicBool, sync::atomic::Ordering, time::Duration};
 use anyhow::Context;
+use futures::Future;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tracing::error;
 use std::fmt::Write;
@@ -15,6 +16,36 @@ pub trait Crc32Hash {
 impl Crc32Hash for str {
     fn crc32(&self) -> u32 {
         crc32fast::hash(self.as_bytes())
+    }
+}
+
+/// AtomicBool that will be automatically set to `false` on guard drop
+pub struct AutoBool(AtomicBool);
+impl AutoBool {
+    /// Create new AutoBool in released state
+    pub const fn new() -> Self {
+        AutoBool(AtomicBool::new(false))
+    }
+        
+    /// Acquire bool guard if bool is `false`
+    pub fn acquire(&self) -> Option<AutoBoolGuard> {
+        match self.0.compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed) {
+            Ok(false) => Some(AutoBoolGuard(&self.0)),
+            _ => None
+        }
+    }
+
+    /// Get bool state
+    pub fn inspect(&self) -> bool {
+        self.0.load(Ordering::Relaxed)
+    }
+}
+
+/// Guard that will set inner AtomicBool to `false` on drop
+pub struct AutoBoolGuard<'a>(&'a AtomicBool);
+impl Drop for AutoBoolGuard<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Relaxed);
     }
 }
 
@@ -141,3 +172,33 @@ pub async fn get_log_tail(buf: &mut [u8]) -> anyhow::Result<usize> {
     let read = f.read(buf).await?;
     Ok(read)
 }
+
+/// Spawn task that will periodically spawn future
+pub async fn task_with_interval<F, Fut>(futs: F, interval: Duration) 
+where 
+    F: Fn() -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = ()> + Send + 'static {
+    tokio::spawn(async move {
+        loop {
+            match tokio::spawn(futs()).await {
+                Ok(_) => (),
+                Err(e) => error!(?e, "failed to wait for future"),
+            }
+            tokio::time::sleep(interval).await;
+        }
+    });
+}
+
+/// Spawn task that will periodically spawn blocking task 
+pub async fn blocking_task_with_interval<F>(f: F, interval: Duration) 
+where F: Fn() -> () + Send + Sync + Clone + Copy + 'static {
+    tokio::spawn(async move {
+        loop {
+            match tokio::task::spawn_blocking(f).await {
+                Ok(_) => (),
+                Err(e) => error!(?e, "failed to wait for blocking future"),
+            }
+            tokio::time::sleep(interval).await;
+        }
+    });
+} 

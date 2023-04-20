@@ -50,7 +50,7 @@ pub struct ElementPrefab {
 }
 
 #[async_trait]
-pub trait MetadataImporter {
+pub trait MetadataImporter: Sync {
     /// Check if importer can get metadata for element
     fn can_parse(&self, element: &ElementPrefab) -> bool;
 
