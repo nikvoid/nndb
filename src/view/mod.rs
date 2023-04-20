@@ -21,6 +21,10 @@ pub use api::edit_tag;
 pub use api::read_log;
 pub use api::import_status;
 pub use api::start_import;
+pub use api::update_tag_count;
+pub use api::clear_group_data;
+pub use api::fix_thumbnails;
+pub use api::retry_imports;
 
 /// Helper for writing nested html_to!
 /// Basically a lazy html! that can be rendered(-to) on demand
@@ -50,9 +54,18 @@ macro_rules! resolve {
 /// Log error and return 500 status to client
 #[macro_export]
 macro_rules! log_n_bail {
-    ($lit:literal, $($tt:tt)*) => {{
-        tracing::error!($($tt)*);
+    ($lit:literal $(, $($tt:tt)* )?) => {{
+        tracing::error!($($($tt)*,)? $lit);
         return Err(actix_web::error::ErrorInternalServerError($lit));
+    }};
+}
+
+/// Log info and return 200 status to client
+#[macro_export]
+macro_rules! log_n_ok {
+    ($lit:literal $(, $($tt:tt)* )?) => {{
+        tracing::info!($($($tt)*,)? $lit);
+        return Ok($lit);
     }};
 }
 

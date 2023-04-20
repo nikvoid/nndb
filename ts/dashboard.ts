@@ -6,7 +6,12 @@ function updateDashboard() {
   if (log_window instanceof HTMLPreElement) {
     let request = new XMLHttpRequest();
     request.onloadend = () => {
+      let isEnd = log_window.scrollTopMax == log_window.scrollTop;
       log_window.innerText = request.responseText; 
+      // Scroll to end
+      if (isEnd) {
+        log_window.scrollTop = log_window.scrollTopMax;  
+      }
     };
     request.onerror = () => {
       log_window.innerText = "error fetching log"
@@ -49,17 +54,59 @@ function updateDashboard() {
   }
 }
 
-function importBtnOnClick() {
-  let req = new XMLHttpRequest();
-  req.open("GET", "/api/write/start_import", true);
-  req.send();
-  return false;
-}
-
 window.addEventListener('DOMContentLoaded', () => {
-  /// Periodically update dashboard
+  // Update dashboard
   updateDashboard();
+  
+  // Periodically update dashboard
   setInterval(() => {
     updateDashboard();
   }, 3000);
 })
+
+/// Manual Import button click handler  
+function importBtnOnClick() {
+  let req = new XMLHttpRequest();
+  req.open("GET", "/api/write/start_import", true);
+  req.send();
+}
+
+/// Update tag counts button click handler  
+function updateTagCountsOnClick() {
+  let req = new XMLHttpRequest();
+  req.onerror = () => {
+    alert(req.status + " " + req.response);
+  }
+  req.open("GET", "/api/write/update_tag_counts");
+  req.send();
+}
+
+/// Clear element groups button onclick handler
+function clearGroupsOnClick() {
+  let req = new XMLHttpRequest();
+  req.onerror = () => {
+    alert(req.status + " " + req.response);
+  }
+  req.open("GET", "/api/write/clear_group_data");
+  req.send();
+}
+
+/// Fix thumbnails button onclick handler
+function fixThumbsOnClick() {
+  let req = new XMLHttpRequest();
+  req.onerror = () => {
+    alert(req.status + " " + req.response);
+  }
+  req.open("GET", "/api/write/fix_thumbnails");
+  req.send();
+}
+
+/// Retry imports button onclick handler
+function retryImportsOnClick() {
+  let req = new XMLHttpRequest();
+  req.onerror = () => {
+    alert(req.status + " " + req.response);
+  }
+  req.open("GET", "/api/write/retry_imports");
+  req.send();
+}

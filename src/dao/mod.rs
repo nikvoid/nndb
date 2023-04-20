@@ -56,7 +56,7 @@ pub trait ElementStorage {
         &self, 
         query: Q,
         offset: u32, 
-        limit: u32,
+        limit: Option<u32>,
         tag_limit: u32,
     ) -> anyhow::Result<(Vec<read::Element>, Vec<read::Tag>, u32)>
     where Q: AsRef<str>;
@@ -89,5 +89,18 @@ pub trait ElementStorage {
     fn update_tag<T>(&self, tag: T, hidden: bool) -> anyhow::Result<()>
     where T: AsRef<Tag>;
 
+    /// Get summary about tags and elements
     fn get_summary(&self) -> anyhow::Result<Summary>;
+
+    /// Mark import as failed
+    fn mark_failed_import(&self, element_id: u32) -> anyhow::Result<()>;
+
+    /// Mark that all elements don't have thumbnails
+    fn remove_thumbnails(&self) -> anyhow::Result<()>;
+
+    /// Remove failed mark from failed imports
+    fn unmark_failed_imports(&self) -> anyhow::Result<()>;
+
+    /// Remove internal grouping data
+    fn clear_groups(&self) -> anyhow::Result<()>;
 }

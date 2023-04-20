@@ -32,12 +32,11 @@ pub async fn dashboard_page() -> impl Responder {
             .tag.tag-block { "Tags: " (summary.tag_count) } 
             .tag.tag-block { "Elements: " (summary.element_count) }
 
-            // TODO
             .tag { "Maintenance" }
-            (ScriptButton("", "Update tag counts"))
-            (ScriptButton("", "Clear element group data"))
-            (ScriptButton("", "Fix thumbnails"))
-            (ScriptButton("", "Retry imports"))
+            (ScriptButton("updateTagCountsOnClick()", "Update tag counts"))
+            (ScriptButton("clearGroupsOnClick()", "Clear element group data"))
+            (ScriptButton("fixThumbsOnClick()", "Fix thumbnails"))
+            (ScriptButton("retryImportsOnClick()", "Retry imports"))
 
             .tag { "Import" }
             (IdParam("scan-files", "Scan files running: ", "unknown"))

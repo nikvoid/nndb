@@ -3,7 +3,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tracing::{info, error};
 
-use crate::{dao::{STORAGE, ElementStorage}, log_n_bail, model::{write, TagType}, util, service::{SCAN_FILES_LOCK, UPDATE_METADATA_LOCK, GROUP_ELEMENTS_LOCK, MAKE_THUMBNAILS_LOCK, self}};
+use crate::{dao::{STORAGE, ElementStorage}, log_n_bail, model::{write, TagType}, util, service::{SCAN_FILES_LOCK, UPDATE_METADATA_LOCK, GROUP_ELEMENTS_LOCK, MAKE_THUMBNAILS_LOCK, self}, log_n_ok};
 
 /// Tag autocompletion max tags
 const TAG_LIMIT: u32 = 15;
@@ -94,7 +94,7 @@ pub async fn add_tags(query: web::Json<AddTagsRequest>) -> impl Responder {
         .collect_vec();
     
     match STORAGE.lock().await.add_tags(query.element_id, &tags) {
-        Ok(_) => Ok(""),
+        Ok(_) => log_n_ok!("added tags to element"),
         Err(e) => log_n_bail!("failed to add tags", ?e)        
     }
 }
@@ -105,7 +105,7 @@ pub async fn delete_tag(req: web::Json<DeleteTagRequest>) -> impl Responder {
     match STORAGE.lock()
         .await
         .remove_tag_from_element(req.element_id, &req.tag_name) {
-        Ok(_) => Ok(""),
+        Ok(_) => log_n_ok!("removed tag from element"),
         Err(e) => log_n_bail!("failed to remove tag", ?e)
     }
 }
@@ -115,11 +115,11 @@ pub async fn delete_tag(req: web::Json<DeleteTagRequest>) -> impl Responder {
 pub async fn edit_tag(req: web::Json<EditTagRequest>) -> impl Responder {
     let tag = match write::Tag::new(&req.tag_name, req.alt_name.clone(), req.tag_type) {
         Some(tag) => tag,
-        None => log_n_bail!("failed to create tag struct", "")
+        None => log_n_bail!("failed to create tag struct")
     };
 
     match STORAGE.lock().await.update_tag(tag, req.hidden) {
-        Ok(_) => Ok(""),
+        Ok(_) => log_n_ok!("edited tag"),
         Err(e) => log_n_bail!("failed to update tag", ?e)
     }
 }
@@ -136,4 +136,40 @@ pub async fn start_import() -> impl Responder {
     });
     
     ""
+}
+
+/// Update count of elements with tag
+#[get("/api/write/update_tag_counts")]
+pub async fn update_tag_count() -> impl Responder {
+    match STORAGE.lock().await.update_tag_count() {
+        Ok(_) => log_n_ok!("updated tag counts (manually)"),
+        Err(e) => log_n_bail!("failed to update tag counts", ?e)
+    }
+}
+
+/// Remove all internal grouping data
+#[get("/api/write/clear_group_data")]
+pub async fn clear_group_data() -> impl Responder {
+    match STORAGE.lock().await.clear_groups() {
+        Ok(_) => log_n_ok!("cleared group data"),
+        Err(e) => log_n_bail!("failed to clear groups", ?e)
+    }
+}
+
+/// Scan thumbnails folder and mark elements without thumbnail
+#[get("/api/write/fix_thumbnails")]
+pub async fn fix_thumbnails() -> impl Responder {
+    match tokio::task::spawn_blocking(service::fix_thumbnails).await {
+        Ok(_) => log_n_ok!("fixed thumbnails"),
+        Err(e) => log_n_bail!("failed to fix thumbnails", ?e)
+    }
+}
+
+/// Retry failed imports
+#[get("/api/write/retry_imports")]
+pub async fn retry_imports() -> impl Responder {
+    match STORAGE.lock().await.unmark_failed_imports() {
+        Ok(_) => log_n_ok!("cleared failed imports state"),
+        Err(e) => log_n_bail!("failed to retry imports", ?e)
+    }
 }

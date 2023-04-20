@@ -1,5 +1,5 @@
 use std::{io::Read, path::PathBuf};
-use anyhow::Context;
+use anyhow::{Context, anyhow};
 use futures::{stream::FuturesUnordered, StreamExt};
 use rayon::prelude::*;
 use tracing::{error, info};
@@ -135,7 +135,10 @@ pub async fn update_metadata() -> anyhow::Result<()> {
                                 Ok(_) => (),
                                 Err(e) => error!(?e, ?imp, "failed to add metadata"),
                             }
-                        Err(e) => error!(?e, ?imp, "failed to fetch metadata"),
+                        Err(e) => {
+                            error!(?e, ?imp, "failed to fetch metadata");
+                            STORAGE.lock().await.mark_failed_import(imp.id).ok();
+                        },
                     }
                 }
             }
@@ -239,7 +242,7 @@ pub fn make_thumbnails() -> anyhow::Result<()> {
         None => return Ok(())
     };
     let elems: Vec<_> = STORAGE.blocking_lock()
-        .search_elements("", 0, 1000000, 0)?
+        .search_elements("", 0, None, 0)?
         .0.into_par_iter()
         // TODO: Thumbs for animated
         .filter(|e| !e.has_thumb && !e.animated)
@@ -269,6 +272,50 @@ pub fn make_thumbnails() -> anyhow::Result<()> {
 
     STORAGE.blocking_lock().add_thumbnails(&elems)?;
 
+    Ok(())
+}
+
+/// Remove thumbnail mark from elements that don't actually have thumbnail
+pub fn fix_thumbnails() -> anyhow::Result<()> {
+    let _guard = match MAKE_THUMBNAILS_LOCK.acquire() {
+        Some(guard) => guard,
+        None => return Ok(())
+    };
+
+    let mut elems = {
+        let store = STORAGE.blocking_lock();
+        store.remove_thumbnails()?;
+        store.search_elements("", 0, None, 0)?.0
+    };
+
+    let thumbs = std::fs::read_dir(&CONFIG.thumbnails_folder)?.map(
+        |e| -> anyhow::Result<String> {
+            let entry = e?;
+            let path = entry.path();
+            let filename = path
+                .file_stem()
+                .ok_or(anyhow!("expected file stem"))?
+                .to_string_lossy();
+            Ok(filename.into_owned())
+        }
+    )
+    .flatten()
+    .collect_vec();
+
+    // Retain only elements that have thumbnail
+    elems.retain(|e| {
+        let filename = e.filename.split('.').next().unwrap();
+        thumbs.iter().find(|t| t.starts_with(filename))
+            .is_some()
+    });
+    
+    let ids = elems.into_iter()
+        .map(|e| e.id)
+        .collect_vec();
+
+    // Return thumbnail mark
+    STORAGE.blocking_lock().add_thumbnails(&ids)?;
+        
     Ok(())
 }
 

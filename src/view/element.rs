@@ -28,7 +28,7 @@ pub async fn element_page(id: web::Path<u32>) -> impl Responder {
             let res = STORAGE
                 .lock()
                 .await
-                .search_elements(format!("group:{}", group_id), 0, 200, 0)
+                .search_elements(format!("group:{}", group_id), 0, None, 0)
                 .map(|(res, ..)| res);
             
             Some(res)

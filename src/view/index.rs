@@ -74,7 +74,7 @@ pub async fn index_page(query: web::Query<Request<String>>) -> impl Responder {
         .search_elements(
             query_str,
             offset, 
-            ELEMENTS_ON_PAGE, 
+            Some(ELEMENTS_ON_PAGE), 
             SELECTION_TAGS_COUNT
         ) {
             Ok(out) => out,

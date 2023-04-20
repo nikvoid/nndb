@@ -364,11 +364,12 @@ impl ElementStorage for Sqlite {
 
     /// Get elements without metadata, awaiting for import
     /// Elements are ordered by importer_id
+    /// Only non-failed imports will be returned
     fn get_pending_imports(&self) -> anyhow::Result<Vec<PendingImport>> {
         let v: Result<Vec<_>, _> = self.0.borrow().prepare( // sql
             "SELECT e.id, i.importer_id, e.hash, e.orig_name
             FROM element e, import i
-            WHERE e.id = i.element_id
+            WHERE e.id = i.element_id AND i.failed = 0
             ORDER BY i.importer_id ASC"
         )?.query_map([], |r| Ok(PendingImport {
             id: r.get(0)?,
@@ -440,11 +441,13 @@ impl ElementStorage for Sqlite {
         &self, 
         query: Q,
         offset: u32, 
-        limit: u32,
+        limit: Option<u32>,
         tag_limit: u32,
     ) -> anyhow::Result<(Vec<read::Element>, Vec<read::Tag>, u32)>
     where Q: AsRef<str> {
         let conn = self.0.borrow();
+
+        let limit = limit.unwrap_or(u32::MAX);
 
         let ids = conn.search_element_ids(query.as_ref())?
             .into_iter()
@@ -677,6 +680,29 @@ impl ElementStorage for Sqlite {
         }))?;
 
         Ok(res)
+    }
+
+    fn mark_failed_import(&self, element_id: u32) -> anyhow::Result<()> {
+        self.0.borrow().prepare_cached(
+            "UPDATE import SET failed = 1
+            WHERE element_id = ?"
+        )?.execute((element_id,))?;
+        Ok(())
+    }
+
+    fn remove_thumbnails(&self) -> anyhow::Result<()> {
+        self.0.borrow().execute("UPDATE element SET has_thumb = 0", [])?;
+        Ok(())
+    }
+
+    fn unmark_failed_imports(&self) -> anyhow::Result<()> {
+        self.0.borrow().execute("UPDATE import SET failed = 0", [])?;
+        Ok(())
+    }
+
+    fn clear_groups(&self) -> anyhow::Result<()> {
+        self.0.borrow().execute("DELETE FROM group_ids", [])?;
+        Ok(())
     }
     
 }

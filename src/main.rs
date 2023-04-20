@@ -85,6 +85,10 @@ async fn main() -> std::io::Result<()> {
             .service(view::read_log)
             .service(view::import_status)
             .service(view::start_import)
+            .service(view::update_tag_count)
+            .service(view::clear_group_data)
+            .service(view::fix_thumbnails)
+            .service(view::retry_imports)
         ;
 
         // Serve static folder if needed
