@@ -35,6 +35,19 @@ pub async fn element_page(id: web::Path<u32>) -> impl Responder {
         }
         None => None,
     };
+    
+    let associated_ext = match elem.group {
+        Some(group_id) => { 
+            let res = STORAGE
+                .lock()
+                .await
+                .search_elements(format!("extgroup:{}", group_id), 0, None, 0)
+                .map(|(res, ..)| res);
+            
+            Some(res)
+        }
+        None => None,
+    };
 
     let associated = match associated.transpose() {
         Ok(elems) => elems,
@@ -44,6 +57,18 @@ pub async fn element_page(id: web::Path<u32>) -> impl Responder {
         }
     };
     
+    let associated_ext = match associated_ext.transpose() {
+        Ok(elems) => elems,
+        Err(e) => {
+            error!(?e, "failed to fetch external element group");
+            None
+        }
+    };
+
+    let assoc = associated.iter()
+        .chain(associated_ext.iter())
+        .flatten();
+
     let page = BaseContainer {
         content: Some(html! {
             .index-main {
@@ -60,9 +85,9 @@ pub async fn element_page(id: web::Path<u32>) -> impl Responder {
                     }
                 }
             } 
-            @if let Some(elems) = associated {
+            @if assoc.clone().count() > 0 {
                 .index-side { 
-                    @for e in elems {
+                    @for e in assoc {
                         (ElementListContainer(&e))
                     } 
                 }

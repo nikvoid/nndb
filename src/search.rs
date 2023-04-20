@@ -6,6 +6,8 @@ pub enum Term<'q> {
     Tag(bool, &'q str),
     /// Element group
     Group(u32),
+    /// External element group
+    ExtGroup(u32),
 }
 
 /// Creates an iterator that will output parsed query parts
@@ -20,6 +22,7 @@ pub fn parse_query<'q>(query: &'q str) -> impl Iterator<Item = Term<'q>> {
 
                 match (left, right) {
                     ("group", id) => id.parse().ok().map(|id| Term::Group(id)),
+                    ("extgroup", id) => id.parse().ok().map(|id| Term::ExtGroup(id)),
                     _ => None,
                 }
             } else {

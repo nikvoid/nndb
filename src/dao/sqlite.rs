@@ -184,6 +184,17 @@ impl ConnectionExt for Connection {
                     );
                     params.push(ToSqlOutput::Owned(Value::Integer(id as i64)))
                 }
+                Term::ExtGroup(id) => {
+                    clause.push_str(
+                        "INTERSECT
+                        SELECT e.id FROM element e
+                        INNER JOIN metadata m ON m.element_id = e.id
+                        WHERE m.ext_group = ?
+                        "
+                    );
+                    params.push(ToSqlOutput::Owned(Value::Integer(id as i64)))
+                    
+                },
             }
         }
 
