@@ -19,6 +19,7 @@ pub use api::add_tags;
 pub use api::delete_tag;
 pub use api::edit_tag;
 pub use api::read_log;
+pub use api::import_status;
 
 /// Helper for writing nested html_to!
 #[macro_export]

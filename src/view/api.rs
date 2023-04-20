@@ -1,8 +1,8 @@
 use actix_web::{Responder, get, web, post};
 use itertools::Itertools;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-use crate::{dao::{STORAGE, ElementStorage}, log_n_bail, model::{write, TagType}, config::CONFIG, util};
+use crate::{dao::{STORAGE, ElementStorage}, log_n_bail, model::{write, TagType}, config::CONFIG, util, service::{SCAN_FILES_LOCK, UPDATE_METADATA_LOCK, GROUP_ELEMENTS_LOCK, MAKE_THUMBNAILS_LOCK}};
 
 /// Tag autocompletion max tags
 const TAG_LIMIT: u32 = 15;
@@ -35,6 +35,14 @@ pub struct EditTagRequest {
     hidden: bool,
 }
 
+#[derive(Serialize)]
+pub struct ImportTasksStatus {
+    scan_files: bool,
+    update_metadata: bool,
+    group_elements: bool,
+    make_thumbnails: bool
+}
+
 /// Tag autocompletion
 #[get("/api/read/autocomplete")]
 pub async fn tag_autocomplete(query: web::Query<AutocompleteRequest>) -> impl Responder {
@@ -60,6 +68,19 @@ pub async fn read_log() -> impl Responder {
         },
         Err(e) => log_n_bail!("failed to fetch log", ?e)
     }    
+}
+
+/// Get import tasks status 
+#[get("/api/read/import")]
+pub async fn import_status() -> impl Responder {
+    let status = ImportTasksStatus {
+        scan_files: SCAN_FILES_LOCK.inspect(),
+        update_metadata: UPDATE_METADATA_LOCK.inspect(),
+        group_elements: GROUP_ELEMENTS_LOCK.inspect(),
+        make_thumbnails: MAKE_THUMBNAILS_LOCK.inspect()
+    };
+
+    web::Json(status)
 }
 
 /// Add tag(s) to element

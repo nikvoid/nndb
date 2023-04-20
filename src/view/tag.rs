@@ -3,20 +3,25 @@ use enum_iterator::all;
 use maud::{Render, html_to, html};
 use serde::{Deserialize, Serialize};
 
-use crate::{model::{read::Tag, TagType}, view::{BlockParam, BaseContainer, ScriptButton}, dao::{STORAGE, ElementStorage}, log_n_bail, html_in};
+use crate::{
+    model::{read::Tag, TagType}, 
+    view::{BaseContainer, ScriptButton}, 
+    dao::{STORAGE, ElementStorage}, 
+    log_n_bail, html_in
+};
 
 pub struct TagInfo<'a>(&'a Tag);
 impl Render for TagInfo<'_> {
     fn render_to(&self, buffer: &mut String) {
         html_to! { buffer,
             .tag { "Tag info" }
-            (BlockParam("", html_in! { "Name: " (&self.0.name) }))
+            .tag.tag-block { "Name: " (&self.0.name) }
             @if let Some(alt) = &self.0.alt_name {
-                (BlockParam("", html_in! { "Name alias: " (alt) }))
+                .tag.tag-block { "Name alias: " (alt) }
             }
-            (BlockParam("", html_in! { "Type: " (self.0.tag_type.label()) }))
-            (BlockParam("", html_in! { "Hidden: " (self.0.hidden) }))
-            (BlockParam("", html_in! { "Images with this tag: " (self.0.count) }))
+            .tag.tag-block { "Type: " (self.0.tag_type.label()) }
+            .tag.tag-block { "Hidden: " (self.0.hidden) }
+            .tag.tag-block { "Images with this tag: " (self.0.count) }
         }
     }
 }
