@@ -239,8 +239,8 @@ impl<'a> Render for BaseContainer<'a> {
                                 input type="submit" value="Search";
                                 .result #head-result hidden {}
                             } 
-                            @if let Some(h) = &self.after_header { (h) };
                         }
+                        @if let Some(h) = &self.after_header { (h) };
                     }
                     @if let Some(cont) = &self.content { (cont) };
                     section.aside {

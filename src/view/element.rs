@@ -45,14 +45,6 @@ pub async fn element_page(id: web::Path<u32>) -> impl Responder {
     };
     
     let page = BaseContainer {
-        after_header: match elem.animated {
-            false => Some(html! {
-                span.head-span {
-                    (ScriptButton("fullSize(this)", "Full size"))
-                }
-            }),
-            true => None
-        },
         content: Some(html! {
             .index-main {
                 @match elem.animated {
@@ -77,6 +69,9 @@ pub async fn element_page(id: web::Path<u32>) -> impl Responder {
             }
         }),
         aside: Some(html! {
+            @if !elem.animated {
+                (ScriptButton("fullSize(this)", "Full size"))
+            }
             (AsideTags(&meta.tags, Some(&elem)))
             (AsideMetadata(&meta))
             (ScriptVar("ELEMENT_ID", elem.id))
