@@ -2,7 +2,7 @@ use maud::{Render, DOCTYPE, Markup, html_to};
 use serde::Serialize;
 use enum_iterator::all;
 
-use crate::{config::CONFIG, model::{read::{Tag, Element, ElementMetadata}, TagType}};
+use crate::{config::CONFIG, model::{read::{Tag, Element, ElementMetadata}, TagType}, util::Crc32Hash};
 
 mod index;
 mod element;
@@ -23,6 +23,7 @@ pub use api::import_status;
 pub use api::start_import;
 
 /// Helper for writing nested html_to!
+/// Basically a lazy html! that can be rendered(-to) on demand
 #[macro_export]
 macro_rules! html_in {
     ($($tt:tt)*) => {
@@ -110,16 +111,16 @@ impl Render for ElementThumbnail<'_> {
 struct ElementListContainer<'a>(&'a Element);
 impl Render for ElementListContainer<'_> {
     fn render_to(&self, buffer: &mut String) {
+        let ident = html_in! { "ELEMENT_LIST_" (self.0.id) };
         html_to! { buffer,
             .image-container-list.image-container-list-video[self.0.animated] {
                 a href=(resolve!(/element/self.0.id)) {
+                    (ScriptVar(&ident, &ElementLink(self.0)))
                     img.def-img.image-list-element src=(ElementThumbnail(self.0))
                         alt={ @if self.0.broken { "broken" } @else { "no image" } }
                         onerror = { 
                             @if !self.0.animated {
-                                "elementListOnError(this, '"
-                                (ElementLink(self.0))
-                                "');"
+                                "elementListOnError(this, " (ident) ")"
                             } 
                         }
                     ;
@@ -162,16 +163,16 @@ where
     }
 }
 
-/// A button that calls script (id, script, text)
-struct ScriptButton<'a, Script, Text>(&'a str, Script, Text);
-impl<Script, Text> Render for ScriptButton<'_, Script, Text>
+/// A button that calls script
+struct ScriptButton<Script, Text>(Script, Text);
+impl<Script, Text> Render for ScriptButton<Script, Text>
 where 
     Script: Render, 
     Text: Render {
     fn render_to(&self, buffer: &mut String) {
         html_to! { buffer,
-            a.button #(self.0) onclick={ (self.1) "; return false;" } href="?" {
-                (self.2)
+            a.button onclick={ (self.0) "; return false;" } href="?" {
+                (self.1)
             }       
         }
     }
@@ -289,11 +290,13 @@ struct TagEditForm<'a, OnSubmit>(OnSubmit, &'a str, &'a str);
 impl<OnSubmit> Render for TagEditForm<'_, OnSubmit>
 where OnSubmit: Render {
     fn render_to(&self, buffer: &mut String) {
+        let ident = html_in! { "TAG_EDIT_FIELD_" (self.1.crc32()) };
         html_to! { buffer,
             form onsubmit=(self.0) {
-                input.tag-field #{ (self.0) "_input" } name="tag" type="text"
-                    onKeyUp={ "getCompletions(this, '" (self.1) "')" } 
-                    onclick={ "getCompletions(this, '" (self.1) "')" };
+                (ScriptVar(&ident, self.1))
+                input.tag-field #{ (self.1) "_box" } name="tag" type="text"
+                    onKeyUp={ "getCompletions(this, " (ident) ")" } 
+                    onclick={ "getCompletions(this, " (ident) ")" };
                 input type="submit" value=(self.2);
                 .result #(self.1) hidden {}
             }            
@@ -362,6 +365,66 @@ impl Render for AsideMetadata<'_> {
                         (tag.name) ", "
                     }
                 }))
+            }
+        }
+    }
+}
+
+/// Variable that can be directly spliced into script chunk
+pub enum ScriptVariable<'a> {
+    Int(i64),
+    String(&'a str),
+    Render(&'a dyn Render),
+} 
+
+impl Render for ScriptVariable<'_> {
+    fn render_to(&self, buffer: &mut String) {
+        match self {
+            ScriptVariable::Int(i) => i.render_to(buffer),
+            ScriptVariable::String(s) => {
+                buffer.push('\'');
+                buffer.push_str(s);
+                buffer.push('\'');
+            },
+            ScriptVariable::Render(r) => html_to! { buffer, "'" (r) "'" },
+        }
+    }
+}
+
+/// Represent value as `ScriptVariable`
+pub trait AsScriptVariable {
+    fn as_script_var(&self) -> ScriptVariable;
+}
+
+impl<T> AsScriptVariable for &T 
+where T: Render {
+    fn as_script_var(&self) -> ScriptVariable {
+        ScriptVariable::Render(self)
+    }
+}
+
+impl AsScriptVariable for &str {
+    fn as_script_var(&self) -> ScriptVariable {
+        ScriptVariable::String(self)
+    }
+} 
+
+impl AsScriptVariable for u32 {
+    fn as_script_var(&self) -> ScriptVariable {
+        ScriptVariable::Int(*self as i64)
+    }
+}
+
+/// Inject variable with (ident, value) into script
+pub struct ScriptVar<Ident, Val>(Ident, Val);
+impl<Ident, Val> Render for ScriptVar<Ident, Val>
+where 
+    Val: AsScriptVariable, 
+    Ident: Render {
+    fn render_to(&self, buffer: &mut String) {
+        html_to! { buffer,
+            script {
+                "let " (self.0) " = " (self.1.as_script_var()) ";"
             }
         }
     }

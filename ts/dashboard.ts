@@ -62,9 +62,4 @@ window.addEventListener('DOMContentLoaded', () => {
   setInterval(() => {
     updateDashboard();
   }, 3000);
-
-  let importBtn = document.querySelector("#start-import-btn");
-  if (importBtn instanceof HTMLElement) {
-    importBtn.onclick = importBtnOnClick;
-  }
 })

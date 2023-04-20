@@ -34,17 +34,17 @@ pub async fn dashboard_page() -> impl Responder {
 
             // TODO
             .tag { "Maintenance" }
-            (ScriptButton("update-tags-btn", "", "Update tag counts"))
-            (ScriptButton("clear-groups-btn", "", "Clear element group data"))
-            (ScriptButton("fix-thumbs-btn", "", "Fix thumbnails"))
-            (ScriptButton("retry-import-btn" ,"", "Retry imports"))
+            (ScriptButton("", "Update tag counts"))
+            (ScriptButton("", "Clear element group data"))
+            (ScriptButton("", "Fix thumbnails"))
+            (ScriptButton("", "Retry imports"))
 
             .tag { "Import" }
             (IdParam("scan-files", "Scan files running: ", "unknown"))
             (IdParam("update-meta", "Update metadata running: ", "unknown"))
             (IdParam("group-elems", "Group elements running: ", "unknown"))
             (IdParam("make-thumbs", "Make thumbnails running: ", "unknown"))
-            (ScriptButton("start-import-btn", "", "Start import manually"))
+            (ScriptButton("importBtnOnClick()", "Start import manually"))
         }),
         content: Some(html! {
             .log-window-outline {

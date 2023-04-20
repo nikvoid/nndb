@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     model::{read::Tag, TagType}, 
-    view::{BaseContainer, ScriptButton}, 
+    view::{BaseContainer, ScriptButton, ScriptVar}, 
     dao::{STORAGE, ElementStorage}, 
     log_n_bail, html_in
 };
@@ -43,8 +43,9 @@ pub async fn tag_page(name: web::Path<String>, query: web::Query<Request>) -> im
     let content = BaseContainer {
         content: Some(html! {
             .index-main {
+                (ScriptVar("TAG_NAME", &*tag.name))
                 form onsubmit={
-                    "editTagOnClick(event, this, '" (tag.name) "')"
+                    "editTagOnClick(event, this, TAG_NAME)"
                 } {
                     "tag type"
                     br;
@@ -65,16 +66,10 @@ pub async fn tag_page(name: web::Path<String>, query: web::Query<Request>) -> im
                     input type="submit" value="Change tag";                
                 }                
                 @if let Some(ref_elem) = query.element_ref {
+                    (ScriptVar("ELEMENT_ID", ref_elem))
                     div style="margin-top: 10px" {
                         (ScriptButton(
-                            "delete-tag-btn",
-                            html_in! { 
-                                "return deleteTagOnClick("
-                                (ref_elem) 
-                                ", '"
-                                (tag.name)
-                                "');" 
-                            },  
+                            "deleteTagOnClick(ELEMENT_ID, TAG_NAME)",
                             "Delete tag from image"
                         ))
                     }

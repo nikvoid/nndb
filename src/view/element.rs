@@ -7,8 +7,8 @@ use crate::{
     view::{
         BaseContainer, AsideTags, ElementLink, 
         TagEditForm, AsideMetadata, ScriptButton, 
-        ElementListContainer
-    }, html_in, log_n_bail};
+        ElementListContainer, ScriptVar
+    }, log_n_bail};
 
 #[get("/element/{id}")]
 pub async fn element_page(id: web::Path<u32>) -> impl Responder {
@@ -48,7 +48,7 @@ pub async fn element_page(id: web::Path<u32>) -> impl Responder {
         after_header: match elem.animated {
             false => Some(html! {
                 span.head-span {
-                    (ScriptButton("full-size-btn", "return fullSize(this);", "Full size"))
+                    (ScriptButton("fullSize(this)", "Full size"))
                 }
             }),
             true => None
@@ -79,8 +79,9 @@ pub async fn element_page(id: web::Path<u32>) -> impl Responder {
         aside: Some(html! {
             (AsideTags(&meta.tags, Some(&elem)))
             (AsideMetadata(&meta))
+            (ScriptVar("ELEMENT_ID", elem.id))
             (TagEditForm(
-                html_in! { "addTagOnSubmit(event, this, " (elem.id) ")" }, 
+                "addTagOnSubmit(event, this, ELEMENT_ID)", 
                 "add_tag_compl", 
                 "Add tag"
             ))
