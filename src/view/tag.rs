@@ -67,6 +67,7 @@ pub async fn tag_page(name: web::Path<String>, query: web::Query<Request>) -> im
                 @if let Some(ref_elem) = query.element_ref {
                     div style="margin-top: 10px" {
                         (ScriptButton(
+                            "delete-tag-btn",
                             html_in! { 
                                 "return deleteTagOnClick("
                                 (ref_elem) 

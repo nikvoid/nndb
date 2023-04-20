@@ -1,8 +1,9 @@
 use actix_web::{Responder, get, web, post};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
+use tracing::{info, error};
 
-use crate::{dao::{STORAGE, ElementStorage}, log_n_bail, model::{write, TagType}, config::CONFIG, util, service::{SCAN_FILES_LOCK, UPDATE_METADATA_LOCK, GROUP_ELEMENTS_LOCK, MAKE_THUMBNAILS_LOCK}};
+use crate::{dao::{STORAGE, ElementStorage}, log_n_bail, model::{write, TagType}, util, service::{SCAN_FILES_LOCK, UPDATE_METADATA_LOCK, GROUP_ELEMENTS_LOCK, MAKE_THUMBNAILS_LOCK, self}};
 
 /// Tag autocompletion max tags
 const TAG_LIMIT: u32 = 15;
@@ -121,4 +122,18 @@ pub async fn edit_tag(req: web::Json<EditTagRequest>) -> impl Responder {
         Ok(_) => Ok(""),
         Err(e) => log_n_bail!("failed to update tag", ?e)
     }
+}
+
+/// Manually start import task in strict sequence
+#[get("/api/write/start_import")]
+pub async fn start_import() -> impl Responder {
+    info!("Starting manual import");
+    tokio::spawn(async {
+        match service::manual_import().await {
+            Ok(_) => info!("Manual import finished"),
+            Err(e) => error!(?e, "Manual import failed")
+        }
+    });
+    
+    ""
 }

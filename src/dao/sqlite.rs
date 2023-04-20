@@ -1,6 +1,5 @@
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
-use anyhow::Context;
 use itertools::Itertools;
 use rusqlite::{Connection, named_params, Transaction, types::{Value, ToSqlOutput}, vtab, ToSql};
 use tracing::error;

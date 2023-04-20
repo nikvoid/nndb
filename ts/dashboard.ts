@@ -2,7 +2,7 @@
 /// Update dashboard
 function updateDashboard() {
   // Update log
-  let log_window = document.getElementById("log-window");
+  let log_window = document.querySelector("#log-window");
   if (log_window instanceof HTMLPreElement) {
     let request = new XMLHttpRequest();
     request.onloadend = () => {
@@ -16,10 +16,10 @@ function updateDashboard() {
   }  
 
   // Update import state
-  let scan = document.getElementById("scan-files");
-  let meta = document.getElementById("update-meta");
-  let group = document.getElementById("group-elems");
-  let thumbs = document.getElementById("make-thumbs");
+  let scan = document.querySelector("#scan-files");
+  let meta = document.querySelector("#update-meta");
+  let group = document.querySelector("#group-elems");
+  let thumbs = document.querySelector("#make-thumbs");
 
   if (
     scan instanceof HTMLElement
@@ -49,7 +49,12 @@ function updateDashboard() {
   }
 }
 
-
+function importBtnOnClick() {
+  let req = new XMLHttpRequest();
+  req.open("GET", "/api/write/start_import", true);
+  req.send();
+  return false;
+}
 
 window.addEventListener('DOMContentLoaded', () => {
   /// Periodically update dashboard
@@ -57,5 +62,9 @@ window.addEventListener('DOMContentLoaded', () => {
   setInterval(() => {
     updateDashboard();
   }, 3000);
-})
 
+  let importBtn = document.querySelector("#start-import-btn");
+  if (importBtn instanceof HTMLElement) {
+    importBtn.onclick = importBtnOnClick;
+  }
+})

@@ -1,7 +1,7 @@
 use actix_web::{get, Responder};
 use maud::{Render, html, html_to};
 
-use crate::{view::{BaseContainer, ScriptButton}, dao::{STORAGE, ElementStorage}, log_n_bail, html_in};
+use crate::{view::{BaseContainer, ScriptButton}, dao::{STORAGE, ElementStorage}, log_n_bail};
 
 /// Takes (id, param_name, init_text) to create block with
 /// concatenated param_name and init_text in span with id
@@ -34,18 +34,17 @@ pub async fn dashboard_page() -> impl Responder {
 
             // TODO
             .tag { "Maintenance" }
-            (ScriptButton("", "Update tag counts"))
-            (ScriptButton("", "Clear element group data"))
-            (ScriptButton("", "Fix thumbnails"))
-            (ScriptButton("", "Retry imports"))
+            (ScriptButton("update-tags-btn", "", "Update tag counts"))
+            (ScriptButton("clear-groups-btn", "", "Clear element group data"))
+            (ScriptButton("fix-thumbs-btn", "", "Fix thumbnails"))
+            (ScriptButton("retry-import-btn" ,"", "Retry imports"))
 
-            // TODO
             .tag { "Import" }
             (IdParam("scan-files", "Scan files running: ", "unknown"))
             (IdParam("update-meta", "Update metadata running: ", "unknown"))
             (IdParam("group-elems", "Group elements running: ", "unknown"))
             (IdParam("make-thumbs", "Make thumbnails running: ", "unknown"))
-            (ScriptButton("", "Start import manually"))
+            (ScriptButton("start-import-btn", "", "Start import manually"))
         }),
         content: Some(html! {
             .log-window-outline {

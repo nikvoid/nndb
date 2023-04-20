@@ -48,7 +48,7 @@ pub async fn element_page(id: web::Path<u32>) -> impl Responder {
         after_header: match elem.animated {
             false => Some(html! {
                 span.head-span {
-                    (ScriptButton("return fullSize(this);", "Full size"))
+                    (ScriptButton("full-size-btn", "return fullSize(this);", "Full size"))
                 }
             }),
             true => None

@@ -20,6 +20,7 @@ pub use api::delete_tag;
 pub use api::edit_tag;
 pub use api::read_log;
 pub use api::import_status;
+pub use api::start_import;
 
 /// Helper for writing nested html_to!
 #[macro_export]
@@ -161,16 +162,16 @@ where
     }
 }
 
-/// A button that calls script
-struct ScriptButton<Script, Text>(Script, Text);
-impl<Script, Text> Render for ScriptButton<Script, Text>
+/// A button that calls script (id, script, text)
+struct ScriptButton<'a, Script, Text>(&'a str, Script, Text);
+impl<Script, Text> Render for ScriptButton<'_, Script, Text>
 where 
     Script: Render, 
     Text: Render {
     fn render_to(&self, buffer: &mut String) {
         html_to! { buffer,
-            a.button onclick=(self.0) href="?" {
-                (self.1)
+            a.button #(self.0) onclick={ (self.1) "; return false;" } href="?" {
+                (self.2)
             }       
         }
     }

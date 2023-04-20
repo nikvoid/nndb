@@ -271,3 +271,19 @@ pub fn make_thumbnails() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+/// Manually start import task in strict sequence
+pub async fn manual_import() -> anyhow::Result<()> {
+    tokio::task::spawn_blocking(scan_files).await??;
+    info!("Scanned files");
+    update_metadata().await?;
+    info!("Updated metadata");
+    group_elements_by_signature().await?;
+    info!("Grouped images");
+    tokio::task::spawn_blocking(update_tag_count).await??;
+    info!("Updated tag counts");
+    tokio::task::spawn_blocking(make_thumbnails).await??;
+    info!("Made thumbnails");
+
+    Ok(())
+}

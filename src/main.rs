@@ -84,6 +84,7 @@ async fn main() -> std::io::Result<()> {
             .service(view::edit_tag)
             .service(view::read_log)
             .service(view::import_status)
+            .service(view::start_import)
         ;
 
         // Serve static folder if needed
