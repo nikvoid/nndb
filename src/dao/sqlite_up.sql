@@ -62,6 +62,10 @@ CREATE TABLE IF NOT EXISTS ai_metadata (
     FOREIGN KEY (element_id) REFERENCES element (id) ON DELETE CASCADE ON UPDATE RESTRICT
 );
 
+CREATE TABLE IF NOT EXISTS tag_group (
+    id INTEGER PRIMARY KEY NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS tag (
     -- crc32 hash of tag name
     name_hash INTEGER PRIMARY KEY NOT NULL,
@@ -72,7 +76,11 @@ CREATE TABLE IF NOT EXISTS tag (
     tag_type  INTEGER NOT NULL,
     -- cached count of elements with this tag
     count     INTEGER NOT NULL DEFAULT 0,
-    hidden    INTEGER NOT NULL DEFAULT 0
+    hidden    INTEGER NOT NULL DEFAULT 0,
+
+    FOREIGN KEY (group_id) REFERENCES tag_group (id)
+    ON DELETE SET NULL
+    ON UPDATE RESTRICT
 );
 
 -- join table for element and tag

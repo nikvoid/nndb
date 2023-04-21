@@ -4,8 +4,8 @@ function updateDashboard() {
   // Update log
   let log_window = document.querySelector("#log-window");
   if (log_window instanceof HTMLPreElement) {
-    let request = new XMLHttpRequest();
-    request.onloadend = () => {
+    let request = new XMLHttpRequestExt();
+    request.success_cb = () => {
       let isEnd = log_window.scrollTopMax == log_window.scrollTop;
       log_window.innerText = request.responseText; 
       // Scroll to end
@@ -13,7 +13,7 @@ function updateDashboard() {
         log_window.scrollTop = log_window.scrollTopMax;  
       }
     };
-    request.onerror = () => {
+    request.error_cb = () => {
       log_window.innerText = "error fetching log"
     };
     request.open("GET", "/api/read/log", true);
@@ -32,7 +32,7 @@ function updateDashboard() {
     && group instanceof HTMLElement
     && thumbs instanceof HTMLElement
   ) {
-    let requesta = new XMLHttpRequest();
+    let requesta = new XMLHttpRequestExt();
 
     type Resp = {
       scan_files: boolean,
@@ -41,13 +41,14 @@ function updateDashboard() {
       make_thumbnails: boolean
     };
     
-    requesta.onloadend = () => {
+    requesta.success_cb = () => {
       let data: Resp = JSON.parse(requesta.responseText);
       scan.innerText = data.scan_files;
       meta.innerText = data.update_metadata;
       group.innerText = data.group_elements;
       thumbs.innerText = data.make_thumbnails;
     };
+    requesta.error_cb = () => {};
 
     requesta.open("GET", "/api/read/import", true);
     requesta.send();
@@ -66,47 +67,35 @@ window.addEventListener('DOMContentLoaded', () => {
 
 /// Manual Import button click handler  
 function importBtnOnClick() {
-  let req = new XMLHttpRequest();
+  let req = new XMLHttpRequestExt();
   req.open("GET", "/api/write/start_import", true);
   req.send();
 }
 
 /// Update tag counts button click handler  
 function updateTagCountsOnClick() {
-  let req = new XMLHttpRequest();
-  req.onerror = () => {
-    alert(req.status + " " + req.response);
-  }
+  let req = new XMLHttpRequestExt();
   req.open("GET", "/api/write/update_tag_counts");
   req.send();
 }
 
 /// Clear element groups button onclick handler
 function clearGroupsOnClick() {
-  let req = new XMLHttpRequest();
-  req.onerror = () => {
-    alert(req.status + " " + req.response);
-  }
+  let req = new XMLHttpRequestExt();
   req.open("GET", "/api/write/clear_group_data");
   req.send();
 }
 
 /// Fix thumbnails button onclick handler
 function fixThumbsOnClick() {
-  let req = new XMLHttpRequest();
-  req.onerror = () => {
-    alert(req.status + " " + req.response);
-  }
+  let req = new XMLHttpRequestExt();
   req.open("GET", "/api/write/fix_thumbnails");
   req.send();
 }
 
 /// Retry imports button onclick handler
 function retryImportsOnClick() {
-  let req = new XMLHttpRequest();
-  req.onerror = () => {
-    alert(req.status + " " + req.response);
-  }
+  let req = new XMLHttpRequestExt();
   req.open("GET", "/api/write/retry_imports");
   req.send();
 }

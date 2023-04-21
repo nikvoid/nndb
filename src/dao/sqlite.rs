@@ -4,7 +4,7 @@ use itertools::Itertools;
 use rusqlite::{Connection, named_params, Transaction, types::{Value, ToSqlOutput}, vtab, ToSql};
 use tracing::error;
 
-use crate::{model::{Md5Hash, GroupMetadata, SIGNATURE_LEN, AIMetadata}, util::{self, Crc32Hash}, search::{self, Term}};
+use crate::{model::{Md5Hash, GroupMetadata, SIGNATURE_LEN, AIMetadata, TagType}, util::{self, Crc32Hash}, search::{self, Term}};
 
 use super::*;
 
@@ -17,7 +17,7 @@ trait TransactionExt {
 
     fn get_tags_hashes(&self) -> anyhow::Result<Vec<u32>>;
     
-    fn add_tags<T>(&self, element_id: u32, tags: &[T]) -> anyhow::Result<()>
+    fn add_tags<T>(&self, element_id: Option<u32>, tags: &[T]) -> anyhow::Result<()>
     where T: AsRef<Tag>;
     
     fn add_metadata<M>(&self, element_id: u32, metadata: M) -> anyhow::Result<()>
@@ -81,7 +81,7 @@ impl TransactionExt for Transaction<'_> {
     }
 
     /// Inner method without RefCell overhead
-    fn add_tags<T>(&self, element_id: u32, tags: &[T]) -> anyhow::Result<()>
+    fn add_tags<T>(&self, element_id: Option<u32>, tags: &[T]) -> anyhow::Result<()>
     where T: AsRef<Tag> {
         let hashes = self.get_tags_hashes()?;
         let mut tag_stmt = self.prepare_cached( // sql
@@ -104,8 +104,10 @@ impl TransactionExt for Transaction<'_> {
             if !hashes.contains(&hash) {
                 tag_stmt.execute((hash, t.name(), t.alt_name(), t.tag_type()))?;
             }
-            
-            join_stmt.execute((element_id, hash))?;
+
+            if let Some(id) = element_id {
+                join_stmt.execute((id, hash))?;
+            }
         }
 
         Ok(())
@@ -117,7 +119,7 @@ impl TransactionExt for Transaction<'_> {
         let m = metadata.as_ref();
         
         if !m.tags.is_empty() {
-            self.add_tags(element_id, &m.tags)?;
+            self.add_tags(Some(element_id), &m.tags)?;
         }
 
         self.prepare_cached(
@@ -213,11 +215,15 @@ impl ConnectionExt for Connection {
 
             // If tag is positive, intersect with set, otherwise subtract it
             clause.push_str(if pos { "INTERSECT" } else { "EXCEPT" });
-            clause.push_str(
+            clause.push_str( // sql
                 "
                 SELECT e.id FROM element e
                 JOIN element_tag et ON et.element_id = e.id
-                WHERE et.tag_hash = ?
+                JOIN tag t ON t.name_hash = et.tag_hash
+                WHERE et.tag_hash = ?1 OR t.group_id = (
+                    SELECT tg.id FROM tag_group tg, tag t 
+                    WHERE t.group_id = tg.id AND t.name_hash = ?1                                        
+                )
                 "
             );
 
@@ -347,7 +353,7 @@ impl ElementStorage for Sqlite {
             if let Some(id) = id {
                 let tags = util::get_tags_from_path(&e.path);
                 if !tags.is_empty() {
-                    self.add_tags(id, tags.as_slice())?;
+                    self.add_tags(Some(id), tags.as_slice())?;
                 }
             }
         }
@@ -364,7 +370,7 @@ impl ElementStorage for Sqlite {
         Ok(v)
     }
 
-    fn add_tags<T>(&self, element_id: u32, tags: &[T]) -> anyhow::Result<()>
+    fn add_tags<T>(&self, element_id: Option<u32>, tags: &[T]) -> anyhow::Result<()>
     where T: AsRef<Tag> {
         let mut conn = self.0.borrow_mut();
         let tx = conn.transaction()?;
@@ -715,5 +721,71 @@ impl ElementStorage for Sqlite {
         self.0.borrow().execute("DELETE FROM group_ids", [])?;
         Ok(())
     }
-    
+
+    fn alias_tag<N, Nt>(&self, tag: N, to: Nt) -> anyhow::Result<()>
+    where 
+        N: AsRef<str>,
+        Nt: AsRef<str> {
+
+        let to = to.as_ref();
+        let Some(tag) = self.get_tag_data(tag.as_ref())? else {
+            anyhow::bail!("no such tag");
+        };
+        
+        let alias_to = self.get_tag_data(to)?;
+        let alias_to = match alias_to {
+            Some(to) => to,
+            None => {
+                let Some(alias) = Tag::new(to, None, tag.tag_type) else {
+                    anyhow::bail!("expected alias name");
+                };
+                self.add_tags(None, &[alias])?;
+                // If add_tags suceeded, this should suceed too
+                self.get_tag_data(to)?.unwrap()
+            } 
+        };
+
+        let mut conn = self.0.borrow_mut();
+        let tx = conn.transaction()?;
+        // Get group or insert new
+        let group_id = match alias_to.group_id {
+            Some(id) => id,
+            None => {
+                tx.prepare("INSERT INTO tag_group (id) VALUES (?)")?
+                    .insert((None::<u32>,))? as u32
+            }
+        };
+
+        // Set group to tag and possibly newly created alias
+        tx.prepare(
+            "UPDATE tag SET group_id = ?
+            WHERE name_hash in (?, ?)"
+        )?.execute((group_id, tag.name.crc32(), alias_to.name.crc32()))?;
+
+        tx.commit()?;
+        
+        Ok(())
+    }
+
+    fn get_tag_aliases<N>(&self, tag: N) -> anyhow::Result<Vec<read::Tag>>
+    where N: AsRef<str> {
+        let v: Result<Vec<_>, _> = self.0.borrow().prepare( // sql
+            "SELECT tag_name, alt_name, tag_type, count, group_id, hidden
+            FROM tag
+            WHERE group_id = (
+                SELECT tg.id FROM tag_group tg, tag t 
+                WHERE t.group_id = tg.id AND t.name_hash = ? 
+            )"
+        )?.query_map((tag.as_ref().crc32(),), |r| Ok(read::Tag {
+            name: r.get(0)?,
+            alt_name: r.get(1)?,
+            tag_type: r.get(2)?,
+            count: r.get(3)?,
+            group_id: r.get(4)?,
+            hidden: r.get(5)?,
+        }))?
+        .collect();
+
+        Ok(v?)
+    }
 }

@@ -28,7 +28,7 @@ pub trait ElementStorage {
     fn get_hashes(&self) -> anyhow::Result<Vec<Md5Hash>>;
 
     /// Add all tags from slice
-    fn add_tags<T>(&self, element_id: u32, tags: &[T]) -> anyhow::Result<()>
+    fn add_tags<T>(&self, element_id: Option<u32>, tags: &[T]) -> anyhow::Result<()>
     where T: AsRef<Tag>;
 
     /// Get all elements waiting on metadata
@@ -89,6 +89,16 @@ pub trait ElementStorage {
     fn update_tag<T>(&self, tag: T, hidden: bool) -> anyhow::Result<()>
     where T: AsRef<Tag>;
 
+    /// Add `tag` to group that have `to` tag, or create new
+    /// If `to` does not exist, it will be created 
+    fn alias_tag<N, Nt>(&self, tag: N, to: Nt) -> anyhow::Result<()>
+    where 
+        N: AsRef<str>,
+        Nt: AsRef<str>;
+
+    fn get_tag_aliases<N>(&self, tag: N) -> anyhow::Result<Vec<read::Tag>>
+    where N: AsRef<str>;
+    
     /// Get summary about tags and elements
     fn get_summary(&self) -> anyhow::Result<Summary>;
 

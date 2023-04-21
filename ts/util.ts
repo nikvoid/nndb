@@ -1,4 +1,26 @@
 
+/// Extension for request
+class XMLHttpRequestExt extends XMLHttpRequest {
+  success_cb: () => void;
+  error_cb: () => void;
+  
+  constructor() {
+    super();
+    this.error_cb = () => {
+      alert(this.status + " " + this.response);
+    }
+    this.onreadystatechange = () => {
+      if (this.readyState == 4) {
+        if (this.status >= 200 && this.status < 300) {
+          this.success_cb();
+        } else {
+          this.error_cb();
+        }
+      } 
+    }
+  }
+}
+
 /// Remove constraints from element container
 function fullSize(btn: HTMLElement): boolean {
   let img = document.getElementById("element")!;
@@ -34,19 +56,37 @@ function addTagOnSubmit(event: Event, form: HTMLFormElement, elementId: number) 
       tags: input.value,
     };
     
-    let request = new XMLHttpRequest();
-    request.onreadystatechange = () => {
-      if (request.readyState == 4) {
-        if (request.status == 200) {
-          input.value = "";
-          location.reload();
-        } else {
-          alert(request.status + " " + request.response);
-        }
-      }
+    let request = new XMLHttpRequestExt();
+    request.success_cb = () => {
+      input.value = "";
+      location.reload();
     }
     
     request.open('POST', "/api/write/add_tags", true);
+    request.setRequestHeader("Content-Type", "application/json");
+    request.send(JSON.stringify(payload));
+  }
+  event.preventDefault();
+  return false;
+}
+
+/// Send tags to api enpoint on click, display alert on fail
+function aliasTagOnSubmit(event: Event, form: HTMLFormElement, tag: string) {
+  let input = form.querySelector('.tag-field');
+  if (input instanceof HTMLInputElement) {
+
+    let payload = {
+      tag_name: tag,
+      query: input.value,
+    };
+    
+    let request = new XMLHttpRequestExt();
+    request.success_cb = () => {
+      input.value = "";
+      location.reload();
+    };
+    
+    request.open('POST', "/api/write/alias_tag", true);
     request.setRequestHeader("Content-Type", "application/json");
     request.send(JSON.stringify(payload));
   }
@@ -61,16 +101,10 @@ function deleteTagOnClick(elem_id: number, tag_name: string) {
     tag_name: tag_name
   };
 
-  let request = new XMLHttpRequest();
-  request.onreadystatechange = () => {
-    if (request.readyState == 4) {
-      if (request.status == 200) {
-        location.replace(`/element/${elem_id}`);
-      } else {
-        alert(request.status + " " + request.response);
-      }
-    }
-  }
+  let request = new XMLHttpRequestExt();
+  request.success_cb = () => {
+    location.replace(`/element/${elem_id}`);
+  };
   
   request.open('POST', "/api/write/delete_tag", true);
   request.setRequestHeader("Content-Type", "application/json");
@@ -95,11 +129,8 @@ function editTagOnClick(event: Event, form: HTMLFormElement, tag_name: string) {
       hidden: hidden_box.checked
     };
 
-    let request = new XMLHttpRequest();
-    request.onerror = () => {
-      alert(request.status + " " + request.response);
-    };
-    request.onloadend = () => {
+    let request = new XMLHttpRequestExt();
+    request.success_cb = () => {
       location.reload();
     };
     

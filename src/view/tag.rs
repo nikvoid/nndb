@@ -5,9 +5,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     model::{read::Tag, TagType}, 
-    view::{BaseContainer, ScriptButton, ScriptVar}, 
+    view::{BaseContainer, ScriptButton, ScriptVar, TagEditForm, AsideTags}, 
     dao::{STORAGE, ElementStorage}, 
-    log_n_bail, html_in
+    log_n_bail
 };
 
 pub struct TagInfo<'a>(&'a Tag);
@@ -33,11 +33,15 @@ pub struct Request {
 
 #[get("/tag/{name}")]
 pub async fn tag_page(name: web::Path<String>, query: web::Query<Request>) -> impl Responder {
-
     let tag = match STORAGE.lock().await.get_tag_data(&*name) {
         Ok(Some(tag)) => tag,
         Ok(None) => return Err(ErrorNotFound("no such tag")),
         Err(e) => log_n_bail!("failed to get tag data", ?e),
+    };
+
+    let aliases = match STORAGE.lock().await.get_tag_aliases(&tag.name) {
+        Ok(a) => a,
+        Err(e) => log_n_bail!("failed to get tag aliases", ?e)
     };
 
     let content = BaseContainer {
@@ -65,6 +69,11 @@ pub async fn tag_page(name: web::Path<String>, query: web::Query<Request>) -> im
                     br;
                     input type="submit" value="Change tag";                
                 }                
+                (TagEditForm(
+                    "aliasTagOnSubmit(event, this, TAG_NAME)", 
+                    "tag_alias", 
+                    "Alias to"
+                ))
                 @if let Some(ref_elem) = query.element_ref {
                     (ScriptVar("ELEMENT_ID", ref_elem))
                     div style="margin-top: 10px" {
@@ -76,7 +85,13 @@ pub async fn tag_page(name: web::Path<String>, query: web::Query<Request>) -> im
                 }
             }
         }),
-        aside: Some(TagInfo(&tag).render()),
+        aside: Some(html!{ 
+            (TagInfo(&tag))
+            @if let Some(id) = tag.group_id {
+                .tag { "Alias group: " (id) }
+                (AsideTags(&aliases, None))
+            }
+        }),
         ..Default::default() 
     };
 

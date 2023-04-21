@@ -3,7 +3,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tracing::{info, error};
 
-use crate::{dao::{STORAGE, ElementStorage}, log_n_bail, model::{write, TagType}, util, service::{SCAN_FILES_LOCK, UPDATE_METADATA_LOCK, GROUP_ELEMENTS_LOCK, MAKE_THUMBNAILS_LOCK, self}, log_n_ok};
+use crate::{dao::{STORAGE, ElementStorage}, log_n_bail, model::{write, TagType}, util, service::{SCAN_FILES_LOCK, UPDATE_METADATA_LOCK, GROUP_ELEMENTS_LOCK, MAKE_THUMBNAILS_LOCK, self}, log_n_ok, search::{self, Term}};
 
 /// Tag autocompletion max tags
 const TAG_LIMIT: u32 = 15;
@@ -34,6 +34,12 @@ pub struct EditTagRequest {
     alt_name: Option<String>,
     tag_type: TagType,
     hidden: bool,
+}
+
+#[derive(Deserialize)]
+pub struct AliasTagRequest {
+    tag_name: String,
+    query: String,   
 }
 
 #[derive(Serialize)]
@@ -93,7 +99,7 @@ pub async fn add_tags(query: web::Json<AddTagsRequest>) -> impl Responder {
         .filter_map(|t| write::Tag::new(&t, None, TagType::Tag))
         .collect_vec();
     
-    match STORAGE.lock().await.add_tags(query.element_id, &tags) {
+    match STORAGE.lock().await.add_tags(Some(query.element_id), &tags) {
         Ok(_) => log_n_ok!("added tags to element"),
         Err(e) => log_n_bail!("failed to add tags", ?e)        
     }
@@ -121,6 +127,23 @@ pub async fn edit_tag(req: web::Json<EditTagRequest>) -> impl Responder {
     match STORAGE.lock().await.update_tag(tag, req.hidden) {
         Ok(_) => log_n_ok!("edited tag"),
         Err(e) => log_n_bail!("failed to update tag", ?e)
+    }
+}
+
+/// Alias tag
+#[post("/api/write/alias_tag")]
+pub async fn alias_tag(req: web::Json<AliasTagRequest>) -> impl Responder {
+    match search::parse_query(&req.query)
+        .filter_map(|t| if let Term::Tag(true, tag) = t { Some(tag) } else { None })
+        .next() {
+        Some(to) => match STORAGE
+            .lock()
+            .await
+            .alias_tag(&req.tag_name, to) {
+            Ok(_) => log_n_ok!("aliased tag", tag=req.tag_name, to),
+            Err(e) => log_n_bail!("failed to make alias", ?e)
+        }
+        None => log_n_bail!("tag definition not found"),
     }
 }
 

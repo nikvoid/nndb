@@ -25,6 +25,7 @@ pub use api::update_tag_count;
 pub use api::clear_group_data;
 pub use api::fix_thumbnails;
 pub use api::retry_imports;
+pub use api::alias_tag;
 
 /// Helper for writing nested html_to!
 /// Basically a lazy html! that can be rendered(-to) on demand
@@ -298,14 +299,14 @@ impl Render for AsideTags<'_> {
     }
 }
 
-/// Tag input form with autocomplete (TODO: Not yet) (action, id, submit_name)
+/// Tag input form with autocomplete (action, id, submit_name)
 struct TagEditForm<'a, OnSubmit>(OnSubmit, &'a str, &'a str);
 impl<OnSubmit> Render for TagEditForm<'_, OnSubmit>
 where OnSubmit: Render {
     fn render_to(&self, buffer: &mut String) {
         let ident = html_in! { "TAG_EDIT_FIELD_" (self.1.crc32()) };
         html_to! { buffer,
-            form onsubmit=(self.0) {
+            form onsubmit={ (self.0)"; return false;" } {
                 (ScriptVar(&ident, self.1))
                 input.tag-field #{ (self.1) "_box" } name="tag" type="text"
                     onKeyUp={ "getCompletions(this, " (ident) ")" } 
