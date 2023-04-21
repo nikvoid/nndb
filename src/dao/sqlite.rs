@@ -726,9 +726,19 @@ impl ElementStorage for Sqlite {
     where 
         N: AsRef<str>,
         Nt: AsRef<str> {
-
+        let tag = tag.as_ref();
         let to = to.as_ref();
-        let Some(tag) = self.get_tag_data(tag.as_ref())? else {
+
+        // Special case: alias to self - remove from group 
+        if tag == to {
+            self.0.borrow().execute(
+                "UPDATE tag SET group_id = NULL 
+                WHERE name_hash = ?",
+                (tag.crc32(),))?;
+            return Ok(())
+        }
+        
+        let Some(tag) = self.get_tag_data(tag)? else {
             anyhow::bail!("no such tag");
         };
         

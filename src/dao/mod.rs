@@ -91,11 +91,13 @@ pub trait ElementStorage {
 
     /// Add `tag` to group that have `to` tag, or create new
     /// If `to` does not exist, it will be created 
+    /// If `tag == to`, `tag` will be removed from group
     fn alias_tag<N, Nt>(&self, tag: N, to: Nt) -> anyhow::Result<()>
     where 
         N: AsRef<str>,
         Nt: AsRef<str>;
 
+    /// Get tag aliases group
     fn get_tag_aliases<N>(&self, tag: N) -> anyhow::Result<Vec<read::Tag>>
     where N: AsRef<str>;
     
