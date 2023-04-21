@@ -6,9 +6,10 @@ class XMLHttpRequestExt extends XMLHttpRequest {
   
   constructor() {
     super();
+    this.success_cb = () => {};
     this.error_cb = () => {
       alert(this.status + " " + this.response);
-    }
+    };
     this.onreadystatechange = () => {
       if (this.readyState == 4) {
         if (this.status >= 200 && this.status < 300) {

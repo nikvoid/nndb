@@ -68,7 +68,11 @@ pub fn scan_files() -> anyhow::Result<u32> {
 
     let elements: Vec<_> = files.into_par_iter()
         .map(|(path, is_anim)| -> anyhow::Result<ElementWithMetadata> {
-            let mut file = std::fs::File::open(&path)?;
+            // TODO: Will write option return error if file is busy now?..
+            let mut file = std::fs::File::options()
+                .write(true)
+                .read(true)
+                .open(&path)?;
 
             // TODO: Handle animations differently
             let element = match is_anim {
