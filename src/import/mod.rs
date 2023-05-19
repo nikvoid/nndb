@@ -7,6 +7,7 @@ use num_enum::{FromPrimitive, IntoPrimitive};
 
 mod passthrough;
 mod novelai;
+mod webui;
 
 pub const IMAGE_EXTS: &[&str] = &["png", "jpeg", "jpg", "gif", "avif", "webp"];
 pub const ANIMATION_EXTS: &[&str] = &["mp4", "mov", "webm", "m4v"];
@@ -22,13 +23,16 @@ pub enum Importer {
     #[default]
     Passthrough = 0,
     // Novel AI generations
-    NovelAI = 1,
+    NovelAI     = 1,
+    // Webui generations
+    Webui       = 2,
 }
 
 impl Importer {
     /// Decide which importer to use with file
     pub fn scan(element: &ElementPrefab) -> Self  {
         match () {
+            _ if webui::Webui.can_parse(element) => Self::Webui,
             _ if novelai::NovelAI.can_parse(element) => Self::NovelAI,
             _ => Self::Passthrough
         }
@@ -37,8 +41,9 @@ impl Importer {
     /// Get singleton for chosen importer
     pub fn get_singleton(self) -> &'static dyn MetadataImporter {
         match self {
-            Importer::Passthrough => &passthrough::Passthrough,
-            Importer::NovelAI => &novelai::NovelAI,
+            Self::Passthrough => &passthrough::Passthrough,
+            Self::NovelAI => &novelai::NovelAI,
+            Self::Webui => &webui::Webui,
         }
     }
 }
@@ -79,4 +84,11 @@ pub trait MetadataImporter: Sync {
         &self,
         element: &PendingImport
     ) -> anyhow::Result<ElementMetadata>;
+}
+
+// Check PNG header
+fn is_png(element: &ElementPrefab) -> bool {
+    element.data.starts_with(
+        &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
+    )    
 }

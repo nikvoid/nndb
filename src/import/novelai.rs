@@ -6,7 +6,7 @@ use serde::Deserialize;
 
 use crate::model::{read::PendingImport, write::{ElementMetadata, Tag}, TagType, AIMetadata};
 
-use super::{MetadataImporter, ElementPrefab};
+use super::{MetadataImporter, ElementPrefab, is_png};
 
 pub struct NovelAI;
 
@@ -70,9 +70,7 @@ impl MetadataImporter for NovelAI {
     /// Check if png contains `Software = NovelAI`
     fn can_parse(&self, element: &ElementPrefab) -> bool {
         // PNG header
-        if !element.data.starts_with(
-            &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
-        ) {
+        if !is_png(element) {
             return false
         }
         

@@ -9,7 +9,7 @@ use super::*;
 
 /// Tag excape regex
 pub static TAG_REX: Lazy<Regex> = Lazy::new(|| 
-    Regex::new(r#"[\s:,.@#$*'"`|%]+"#).unwrap()
+    Regex::new(r#"[\s:,.@#$*'"`|%{}\[\]]+"#).unwrap()
 );
 
 /// Tag to write. Internal primary key is crc32 name hash 

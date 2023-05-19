@@ -15,6 +15,7 @@ pub mod read;
 pub mod write;
 
 /// Generative Neural Network (SD primarily) metadata
+#[derive(Default)]
 pub struct AIMetadata {
     pub positive_prompt: String,
     pub negative_prompt: Option<String>,
