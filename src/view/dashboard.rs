@@ -1,7 +1,7 @@
 use actix_web::{get, Responder};
 use maud::{Render, html, html_to};
 
-use crate::{view::{BaseContainer, ScriptButton}, dao::{STORAGE, ElementStorage}, log_n_bail};
+use crate::{view::{BaseContainer, ScriptButton}, dao::STORAGE, log_n_bail};
 
 /// Takes (id, param_name, init_text) to create block with
 /// concatenated param_name and init_text in span with id
@@ -21,7 +21,7 @@ where R: Render {
 
 #[get("/dashboard")]
 pub async fn dashboard_page() -> impl Responder {
-    let summary = match STORAGE.lock().await.get_summary() {
+    let summary = match STORAGE.get_summary().await {
         Ok(sum) => sum,
         Err(e) => log_n_bail!("failed to fetch summary", ?e)
     };

@@ -3,7 +3,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tracing::{info, error};
 
-use crate::{dao::{STORAGE, ElementStorage}, log_n_bail, model::{write, TagType}, util, service::{SCAN_FILES_LOCK, UPDATE_METADATA_LOCK, GROUP_ELEMENTS_LOCK, MAKE_THUMBNAILS_LOCK, self}, log_n_ok, search::{self, Term}};
+use crate::{dao::STORAGE, log_n_bail, model::{write, TagType}, util, service::{SCAN_FILES_LOCK, UPDATE_METADATA_LOCK, GROUP_ELEMENTS_LOCK, MAKE_THUMBNAILS_LOCK, self}, log_n_ok, search::{self, Term}};
 
 /// Tag autocompletion max tags
 const TAG_LIMIT: u32 = 15;
@@ -53,7 +53,7 @@ pub struct ImportTasksStatus {
 /// Tag autocompletion
 #[get("/api/read/autocomplete")]
 pub async fn tag_autocomplete(query: web::Query<AutocompleteRequest>) -> impl Responder {
-    match STORAGE.lock().await.get_tag_completions(query.0.input, TAG_LIMIT) {
+    match STORAGE.get_tag_completions(&query.0.input, TAG_LIMIT).await {
         Ok(res) => {
             Ok(web::Json(res))
         },
@@ -99,7 +99,7 @@ pub async fn add_tags(query: web::Json<AddTagsRequest>) -> impl Responder {
         .filter_map(|t| write::Tag::new(&t, None, TagType::Tag))
         .collect_vec();
     
-    match STORAGE.lock().await.add_tags(Some(query.element_id), &tags) {
+    match STORAGE.add_tags(Some(query.element_id), &tags).await {
         Ok(_) => log_n_ok!("added tags to element"),
         Err(e) => log_n_bail!("failed to add tags", ?e)        
     }
@@ -108,9 +108,9 @@ pub async fn add_tags(query: web::Json<AddTagsRequest>) -> impl Responder {
 /// Delete tag from element
 #[post("/api/write/delete_tag")]
 pub async fn delete_tag(req: web::Json<DeleteTagRequest>) -> impl Responder {
-    match STORAGE.lock()
-        .await
-        .remove_tag_from_element(req.element_id, &req.tag_name) {
+    match STORAGE
+        .remove_tag_from_element(req.element_id, &req.tag_name)
+        .await {
         Ok(_) => log_n_ok!("removed tag from element"),
         Err(e) => log_n_bail!("failed to remove tag", ?e)
     }
@@ -124,7 +124,7 @@ pub async fn edit_tag(req: web::Json<EditTagRequest>) -> impl Responder {
         None => log_n_bail!("failed to create tag struct")
     };
 
-    match STORAGE.lock().await.update_tag(tag, req.hidden) {
+    match STORAGE.update_tag(tag, req.hidden).await {
         Ok(_) => log_n_ok!("edited tag"),
         Err(e) => log_n_bail!("failed to update tag", ?e)
     }
@@ -137,9 +137,8 @@ pub async fn alias_tag(req: web::Json<AliasTagRequest>) -> impl Responder {
         .filter_map(|t| if let Term::Tag(true, tag) = t { Some(tag) } else { None })
         .next() {
         Some(to) => match STORAGE
-            .lock()
-            .await
-            .alias_tag(&req.tag_name, to) {
+            .alias_tag(&req.tag_name, to)
+            .await {
             Ok(_) => log_n_ok!("aliased tag", tag=req.tag_name, to),
             Err(e) => log_n_bail!("failed to make alias", ?e)
         }
@@ -164,7 +163,7 @@ pub async fn start_import() -> impl Responder {
 /// Update count of elements with tag
 #[get("/api/write/update_tag_counts")]
 pub async fn update_tag_count() -> impl Responder {
-    match STORAGE.lock().await.update_tag_count() {
+    match STORAGE.update_tag_count().await {
         Ok(_) => log_n_ok!("updated tag counts (manually)"),
         Err(e) => log_n_bail!("failed to update tag counts", ?e)
     }
@@ -173,7 +172,7 @@ pub async fn update_tag_count() -> impl Responder {
 /// Remove all internal grouping data
 #[get("/api/write/clear_group_data")]
 pub async fn clear_group_data() -> impl Responder {
-    match STORAGE.lock().await.clear_groups() {
+    match STORAGE.clear_groups().await {
         Ok(_) => log_n_ok!("cleared group data"),
         Err(e) => log_n_bail!("failed to clear groups", ?e)
     }
@@ -191,7 +190,7 @@ pub async fn fix_thumbnails() -> impl Responder {
 /// Retry failed imports
 #[get("/api/write/retry_imports")]
 pub async fn retry_imports() -> impl Responder {
-    match STORAGE.lock().await.unmark_failed_imports() {
+    match STORAGE.unmark_failed_imports().await {
         Ok(_) => log_n_ok!("cleared failed imports state"),
         Err(e) => log_n_bail!("failed to retry imports", ?e)
     }

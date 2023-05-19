@@ -3,7 +3,7 @@ use maud::{Render, html};
 use tracing::error;
 
 use crate::{
-    dao::{STORAGE, ElementStorage}, 
+    dao::STORAGE, 
     view::{
         BaseContainer, AsideTags, ElementLink, 
         TagEditForm, AsideMetadata, ScriptButton, 
@@ -15,9 +15,8 @@ pub async fn element_page(id: web::Path<u32>) -> impl Responder {
     let id = *id;
 
     let (elem, meta) = match STORAGE
-        .lock()
-        .await
-        .get_element_data(id) {
+        .get_element_data(id)
+        .await {
             Ok(Some(data)) => data,
             Ok(None) => return Err(ErrorNotFound("no such element")),
             Err(e) => log_n_bail!("failed to fetch element data", ?e),
@@ -26,9 +25,8 @@ pub async fn element_page(id: web::Path<u32>) -> impl Responder {
     let associated = match elem.group_id {
         Some(group_id) => { 
             let res = STORAGE
-                .lock()
+                .search_elements(&format!("group:{}", group_id), 0, None, 0)
                 .await
-                .search_elements(format!("group:{}", group_id), 0, None, 0)
                 .map(|(res, ..)| res);
             
             Some(res)
@@ -39,9 +37,8 @@ pub async fn element_page(id: web::Path<u32>) -> impl Responder {
     let associated_ext = match elem.group {
         Some(group_id) => { 
             let res = STORAGE
-                .lock()
+                .search_elements(&format!("extgroup:{}", group_id), 0, None, 0)
                 .await
-                .search_elements(format!("extgroup:{}", group_id), 0, None, 0)
                 .map(|(res, ..)| res);
             
             Some(res)

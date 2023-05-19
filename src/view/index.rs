@@ -1,4 +1,4 @@
-use crate::{dao::{STORAGE, ElementStorage}, resolve, log_n_bail};
+use crate::{dao::STORAGE, resolve, log_n_bail};
 
 use super::*;
 
@@ -69,14 +69,13 @@ pub async fn index_page(query: web::Query<Request<String>>) -> impl Responder {
     };
 
     let offset = (page - 1) * ELEMENTS_ON_PAGE;
-    let (elements, tags, count) = match STORAGE.lock()
-        .await
+    let (elements, tags, count) = match STORAGE
         .search_elements(
             query_str,
             offset, 
             Some(ELEMENTS_ON_PAGE), 
             SELECTION_TAGS_COUNT
-        ) {
+        ).await {
             Ok(out) => out,
             Err(e) => log_n_bail!("failed to perform search", ?e)
         };

@@ -7,7 +7,7 @@ use walkdir::WalkDir;
 use itertools::Itertools;
 
 use crate::{
-    dao::{ElementStorage, STORAGE}, 
+    dao::{STORAGE, FutureBlock}, 
     import::{ElementPrefab, ANIMATION_EXTS, IMAGE_EXTS}, 
     model::write::ElementWithMetadata, 
     config::CONFIG, util::{self, AutoBool}
@@ -104,7 +104,7 @@ pub fn scan_files() -> anyhow::Result<u32> {
         })
         .collect();
 
-    STORAGE.blocking_lock().add_elements(&elements)
+    STORAGE.add_elements(&elements).blocking_run()
 }
 
 
@@ -116,9 +116,8 @@ pub async fn update_metadata() -> anyhow::Result<()> {
         None => return Ok(())
     };
     let imports = STORAGE
-        .lock()
-        .await
-        .get_pending_imports()?;
+        .get_pending_imports()
+        .await?;
 
     let mut groups: FuturesUnordered<_> = imports.iter()
         .group_by(|imp| imp.importer_id)
@@ -133,15 +132,14 @@ pub async fn update_metadata() -> anyhow::Result<()> {
                 if importer.available() {
                     match importer.fetch_metadata(&imp).await {
                         Ok(meta) => match STORAGE
-                            .lock()
-                            .await
-                            .add_metadata(imp.id, meta) {
+                            .add_metadata(imp.id, meta)
+                            .await {
                                 Ok(_) => (),
                                 Err(e) => error!(?e, ?imp, "failed to add metadata"),
                             }
                         Err(e) => {
                             error!(?e, ?imp, "failed to fetch metadata");
-                            STORAGE.lock().await.mark_failed_import(imp.id).ok();
+                            STORAGE.mark_failed_import(imp.id).await.ok();
                         },
                     }
                 }
@@ -150,7 +148,7 @@ pub async fn update_metadata() -> anyhow::Result<()> {
         .collect();
 
     // Wait for all importers to finish
-    while let Some(_) = groups.next().await {}
+    while groups.next().await.is_some() {}
     
     Ok(())
 }
@@ -163,10 +161,7 @@ pub async fn group_elements_by_signature() -> anyhow::Result<()> {
         None => return Ok(())
     };
     // Get all signatures
-    let group_metas = STORAGE
-        .lock()
-        .await
-        .get_groups()?;
+    let group_metas = STORAGE.get_groups().await?;
 
     // Get elements without assigned group
     let ungrouped = group_metas.iter()
@@ -212,9 +207,8 @@ pub async fn group_elements_by_signature() -> anyhow::Result<()> {
                                 Some(id) => id,
                                 // Or create
                                 None => STORAGE
-                                    .lock()
-                                    .await
-                                    .add_to_group(&[pot.element_id, elem.element_id], None)?,
+                                    .add_to_group(&[pot.element_id, elem.element_id], None)
+                                    .await?,
                             }
                     };
                     groups.add(group_id, elem.element_id);
@@ -225,9 +219,8 @@ pub async fn group_elements_by_signature() -> anyhow::Result<()> {
     }
 
     // Add remaining
-    let store = STORAGE.lock().await;
     for (group_id, elem_ids) in groups.0 {
-        store.add_to_group(&elem_ids, Some(group_id))?;
+        STORAGE.add_to_group(&elem_ids, Some(group_id)).await?;
     }
     
     Ok(())
@@ -235,7 +228,7 @@ pub async fn group_elements_by_signature() -> anyhow::Result<()> {
 
 /// Update count of elements with tag for each tag
 pub fn update_tag_count() -> anyhow::Result<()> {
-    STORAGE.blocking_lock().update_tag_count()
+    STORAGE.update_tag_count().blocking_run()
 }
 
 /// Make thumbnails for all files that don't have one.
@@ -245,8 +238,9 @@ pub fn make_thumbnails() -> anyhow::Result<()> {
         Some(guard) => guard,
         None => return Ok(())
     };
-    let elems: Vec<_> = STORAGE.blocking_lock()
-        .search_elements("", 0, None, 0)?
+    let elems: Vec<_> = STORAGE
+        .search_elements("", 0, None, 0)
+        .blocking_run()?
         .0.into_par_iter()
         // TODO: Thumbs for animated
         .filter(|e| !e.has_thumb && !e.animated)
@@ -274,7 +268,7 @@ pub fn make_thumbnails() -> anyhow::Result<()> {
         .filter_map(|opt| opt)
         .collect();
 
-    STORAGE.blocking_lock().add_thumbnails(&elems)?;
+    STORAGE.add_thumbnails(&elems).blocking_run()?;
 
     Ok(())
 }
@@ -287,9 +281,8 @@ pub fn fix_thumbnails() -> anyhow::Result<()> {
     };
 
     let mut elems = {
-        let store = STORAGE.blocking_lock();
-        store.remove_thumbnails()?;
-        store.search_elements("", 0, None, 0)?.0
+        STORAGE.remove_thumbnails().blocking_run()?;
+        STORAGE.search_elements("", 0, None, 0).blocking_run()?.0
     };
 
     let thumbs = std::fs::read_dir(&CONFIG.thumbnails_folder)?.map(
@@ -318,7 +311,7 @@ pub fn fix_thumbnails() -> anyhow::Result<()> {
         .collect_vec();
 
     // Return thumbnail mark
-    STORAGE.blocking_lock().add_thumbnails(&ids)?;
+    STORAGE.add_thumbnails(&ids).blocking_run()?;
         
     Ok(())
 }
