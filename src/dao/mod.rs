@@ -148,7 +148,6 @@
 //! }
 //! ```
 
-// mod sqlite;
 mod sqlitex;
 
 use futures::Future;
@@ -159,16 +158,7 @@ use crate::config::CONFIG;
 
 pub type StorageBackend = Sqlite;
 
-// TODO: Decouple mutex with backend
-// pub static STORAGE: Lazy<Mutex<StorageBackend>> = Lazy::new(||
-//     Mutex::new(StorageBackend::init(&CONFIG.db_url))
-// ); 
-
 pub static STORAGE: Lazy<StorageBackend> = Lazy::new(|| {
-    // futures::executor::block_on(async {
-    //     StorageBackend::init(&CONFIG.db_url).await
-    // }).unwrap()
-    
     StorageBackend::init(&CONFIG.db_url).blocking_run().unwrap()
 });
 
