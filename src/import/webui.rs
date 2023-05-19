@@ -22,7 +22,7 @@ static COMPLICATED_REX: Lazy<Regex> = Lazy::new(|| {
 
 /// Match prompt weight `prompt:0.001`
 static WEIGHT_REX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r":[0-9]+(\.[0-9]+)?").unwrap()
+    Regex::new(r":-?[0-9]+(\.[0-9]+)?").unwrap()
 });
 
 /// Extract tags from Webui prompt
@@ -31,22 +31,12 @@ static WEIGHT_REX: Lazy<Regex> = Lazy::new(|| {
 fn parse_prompt(prompt: &str) -> impl Iterator<Item = String> + '_ {
     prompt
         .split(',')    
-        .flat_map(|expr| {
+        .filter_map(|expr| {
             // Strip whitespaces
             let trim = expr.trim();
 
-            // Get count of strength control braces tag wrapped into
-            let braces = trim
-                .chars()
-                .zip(trim.chars().rev())
-                .take_while(|&cursors| matches!(
-                    cursors, 
-                    | ('{', '}') 
-                    | ('[', ']')
-                    | ('(', ')')))
-                .count();
-
-            let body = trim.get(braces..trim.len() - braces)?;
+            // Trim strength control braces
+            let body = super::trim_braces(trim)?;
 
             // At first, strip out weights
             let strip_weights = WEIGHT_REX.replace_all(body, "");
@@ -125,7 +115,7 @@ impl MetadataImporter for Webui {
             .join(" ");
 
         let tags = parse_prompt(&prompt)
-            .flat_map(|t| Tag::new(&t, None, TagType::Tag))
+            .filter_map(|t| Tag::new(&t, None, TagType::Tag))
             // Append source tag 
             .chain(Tag::new("webui_generated", None, TagType::Metadata))
             .collect();        
@@ -141,7 +131,7 @@ impl MetadataImporter for Webui {
 
         // Parse other metadata
         let mut ai_meta = other.split(',')
-            .flat_map(|m| m.split(':').collect_tuple())
+            .filter_map(|m| m.split(':').collect_tuple())
             .fold(AIMetadata::default(), |mut acc, (key, val)| {
                 let val = val.trim();
                 match key.trim() {

@@ -92,3 +92,19 @@ fn is_png(element: &ElementPrefab) -> bool {
         &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
     )    
 }
+
+/// Trim pairs of ({[]}) braces expr wrapped into
+fn trim_braces(expr: &str) -> Option<&str> {
+    // Count braces
+    let braces = expr
+        .chars()
+        .zip(expr.chars().rev())
+        .take_while(|&cursors| matches!(
+            cursors, 
+            | ('{', '}') 
+            | ('[', ']')
+            | ('(', ')')))
+        .count();
+    
+    expr.get(braces..expr.len() - braces)
+}

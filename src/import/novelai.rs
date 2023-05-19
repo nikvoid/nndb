@@ -21,48 +21,26 @@ struct Metadata<'a> {
     uc: Cow<'a, str>
 }
 
-/// NovelAI Tag syntax
-/// Can contain multiple tags in one clause
-enum NovelAITag<'a> {
-    Simple(&'a str),
-    Mixed(Vec<&'a str>)
-}
+/// Parse NovelAI prompt
+///
+/// Reference: https://docs.novelai.net/
+fn parse_prompt(prompt: &str) -> impl Iterator<Item = &str> + '_ {
+    prompt
+        .split(',')    
+        .filter_map(|expr| {
 
-impl<'a> NovelAITag<'a> {
-    fn parse(expr: &'a str) -> Option<Self> {
         // Strip whitespaces
         let trim = expr.trim();
-
-        // Get count of strength control braces tag wrapped into
-        let braces = trim
-            .chars()
-            .zip(trim.chars().rev())
-            .take_while(|&(s, e)| match (s, e) {
-                | ('{', '}') 
-                | ('[', ']')
-                | ('(', ')') => true,
-                _ => false
-            })
-            .count();
-
-        let body = trim.get(braces..trim.len() - braces)?;
-
-        if body.is_empty() {
-            return None
-        }
-                
-        if body.contains("|") {
-            let opt: Option<Vec<_>> = body
-                .split("|")
-                // Strip weights
-                .map(|t| t.split(':').next())
-                .collect();
-
-            opt.map(|tags| NovelAITag::Mixed(tags))
-        } else {
-            Some(NovelAITag::Simple(body))
-        }
-    }
+            
+        // Trim strength control braces
+        super::trim_braces(trim)
+        })
+        .flat_map(|expr| {
+            // Split mixed tag
+            expr.split('|')
+                // Remove weigths
+                .filter_map(|t| t.split(':').next())
+        })
 }
 
 #[async_trait]
@@ -78,9 +56,9 @@ impl MetadataImporter for NovelAI {
         let dec = png::Decoder::new(&mut cursor);
         if let Ok(reader) = dec.read_info() {
             for entry in &reader.info().uncompressed_latin1_text {
-                match (entry.keyword.as_str(), entry.text.as_str()) {
-                    ("Software", "NovelAI") => return true,
-                    _ => ()
+                if let ("Software", "NovelAI") = 
+                    (entry.keyword.as_str(), entry.text.as_str()) {
+                    return true
                 } 
             }
         }
@@ -118,32 +96,13 @@ impl MetadataImporter for NovelAI {
             }
         ).context("novelai metadata not found")?;
             
-        let meta: Metadata = serde_json::from_str(&others)?;
+        let meta: Metadata = serde_json::from_str(others)?;
 
-        // This is mostly heuristic... assume that tags are split by commas
-        let nai_tags = prompt
-            .split(",")
-            // Just ignore malformed tags
-            .filter_map(|tag| NovelAITag::parse(tag));
-
-        let mut tags = vec![Tag::new(
-            "novelai_generated",
-            None,
-            TagType::Metadata
-        ).unwrap()];
-
-        // Push all tags
-        for tag in nai_tags {
-            match tag {
-                NovelAITag::Simple(tag) => tags.extend(
-                    Tag::new(tag, None, TagType::Tag).into_iter()
-                ),
-                NovelAITag::Mixed(m_tags) => tags.extend(m_tags.iter().map(
-                    |tag| Tag::new(tag, None, TagType::Tag)
-                ).flatten())
-            }
-        }
-
+        let tags = parse_prompt(&prompt)
+            .filter_map(|t| Tag::new(t, None, TagType::Tag))
+            .chain(Tag::new("novelai_generated", None, TagType::Metadata))
+            .collect();
+        
         Ok(ElementMetadata {
             src_link: None,
             src_time: None,
