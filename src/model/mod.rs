@@ -47,6 +47,7 @@ pub struct GroupMetadata {
 }
 
 /// Database summary
+#[derive(sqlx::FromRow)]
 pub struct Summary {
     /// Count of tags in DB
     pub tag_count: u32,

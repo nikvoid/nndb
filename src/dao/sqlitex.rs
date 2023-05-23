@@ -635,26 +635,60 @@ impl Sqlite {
     
     /// Get summary about tags and elements
     pub async fn get_summary(&self) -> Result<Summary, StorageError> {
-        todo!()
+        let summary = sqlx::query_as(
+            "SELECT 
+                (SELECT count(*) FROM tag) as tag_count, 
+                (SELECT count(*) FROM element) as element_count"
+        )
+        .fetch_one(&self.0)
+        .await?;
+
+        Ok(summary)
     }
 
     /// Mark import as failed
     pub async fn mark_failed_import(&self, element_id: u32) -> Result<(), StorageError> {
+        sqlx::query!(
+            "UPDATE import SET failed = 1
+            WHERE element_id = ?",
+            element_id
+        )
+        .execute(&self.0)
+        .await?;
+        
         Ok(())
     }
 
     /// Mark that all elements don't have thumbnails
     pub async fn remove_thumbnails(&self) -> Result<(), StorageError> {
+        sqlx::query!(
+            "UPDATE element SET has_thumb = 0"
+        )
+        .execute(&self.0)
+        .await?;
+        
         Ok(())
     }
 
     /// Remove failed mark from failed imports
     pub async fn unmark_failed_imports(&self) -> Result<(), StorageError> {
+        sqlx::query!(
+            "UPDATE import SET failed = 0"
+        )
+        .execute(&self.0)
+        .await?;
+        
         Ok(())
     }
 
     /// Remove internal grouping data
     pub async fn clear_groups(&self) -> Result<(), StorageError> {
+        sqlx::query!(
+            "DELETE FROM group_ids"
+        )
+        .execute(&self.0)
+        .await?;
+        
         Ok(())
     }
 }
