@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use sqlx::Executor;
 use sqlx::{SqlitePool, migrate::MigrateDatabase, SqliteConnection};
 
-use crate::util;
+use crate::util::{self, Crc32Hash};
 use crate::{
     model::{
         write::{self, ElementWithMetadata}, 
@@ -196,6 +196,21 @@ impl Sqlite {
         }
 
         Ok(())
+    }
+
+    async fn get_tag_data_tx(
+        tx: &mut SqliteConnection,
+        name: &str
+    ) -> Result<Option<read::Tag>, StorageError> {
+        let data = sqlx::query_as(
+            "SELECT * FROM tag
+            WHERE name_hash = ?"
+        )
+        .bind(name.crc32())
+        .fetch_optional(&mut *tx)
+        .await?;
+            
+        Ok(data)
     }
 }
 
@@ -411,6 +426,7 @@ impl Sqlite {
             return Ok(None)
         };
 
+        // Nested part of metadata is fetched below 
         let meta: Option<read::ElementMetadata> = sqlx::query_as( // sql
             "SELECT
                 m.src_link,
@@ -450,12 +466,32 @@ impl Sqlite {
 
     /// Update count of elements with tag for each tag
     pub async fn update_tag_count(&self) -> Result<(), StorageError> {
+        sqlx::query!(
+            "UPDATE tag SET count = (
+                SELECT count(*) FROM element_tag WHERE tag_hash = name_hash
+            )"
+        )
+        .execute(&self.0)
+        .await?;
+
         Ok(())
     }
 
     /// Tag autocompletion
     pub async fn get_tag_completions(&self, input: &str, limit: u32) -> Result<Vec<read::Tag>, StorageError> {
-        Ok(vec![])
+        let fmt = format!("%{}%", input);
+        let tags = sqlx::query_as(
+            "SELECT * FROM tag
+            WHERE tag_name LIKE ? AND hidden = 0
+            ORDER BY count DESC
+            LIMIT ?"
+        )
+        .bind(fmt)
+        .bind(limit)
+        .fetch_all(&self.0)
+        .await?;
+        
+        Ok(tags)
     }  
 
     /// Mark that `element_ids` have thumbnails
@@ -465,17 +501,52 @@ impl Sqlite {
 
     /// Get full data for tag by it's primary name
     pub async fn get_tag_data(&self, name: &str) -> Result<Option<read::Tag>, StorageError> {
-        Ok(None)
+        let mut conn = self.0.acquire().await?;
+        Self::get_tag_data_tx(&mut conn, name).await
     } 
 
     /// Remove tag from element
     pub async fn remove_tag_from_element(&self, element_id: u32, tag_name: &str) -> Result<(), StorageError> {
+        let mut tx = self.0.begin().await?;
+        let hash = tag_name.crc32();
+
+        let rows = sqlx::query!(
+            "DELETE FROM element_tag
+            WHERE element_id = ? AND tag_hash = ?",
+            element_id, hash
+        )
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+
+        if rows > 0 {
+            sqlx::query!(
+                "UPDATE tag SET count = count - 1
+                WHERE name_hash = ?",
+                hash
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        tx.commit().await?;
+        
         Ok(())
     }
 
     /// Update tag data
-    pub async fn update_tag<T>(&self, tag: T, hidden: bool) -> Result<(), StorageError>
-    where T: AsRef<write::Tag> + Send {
+    pub async fn update_tag(&self, tag: &write::Tag, hidden: bool) -> Result<(), StorageError> {
+        sqlx::query(
+            "UPDATE tag SET alt_name = ?, tag_type = ?, hidden = ?
+            WHERE name_hash = ?"
+        )
+        .bind(tag.alt_name())
+        .bind(tag.tag_type())
+        .bind(hidden)
+        .bind(tag.name_hash())
+        .execute(&self.0)
+        .await?;
+        
         Ok(())
     }
 
@@ -483,12 +554,83 @@ impl Sqlite {
     /// If `to` does not exist, it will be created 
     /// If `tag == to`, `tag` will be removed from group
     pub async fn alias_tag(&self, tag: &str, to: &str) -> Result<(), StorageError> {
+        // Special case: alias to self - remove from group 
+        if tag == to {
+            sqlx::query(
+                "UPDATE tag SET group_id = NULL
+                WHERE name_hash = ?"
+            )
+            .bind(tag.crc32())
+            .execute(&self.0)
+            .await?;
+
+            return Ok(())
+        }
+        
+        let Some(tag) = self.get_tag_data(tag).await? else {
+            anyhow::bail!("no such tag");
+        };
+        
+        let alias_to = self.get_tag_data(to).await?;
+
+        // Start transaction
+        let mut tx = self.0.begin().await?;
+        
+        let alias_to = match alias_to {
+            Some(to) => to,
+            // Add new tag
+            None => {
+                let Some(alias) = write::Tag::new(to, None, tag.tag_type) else {
+                    anyhow::bail!("expected alias name");
+                };
+                Self::add_tags_tx(&mut tx, None, &[alias]).await?;
+                // If add_tags suceeded, tag should be present
+                Self::get_tag_data_tx(&mut tx, to).await?.unwrap()
+            } 
+        };
+
+        // Get group or insert new
+        let group_id = match alias_to.group_id {
+            Some(id) => id,
+            None => {
+                sqlx::query!(
+                    "INSERT INTO tag_group (id) VALUES (NULL)",
+                )
+                .execute(&mut *tx)
+                .await?
+                .last_insert_rowid() as u32
+            }
+        };
+
+        sqlx::query(
+            "UPDATE tag SET group_id = ?
+            WHERE name_hash in (?, ?)"
+        )
+        .bind(group_id)
+        .bind(tag.name.crc32())
+        .bind(alias_to.name.crc32())
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+        
         Ok(())
     }
 
     /// Get tag aliases group
     pub async fn get_tag_aliases(&self, tag: &str) -> Result<Vec<read::Tag>, StorageError> {
-        Ok(vec![])
+        let aliases = sqlx::query_as(
+            "SELECT * FROM tag
+            WHERE group_id = (
+                SELECT tg.id FROM tag_group tg, tag t
+                WHERE t.group_id = tg.id AND t.name_hash = ?
+            )"
+        )
+        .bind(tag.crc32())
+        .fetch_all(&self.0)
+        .await?;
+        
+        Ok(aliases)
     }
     
     /// Get summary about tags and elements

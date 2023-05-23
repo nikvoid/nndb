@@ -124,7 +124,7 @@ pub async fn edit_tag(req: web::Json<EditTagRequest>) -> impl Responder {
         None => log_n_bail!("failed to create tag struct")
     };
 
-    match STORAGE.update_tag(tag, req.hidden).await {
+    match STORAGE.update_tag(&tag, req.hidden).await {
         Ok(_) => log_n_ok!("edited tag"),
         Err(e) => log_n_bail!("failed to update tag", ?e)
     }
