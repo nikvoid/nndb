@@ -4,10 +4,20 @@ use sqlx::Executor;
 use sqlx::{SqlitePool, migrate::MigrateDatabase, SqliteConnection};
 
 use crate::util;
-use crate::{model::{write::{self, ElementWithMetadata}, read::{self, PendingImport}, Summary, Md5Hash, GroupMetadata, AIMetadata}, config::CONFIG};
+use crate::{
+    model::{
+        write::{self, ElementWithMetadata}, 
+        MD5_LEN, 
+        SIGNATURE_LEN,
+        read::{self, PendingImport}, 
+        Summary, Md5Hash, GroupMetadata, AIMetadata
+    }, 
+    config::CONFIG
+};
 use futures::StreamExt;
 
 use tracing::error;
+use super::SliceShim;
 
 pub struct Sqlite(SqlitePool);
 
@@ -267,12 +277,11 @@ impl Sqlite {
     /// Get all files' hashes
     pub async fn get_hashes(&self) -> Result<Vec<Md5Hash>, StorageError> {
         let hashes = sqlx::query!(
-            "SELECT hash FROM element"
+            r#"SELECT hash FROM element"#
         )
-        .fetch_all(&self.0).await?
-        .into_iter()
-        .map(|anon| Md5Hash::try_from(anon.hash).unwrap())
-        .collect();
+        .map(|anon| anon.hash.try_into().unwrap())
+        .fetch_all(&self.0)
+        .await?;
         
         Ok(hashes)
     }
@@ -290,7 +299,26 @@ impl Sqlite {
 
     /// Get all elements waiting on metadata
     pub async fn get_pending_imports(&self) -> Result<Vec<PendingImport>, StorageError> {
-        Ok(vec![])
+        // let v = sqlx::query_as!(PendingImport,
+        //     r#"SELECT 
+        //         e.id as "id: _", 
+        //         i.importer_id as importer_id, 
+        //         e.hash as "hash: Blob<MD5_LEN>", 
+        //         e.orig_name as orig_filename
+        //     FROM element e, import i
+        //     WHERE e.id = i.element_id AND i.failed = 0
+        //     ORDER BY i.importer_id ASC"#
+        // )
+        let v = sqlx::query_as( // sql
+            "SELECT e.*, e.orig_name as orig_filename
+            FROM element e, import i
+            WHERE e.id = i.element_id AND i.failed = 0
+            ORDER BY i.importer_id ASC"
+        )
+        .fetch_all(&self.0)
+        .await?;
+        
+        Ok(v)
     }
 
     /// Add metadata for element -- and remove pending import
@@ -303,7 +331,20 @@ impl Sqlite {
 
     /// Get all image signature groups stored in db
     pub async fn get_groups(&self) -> Result<Vec<GroupMetadata>, StorageError> {
-        Ok(vec![])
+        // let metas = sqlx::query_as!(GroupMetadata,
+        //     r#"SELECT 
+        //         element_id as "element_id: _", 
+        //         signature as "signature: Blob<SIGNATURE_LEN>", 
+        //         group_id as "group_id?: _" 
+        //     FROM group_metadata"#
+        // )
+        let metas = sqlx::query_as(
+            "SELECT * FROM group_metadata"
+        )
+        .fetch_all(&self.0)
+        .await?;
+        
+        Ok(metas)
     }
 
     /// Add all elements to group (or create new group with them)
@@ -326,7 +367,45 @@ impl Sqlite {
         limit: Option<u32>,
         tag_limit: u32,
     ) -> Result<(Vec<read::Element>, Vec<read::Tag>, u32), StorageError> {
-        Ok((vec![], vec![], 0))
+        let limit = limit.unwrap_or(u32::MAX);
+
+        let elems = sqlx::query_as( // sql
+            "SELECT 
+                e.*, e.orig_name as orig_filename,
+                g.group_id, m.ext_group as `group`
+            FROM element e
+            LEFT JOIN group_metadata g ON g.element_id = e.id
+            LEFT JOIN metadata m ON m.element_id = e.id
+            -- WHERE e.id in rarray(?)
+            LIMIT ? OFFSET ?",
+        )
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.0)
+        .await?;
+
+        // TEMP:
+        let count = sqlx::query_scalar!(
+            "SELECT count(*) FROM element"
+        )
+        .fetch_one(&self.0)
+        .await?;
+
+        let tags = sqlx::query_as( // sql
+            "SELECT t.*, t.tag_name as name
+            FROM tag t
+            WHERE t.name_hash IN (
+                SELECT tag_hash FROM element_tag
+                -- WHERE element_id in  
+            )
+            ORDER BY t.count DESC
+            LIMIT ?",
+        )
+        .bind(tag_limit)
+        .fetch_all(&self.0)
+        .await?;
+        
+        Ok((elems, tags, count as u32))
     }
 
     /// Get element data and metadata
@@ -334,7 +413,58 @@ impl Sqlite {
         &self, 
         id: u32,
     ) -> Result<Option<(read::Element, read::ElementMetadata)>, StorageError> {
-        Ok(None)
+        let elem = sqlx::query_as( // sql
+            "SELECT 
+                e.*, e.orig_name as orig_filename,
+                g.group_id, m.ext_group as `group`
+            FROM element e
+            LEFT JOIN group_metadata g ON g.element_id = e.id
+            LEFT JOIN metadata m ON m.element_id = e.id
+            WHERE e.id = ?"
+        )
+        .bind(id)
+        .fetch_optional(&self.0)
+        .await?;
+
+        let Some(elem) = elem else {
+            return Ok(None)
+        };
+
+        let meta: Option<read::ElementMetadata> = sqlx::query_as( // sql
+            "SELECT
+                m.src_link,
+                m.src_time,
+                e.add_time
+            FROM metadata m
+            INNER JOIN element e ON e.id = m.element_id
+            WHERE m.element_id = ?"
+        )
+        .bind(id)
+        .fetch_optional(&self.0)
+        .await?;
+        
+        let Some(mut meta) = meta else {
+            return Ok(None)
+        };
+
+        meta.ai_meta = sqlx::query_as( // sql
+            "SELECT * FROM ai_metadata
+            WHERE element_id = ?"    
+        )
+        .bind(id)
+        .fetch_optional(&self.0)
+        .await?;
+
+        meta.tags = sqlx::query_as( // sql
+            "SELECT t.*, t.tag_name as name
+            FROM tag t, element_tag et
+            WHERE t.name_hash = et.tag_hash AND et.element_id = ?"
+        )
+        .bind(id)
+        .fetch_all(&self.0)
+        .await?;
+        
+        Ok(Some((elem, meta)))
     }
 
     /// Update count of elements with tag for each tag

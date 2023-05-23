@@ -43,5 +43,8 @@ tracing-actix-web = "0.7.3"
 tracing-subscriber = { version = "0.3.16", default-features = false, features = ["alloc", "fmt", "registry", "sharded-slab", "smallvec", "std", "thread_local", "tracing-log"] }
 walkdir = "2.3.3"
 
+[profile.dev]
+opt-level = 3
+
 [profile.dev.package.sqlx-macros]
 opt-level = 3

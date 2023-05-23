@@ -175,3 +175,24 @@ impl<T> FutureBlock for T where T: Future {
         futures::executor::block_on(self)
     }
 }
+
+/// Wrapper for decoding blob into fixed size array
+#[derive(sqlx::Type, Debug)]
+#[sqlx(transparent)]
+pub struct SliceShim<'a>(&'a [u8]);
+
+impl<'a, const N: usize> TryFrom<SliceShim<'a>> for [i8; N] {
+    type Error = std::array::TryFromSliceError;
+
+    fn try_from(value: SliceShim<'a>) -> Result<Self, Self::Error> {
+        Self::try_from(bytemuck::cast_slice(value.0))
+    }
+}
+
+impl<'a, const N: usize> TryFrom<SliceShim<'a>> for [u8; N] {
+    type Error = std::array::TryFromSliceError;
+
+    fn try_from(value: SliceShim<'a>) -> Result<Self, Self::Error> {
+        Self::try_from(bytemuck::cast_slice(value.0))
+    }
+} 
