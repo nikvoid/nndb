@@ -8,6 +8,7 @@ use super::*;
 #[derive(Serialize, sqlx::FromRow)]
 pub struct Tag {
     /// Primary name
+    #[sqlx(rename = "tag_name")]
     pub name: String,
     /// Alternative name
     pub alt_name: Option<String>,
@@ -38,6 +39,7 @@ pub struct Element {
     /// Group of similar images (decided by comparing image signatures)
     pub group_id: Option<u32>,
     /// Group info derived from external source
+    #[sqlx(rename = "ext_group")]
     pub group: Option<u32>,
 }   
 

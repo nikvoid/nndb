@@ -12,6 +12,8 @@ pub type UtcDateTime = DateTime<Utc>;
 pub type Md5Hash = [u8; MD5_LEN];
 pub type Signature = [i8; SIGNATURE_LEN];
 
+use crate::dao::SliceShim;
+
 pub mod read;
 pub mod write;
 

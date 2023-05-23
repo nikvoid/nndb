@@ -73,7 +73,7 @@ impl Sqlite {
 
         let hash = e.hash.as_slice();
         let id = sqlx::query!(
-            "INSERT INTO element (filename, orig_name, hash, broken, animated)
+            "INSERT INTO element (filename, orig_filename, hash, broken, animated)
             VALUES (?, ?, ?, ?, ?)",
             e.filename,
             e.orig_filename,
@@ -299,18 +299,8 @@ impl Sqlite {
 
     /// Get all elements waiting on metadata
     pub async fn get_pending_imports(&self) -> Result<Vec<PendingImport>, StorageError> {
-        // let v = sqlx::query_as!(PendingImport,
-        //     r#"SELECT 
-        //         e.id as "id: _", 
-        //         i.importer_id as importer_id, 
-        //         e.hash as "hash: Blob<MD5_LEN>", 
-        //         e.orig_name as orig_filename
-        //     FROM element e, import i
-        //     WHERE e.id = i.element_id AND i.failed = 0
-        //     ORDER BY i.importer_id ASC"#
-        // )
         let v = sqlx::query_as( // sql
-            "SELECT e.*, e.orig_name as orig_filename
+            "SELECT e.*
             FROM element e, import i
             WHERE e.id = i.element_id AND i.failed = 0
             ORDER BY i.importer_id ASC"
@@ -331,13 +321,6 @@ impl Sqlite {
 
     /// Get all image signature groups stored in db
     pub async fn get_groups(&self) -> Result<Vec<GroupMetadata>, StorageError> {
-        // let metas = sqlx::query_as!(GroupMetadata,
-        //     r#"SELECT 
-        //         element_id as "element_id: _", 
-        //         signature as "signature: Blob<SIGNATURE_LEN>", 
-        //         group_id as "group_id?: _" 
-        //     FROM group_metadata"#
-        // )
         let metas = sqlx::query_as(
             "SELECT * FROM group_metadata"
         )
@@ -371,8 +354,7 @@ impl Sqlite {
 
         let elems = sqlx::query_as( // sql
             "SELECT 
-                e.*, e.orig_name as orig_filename,
-                g.group_id, m.ext_group as `group`
+                e.*, g.group_id, m.ext_group
             FROM element e
             LEFT JOIN group_metadata g ON g.element_id = e.id
             LEFT JOIN metadata m ON m.element_id = e.id
@@ -392,7 +374,7 @@ impl Sqlite {
         .await?;
 
         let tags = sqlx::query_as( // sql
-            "SELECT t.*, t.tag_name as name
+            "SELECT t.*
             FROM tag t
             WHERE t.name_hash IN (
                 SELECT tag_hash FROM element_tag
@@ -415,8 +397,7 @@ impl Sqlite {
     ) -> Result<Option<(read::Element, read::ElementMetadata)>, StorageError> {
         let elem = sqlx::query_as( // sql
             "SELECT 
-                e.*, e.orig_name as orig_filename,
-                g.group_id, m.ext_group as `group`
+                e.*, g.group_id, m.ext_group
             FROM element e
             LEFT JOIN group_metadata g ON g.element_id = e.id
             LEFT JOIN metadata m ON m.element_id = e.id
@@ -456,7 +437,7 @@ impl Sqlite {
         .await?;
 
         meta.tags = sqlx::query_as( // sql
-            "SELECT t.*, t.tag_name as name
+            "SELECT t.*
             FROM tag t, element_tag et
             WHERE t.name_hash = et.tag_hash AND et.element_id = ?"
         )
