@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{time::Duration, path::Path};
 
 use actix_files::Files;
 use actix_web::{HttpServer, App, web::redirect};
@@ -64,6 +64,10 @@ async fn main() -> std::io::Result<()> {
         Some(p) => p,
         None => DEF_CONFIG_FILE.to_string()
     };
+
+    if !Path::new(&cfg_path).exists() {
+        std::fs::write(&cfg_path, include_bytes!("../config.toml"))?;
+    }
 
     let cfg_str = std::fs::read_to_string(cfg_path)?;
     CONFIG.init(toml::from_str(&cfg_str).unwrap());
