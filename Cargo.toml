@@ -48,3 +48,9 @@ opt-level = 3
 
 [profile.dev.package.sqlx-macros]
 opt-level = 3
+
+[profile.release]
+debug = true        # Retain debug info
+opt-level = 3
+lto = "fat"         # Enable link-time optimization
+codegen-units = 1   # Reduce number of codegen units to increase optimizations

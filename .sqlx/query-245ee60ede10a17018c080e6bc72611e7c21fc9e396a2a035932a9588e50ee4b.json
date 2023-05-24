@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT group_id FROM tag WHERE name_hash = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "group_id",
+        "ordinal": 0,
+        "type_info": "Int64"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "245ee60ede10a17018c080e6bc72611e7c21fc9e396a2a035932a9588e50ee4b"
+}

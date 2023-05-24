@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO ai_metadata \n            (element_id, positive_prompt, negative_prompt, steps, scale,\n            sampler, seed, strength, noise)\n            VALUES \n            (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 9
+    },
+    "nullable": []
+  },
+  "hash": "be77d07403cac42d235deda960f169d10d3424c2770dbf6026d692261744b5ae"
+}

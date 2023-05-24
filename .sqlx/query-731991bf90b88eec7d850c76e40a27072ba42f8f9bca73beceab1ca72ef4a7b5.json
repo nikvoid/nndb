@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO import (element_id, importer_id) VALUES (?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "731991bf90b88eec7d850c76e40a27072ba42f8f9bca73beceab1ca72ef4a7b5"
+}

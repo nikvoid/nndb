@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE element SET has_thumb = 0",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "57a7d33f0d1b3cde5c3d2a4228bdc8aeacf46e5902fa3219ecbb0b826e1b145b"
+}

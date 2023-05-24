@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO element (filename, orig_filename, hash, broken, animated)\n            VALUES (?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "0455ef5e95a5c77003aaafd256fd4d23779cca152fd977b1423cab136a463f28"
+}
