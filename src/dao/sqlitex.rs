@@ -1,8 +1,10 @@
 use std::path::PathBuf;
 
-use sqlx::Executor;
+use futures::FutureExt;
+use sqlx::{Executor, Transaction};
 use sqlx::{SqlitePool, migrate::MigrateDatabase, SqliteConnection};
 
+use crate::search::{self, Term};
 use crate::util::{self, Crc32Hash};
 use crate::{
     model::{
@@ -14,7 +16,7 @@ use crate::{
     }, 
     config::CONFIG
 };
-use futures::StreamExt;
+use futures::{StreamExt, Future, future::BoxFuture};
 
 use tracing::error;
 use super::SliceShim;
@@ -212,6 +214,174 @@ impl Sqlite {
             
         Ok(data)
     }
+
+    /// Create temporary tables with values in in-memory DB
+    /// available with `<db_name>.<table_name>`.
+    /// 
+    /// Future must be `.boxed()`
+    async fn with_temp_array_tx<T, F, Out>(
+        tx: &mut SqliteConnection,
+        db_name: &str,
+        tables: &[(&str, &[T])],
+        mut inner: F
+    ) -> Result<Out, StorageError>
+    where 
+        for<'a> T: sqlx::Type<sqlx::Sqlite>
+            + sqlx::Encode<'a, sqlx::Sqlite>
+            + Clone 
+            + Send,
+        for<'a> F: FnMut(
+            &'a mut SqliteConnection
+        ) -> BoxFuture<'a, Result<Out, StorageError>>,
+    {
+        // 1. Open aux in-memory DB
+        let mut stmt = format!( // sql
+            "ATTACH ':memory:' AS {db_name};"
+        );        
+
+        // 2. Construct statement for creating temp arrays
+        for (table, data) in tables {
+            stmt.push_str(&format!( // sql   
+                "CREATE TABLE {db_name}.{table} (
+                    value BLOB
+                );"
+            ));
+            if !data.is_empty() {
+                stmt.push_str(&format!(
+                    "INSERT INTO {db_name}.{table} (value) VALUES " 
+                ));
+                
+                for _ in *data {
+                    stmt.push_str("(?),");
+                }
+
+                stmt.pop();
+                stmt.push_str(";\n");
+            }
+        }
+        
+        let mut query = sqlx::query(&stmt);
+
+        for (_, data) in tables {
+            for val in *data {
+                query = query.bind(val.clone());
+            }
+        }
+        
+        // 3. Execute stmt for in-mem DB
+        tx.execute_many(query).count().await;
+        
+        // 4. Use in-mem DB table
+        let res = inner(&mut *tx).await;   
+       
+        // 5. Close in-mem DB
+        sqlx::query(
+            &format!("DETACH {db_name}")
+        )
+        .execute(&mut *tx)
+        .await?;
+        
+        res
+    }
+
+    /// Get ids of elements that this search query should get
+    async fn get_element_ids_by_query_tx(
+        tx: &mut SqliteConnection,
+        query: &str
+    ) -> Result<Vec<u32>, StorageError> {
+        
+        let mut pos_tag_set = vec![];
+        let mut neg_tag_set = vec![];
+        
+        for tag in search::parse_query(query) {
+            let Term::Tag(pos, name) = tag else { continue };
+            let hash = name.crc32();
+
+            if pos {
+                pos_tag_set.push(hash);
+            } else {
+                neg_tag_set.push(hash);
+            }
+        }
+        
+        let arrays = [
+            ("pos_tags", pos_tag_set.as_slice()),
+            ("neg_tags", neg_tag_set.as_slice()),
+        ];
+
+        let mut group = None;
+        let mut ext_group = None;
+        for meta in search::parse_query(query) {
+            match meta {
+                Term::Tag(..) => continue,
+                Term::Group(id) => group = Some(id),
+                Term::ExtGroup(id) => ext_group = Some(id),
+            }
+        }
+
+        // Combined checksum
+        let pos_tags_sum: i64 = pos_tag_set.iter().map(|&h| h as i64).sum();
+        let neg_tags_sum: i64 = neg_tag_set.iter().map(|&h| h as i64).sum();
+        let ids = Self::with_temp_array_tx(tx, "mem", &arrays, |tx| async move {
+            let ids: Vec<u32> = sqlx::query_scalar(
+                &format!( // sql
+                "
+                SELECT DISTINCT e.id FROM element e
+                JOIN element_tag et ON et.element_id = e.id
+                JOIN tag t ON t.name_hash = et.tag_hash
+                {join_group_meta}
+                {join_metadata}
+                -- When no pos tags: exclude hidden (by clearing group)
+                -- When hidden pos tag explicitly requested: include only elements with this hidden tag
+                -- Exclude elements that have any neg tag
+                WHERE 
+                    CASE ?1
+                    WHEN 0 THEN 1
+                    ELSE   
+                        et.tag_hash IN mem.pos_tags   
+                        -- Include this to invalidate pos checksum       
+                        OR et.tag_hash IN mem.neg_tags OR t.hidden = 1
+                    END 
+                    {cond_group}
+                    {cond_ext_group}
+                GROUP BY e.id
+                HAVING 
+                    CASE ?1
+                    WHEN 0 THEN
+                        sum(t.hidden) = 0
+                    ELSE 
+                        sum(et.tag_hash) = ?1
+                    END
+                    AND
+                    sum(et.tag_hash IN mem.neg_tags) = 0 
+                ORDER BY e.add_time DESC",
+                // Add joins on demand
+                join_metadata = ext_group.is_some()
+                    .then_some("JOIN metadata m ON m.element_id = e.id")
+                    .unwrap_or_default(),
+                join_group_meta = group.is_some()
+                    .then_some("JOIN group_metadata g ON g.element_id = e.id")
+                    .unwrap_or_default(),
+                // Bind conditionals directly, they're integers anyway
+                cond_group = group
+                    .map(|id| format!("AND g.group_id = {id}"))
+                    .unwrap_or_default(),
+                cond_ext_group = ext_group
+                    .map(|id| format!("m.ext_group = {id}"))
+                    .unwrap_or_default(),
+            ))
+            .bind(pos_tags_sum)
+            .bind(neg_tags_sum)
+            .fetch_all(&mut *tx)
+            .await?;
+            
+            Ok(ids)
+        }.boxed())
+        .await?;
+
+        
+        Ok(ids)
+    }
 }
 
 /// Public API
@@ -367,42 +537,46 @@ impl Sqlite {
     ) -> Result<(Vec<read::Element>, Vec<read::Tag>, u32), StorageError> {
         let limit = limit.unwrap_or(u32::MAX);
 
-        let elems = sqlx::query_as( // sql
-            "SELECT 
-                e.*, g.group_id, m.ext_group
-            FROM element e
-            LEFT JOIN group_metadata g ON g.element_id = e.id
-            LEFT JOIN metadata m ON m.element_id = e.id
-            -- WHERE e.id in rarray(?)
-            LIMIT ? OFFSET ?",
-        )
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(&self.0)
-        .await?;
+        let mut conn = self.0.acquire().await?;
 
-        // TEMP:
-        let count = sqlx::query_scalar!(
-            "SELECT count(*) FROM element"
-        )
-        .fetch_one(&self.0)
-        .await?;
-
-        let tags = sqlx::query_as( // sql
-            "SELECT t.*
-            FROM tag t
-            WHERE t.name_hash IN (
-                SELECT tag_hash FROM element_tag
-                -- WHERE element_id in  
+        let ids = Self::get_element_ids_by_query_tx(&mut conn, query).await?;
+        
+        let (elems, tags) =
+        Self::with_temp_array_tx(&mut conn, "mem", &[("ids", &ids)], |conn| async move {
+            let elems = sqlx::query_as( // sql
+                "SELECT 
+                    e.*, g.group_id, m.ext_group
+                FROM element e
+                LEFT JOIN group_metadata g ON g.element_id = e.id
+                LEFT JOIN metadata m ON m.element_id = e.id
+                WHERE e.id in mem.ids
+                LIMIT ? OFFSET ?",
             )
-            ORDER BY t.count DESC
-            LIMIT ?",
-        )
-        .bind(tag_limit)
-        .fetch_all(&self.0)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(&mut *conn)
+            .await?;
+        
+            let tags = sqlx::query_as( // sql
+                "SELECT t.*
+                FROM tag t
+                WHERE t.name_hash IN (
+                    SELECT tag_hash FROM element_tag
+                    WHERE element_id in mem.ids  
+                )
+                ORDER BY t.count DESC
+                LIMIT ?",
+            )
+            .bind(tag_limit)
+            .fetch_all(&mut *conn)
+            .await?;
+            
+            Ok((elems, tags))
+        }.boxed())
         .await?;
         
-        Ok((elems, tags, count as u32))
+        
+        Ok((elems, tags, ids.len() as u32))
     }
 
     /// Get element data and metadata
@@ -496,6 +670,19 @@ impl Sqlite {
 
     /// Mark that `element_ids` have thumbnails
     pub async fn add_thumbnails(&self, element_ids: &[u32]) -> Result<(), StorageError> {
+        let mut conn = self.0.acquire().await?;
+        
+        Self::with_temp_array_tx(&mut conn, "mem", &[("ids", element_ids)], |tx| async {
+            sqlx::query(
+                "UPDATE element SET has_thumb = 1
+                WHERE id IN mem.ids"
+            )
+            .execute(&mut *tx)
+            .await?;
+            
+            Ok(())
+        }.boxed()).await?;
+        
         Ok(())
     }
 
