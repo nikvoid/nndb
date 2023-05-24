@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use futures::FutureExt;
-use sqlx::{Executor, Transaction};
+use sqlx::Executor;
 use sqlx::{SqlitePool, migrate::MigrateDatabase, SqliteConnection};
 
 use crate::search::{self, Term};
@@ -9,17 +9,14 @@ use crate::util::{self, Crc32Hash};
 use crate::{
     model::{
         write::{self, ElementWithMetadata}, 
-        MD5_LEN, 
-        SIGNATURE_LEN,
         read::{self, PendingImport}, 
         Summary, Md5Hash, GroupMetadata, AIMetadata
     }, 
     config::CONFIG
 };
-use futures::{StreamExt, Future, future::BoxFuture};
+use futures::{StreamExt, future::BoxFuture};
 
 use tracing::error;
-use super::SliceShim;
 
 pub struct Sqlite(SqlitePool);
 
@@ -304,11 +301,6 @@ impl Sqlite {
             }
         }
         
-        let arrays = [
-            ("pos_tags", pos_tag_set.as_slice()),
-            ("neg_tags", neg_tag_set.as_slice()),
-        ];
-
         let mut group = None;
         let mut ext_group = None;
         for meta in search::parse_query(query) {
@@ -319,9 +311,28 @@ impl Sqlite {
             }
         }
 
+        let mut pos_aliases = vec![];
+
+        for hash in &pos_tag_set {
+            let opt: Option<i64> = sqlx::query_scalar!(
+                "SELECT group_id FROM tag WHERE name_hash = ?",
+                hash
+            )
+            .fetch_optional(&mut *tx)
+            .await?
+            .flatten();
+
+            pos_aliases.extend(opt.map(|g| g as u32).iter());            
+        }
+        
+        let arrays = [
+            ("pos_tags", pos_tag_set.as_slice()),
+            ("neg_tags", neg_tag_set.as_slice()),
+            ("pos_aliases", pos_aliases.as_slice()),
+        ];
+        
         // Combined checksum
-        let pos_tags_sum: i64 = pos_tag_set.iter().map(|&h| h as i64).sum();
-        let neg_tags_sum: i64 = neg_tag_set.iter().map(|&h| h as i64).sum();
+        let pos_tags: i64 = pos_tag_set.len() as i64;
         let ids = Self::with_temp_array_tx(tx, "mem", &arrays, |tx| async move {
             let ids: Vec<u32> = sqlx::query_scalar(
                 &format!( // sql
@@ -338,8 +349,8 @@ impl Sqlite {
                     CASE ?1
                     WHEN 0 THEN 1
                     ELSE   
-                        et.tag_hash IN mem.pos_tags   
-                        -- Include this to invalidate pos checksum       
+                        et.tag_hash IN mem.pos_tags OR t.group_id IN mem.pos_aliases 
+                        -- Pass this to HAVING       
                         OR et.tag_hash IN mem.neg_tags OR t.hidden = 1
                     END 
                     {cond_group}
@@ -350,7 +361,10 @@ impl Sqlite {
                     WHEN 0 THEN
                         sum(t.hidden) = 0
                     ELSE 
-                        sum(et.tag_hash) = ?1
+                        sum(
+                            et.tag_hash IN mem.pos_tags 
+                            OR t.group_id IN mem.pos_aliases AND t.hidden = 0
+                        ) >= ?1
                     END
                     AND
                     sum(et.tag_hash IN mem.neg_tags) = 0 
@@ -370,8 +384,7 @@ impl Sqlite {
                     .map(|id| format!("m.ext_group = {id}"))
                     .unwrap_or_default(),
             ))
-            .bind(pos_tags_sum)
-            .bind(neg_tags_sum)
+            .bind(pos_tags)
             .fetch_all(&mut *tx)
             .await?;
             
@@ -523,7 +536,28 @@ impl Sqlite {
         element_ids: &[u32],
         group: Option<u32>
     ) -> Result<u32, StorageError> {
-        Ok(0)
+        let mut tx = self.0.begin().await?;
+
+        let group_id = match group {
+            None => sqlx::query!("INSERT INTO group_ids (id) VALUES (NULL)")
+                .execute(&mut *tx)
+                .await?
+                .last_insert_rowid() as u32,
+            Some(id) => id
+        };
+
+        for id in element_ids {
+            sqlx::query!(
+                "UPDATE group_metadata SET group_id = ? WHERE element_id = ?",
+                group_id, id
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        tx.commit().await?;
+        
+        Ok(group_id)
     }
 
     /// Fetch elements from db, by query, with offset and limit.
