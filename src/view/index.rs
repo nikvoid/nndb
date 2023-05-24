@@ -1,4 +1,4 @@
-use crate::{dao::{STORAGE, ElementStorage}, resolve, log_n_bail};
+use crate::{dao::STORAGE, resolve, log_n_bail};
 
 use super::*;
 
@@ -58,10 +58,7 @@ pub struct Request<S> where S: AsRef<str> {
 
 #[get("/index")]
 pub async fn index_page(query: web::Query<Request<String>>) -> impl Responder {
-    let page = match query.0.page {
-        Some(page) => page,
-        None => 1
-    };
+    let page = query.0.page.unwrap_or(1);
 
     let query_str = match &query.0.query {
         Some(q) => q,
@@ -69,14 +66,13 @@ pub async fn index_page(query: web::Query<Request<String>>) -> impl Responder {
     };
 
     let offset = (page - 1) * ELEMENTS_ON_PAGE;
-    let (elements, tags, count) = match STORAGE.lock()
-        .await
+    let (elements, tags, count) = match STORAGE
         .search_elements(
             query_str,
             offset, 
             Some(ELEMENTS_ON_PAGE), 
             SELECTION_TAGS_COUNT
-        ) {
+        ).await {
             Ok(out) => out,
             Err(e) => log_n_bail!("failed to perform search", ?e)
         };

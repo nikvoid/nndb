@@ -1,12 +1,14 @@
 use serde::Serialize;
 
 use crate::import::Importer;
+use crate::dao::SliceShim;
 
 use super::*;
 
-#[derive(Serialize)]
+#[derive(Serialize, sqlx::FromRow)]
 pub struct Tag {
     /// Primary name
+    #[sqlx(rename = "tag_name")]
     pub name: String,
     /// Alternative name
     pub alt_name: Option<String>,
@@ -20,6 +22,7 @@ pub struct Tag {
     pub hidden: bool,
 }
 
+#[derive(sqlx::FromRow)]
 pub struct Element {
     /// Element id
     pub id: u32,
@@ -36,11 +39,12 @@ pub struct Element {
     /// Group of similar images (decided by comparing image signatures)
     pub group_id: Option<u32>,
     /// Group info derived from external source
+    #[sqlx(rename = "ext_group")]
     pub group: Option<u32>,
 }   
 
 /// Element waiting for metadata download/parse
-#[derive(Debug)]
+#[derive(Debug, sqlx::FromRow)]
 pub struct PendingImport {
     /// Element id
     pub id: u32, 
@@ -49,10 +53,12 @@ pub struct PendingImport {
     /// Name that file had before rename
     pub orig_filename: String,
     /// Hash of whole file
+    #[sqlx(try_from = "SliceShim<'a>")]
     pub hash: Md5Hash,
 }
 
 /// Element metadatas and tags
+#[derive(Default, sqlx::FromRow)]
 pub struct ElementMetadata {
     /// Link to source (if was imported from other sources)
     pub src_link: Option<String>,
@@ -61,7 +67,9 @@ pub struct ElementMetadata {
     /// Time when element was added to db
     pub add_time: UtcDateTime,
     /// Stable Diffusion/etc metadata
+    #[sqlx(skip)]
     pub ai_meta: Option<AIMetadata>,
     /// Tags of the element
+    #[sqlx(skip)]
     pub tags: Vec<Tag>,
 }  

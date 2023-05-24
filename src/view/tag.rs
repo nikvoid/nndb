@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     model::{read::Tag, TagType}, 
     view::{BaseContainer, ScriptButton, ScriptVar, TagEditForm, AsideTags}, 
-    dao::{STORAGE, ElementStorage}, 
+    dao::STORAGE, 
     log_n_bail
 };
 
@@ -33,13 +33,13 @@ pub struct Request {
 
 #[get("/tag/{name}")]
 pub async fn tag_page(name: web::Path<String>, query: web::Query<Request>) -> impl Responder {
-    let tag = match STORAGE.lock().await.get_tag_data(&*name) {
+    let tag = match STORAGE.get_tag_data(&name).await {
         Ok(Some(tag)) => tag,
         Ok(None) => return Err(ErrorNotFound("no such tag")),
         Err(e) => log_n_bail!("failed to get tag data", ?e),
     };
 
-    let aliases = match STORAGE.lock().await.get_tag_aliases(&tag.name) {
+    let aliases = match STORAGE.get_tag_aliases(&tag.name).await {
         Ok(a) => a,
         Err(e) => log_n_bail!("failed to get tag aliases", ?e)
     };

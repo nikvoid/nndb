@@ -16,7 +16,7 @@ pub const ANIMATION_EXTS: &[&str] = &["mp4", "mov", "webm", "m4v"];
 /// to add `<tag_name>...` to elements in this directory 
 pub const TAG_TRIGGER: &str = "TAG.";
 
-#[derive(FromPrimitive, IntoPrimitive, Clone, Copy, Debug, PartialEq)]
+#[derive(FromPrimitive, IntoPrimitive, Clone, Copy, Debug, PartialEq, sqlx::Type)]
 #[repr(u8)]
 pub enum Importer {
     /// No specific metadata

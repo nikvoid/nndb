@@ -6,16 +6,19 @@ use num_enum::{FromPrimitive, IntoPrimitive};
 use serde::{Serialize, Deserialize};
 
 pub const SIGNATURE_LEN: usize = 544;
+pub const MD5_LEN: usize = 16;
 
 pub type UtcDateTime = DateTime<Utc>;
-pub type Md5Hash = [u8; 16];
+pub type Md5Hash = [u8; MD5_LEN];
 pub type Signature = [i8; SIGNATURE_LEN];
+
+use crate::dao::SliceShim;
 
 pub mod read;
 pub mod write;
 
 /// Generative Neural Network (SD primarily) metadata
-#[derive(Default)]
+#[derive(Default, sqlx::FromRow)]
 pub struct AIMetadata {
     pub positive_prompt: String,
     pub negative_prompt: Option<String>,
@@ -30,17 +33,21 @@ pub struct AIMetadata {
     pub noise: f32,
 }
 
+
 /// Metadata for element group
+#[derive(sqlx::FromRow)]
 pub struct GroupMetadata {
     /// Id of the element
     pub element_id: u32,
     /// Image signature
+    #[sqlx(try_from = "SliceShim<'a>")]
     pub signature: Signature,
     /// Element group
     pub group_id: Option<u32>,
 }
 
 /// Database summary
+#[derive(sqlx::FromRow)]
 pub struct Summary {
     /// Count of tags in DB
     pub tag_count: u32,
@@ -49,7 +56,17 @@ pub struct Summary {
 }
 
 /// Gelbooru-like types
-#[derive(Clone, Copy, FromPrimitive, IntoPrimitive, Sequence, PartialEq, Serialize, Deserialize)]
+#[derive(
+    Clone, 
+    Copy, 
+    FromPrimitive,
+    IntoPrimitive, 
+    Sequence, 
+    PartialEq, 
+    Serialize, 
+    Deserialize,
+    sqlx::Type
+)]
 #[repr(u8)]
 pub enum TagType {
     #[serde(alias = "service")]
@@ -92,25 +109,5 @@ impl FromStr for TagType {
             "metadata" => Self::Metadata,
             _ => Self::Tag,
         })
-    }
-}
-
-impl rusqlite::ToSql for TagType {
-    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
-        use rusqlite::types::{ToSqlOutput, Value};
-
-        let raw: u8 = (*self).into();
-        Ok(ToSqlOutput::Owned(Value::Integer(raw as i64)))
-    }
-}
-
-impl rusqlite::types::FromSql for TagType {
-    fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
-        use rusqlite::types::{ValueRef, FromSqlError};
-        
-        match value {
-            ValueRef::Integer(i) => Ok(Self::from(i as u8)),
-            _ => Err(FromSqlError::InvalidType)
-        }
     }
 }

@@ -1,13 +1,13 @@
 CREATE TABLE IF NOT EXISTS element (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    filename     TEXT NOT NULL,
-    orig_name    TEXT NOT NULL,
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    filename      TEXT NOT NULL,
+    orig_filename TEXT NOT NULL,
     -- md5 blob of size 16 bytes
-    hash         BLOB NOT NULL UNIQUE,
-    has_thumb    INTEGER NOT NULL DEFAULT 0,
-    broken       INTEGER NOT NULL,
-    animated     INTEGER NOT NULL,
-    add_time     INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP
+    hash          BLOB NOT NULL UNIQUE,
+    has_thumb     INTEGER NOT NULL DEFAULT 0,
+    broken        INTEGER NOT NULL,
+    animated      INTEGER NOT NULL,
+    add_time      INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- table for pending element imports processing
