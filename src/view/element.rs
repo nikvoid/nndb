@@ -78,7 +78,6 @@ pub async fn element_page(id: web::Path<u32>) -> impl Responder {
                     false => {
                         img.page-container #element
                             src=(ElementLink(&elem)) alt="image";
-                        // div {} // TODO: ???
                     }
                 }
             } 

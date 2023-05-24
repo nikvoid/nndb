@@ -154,7 +154,7 @@ use futures::Future;
 use once_cell::sync::Lazy;
 pub use sqlitex::Sqlite;
 
-use crate::config::CONFIG;
+use crate::CONFIG;
 
 pub type StorageBackend = Sqlite;
 

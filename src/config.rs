@@ -1,45 +1,62 @@
-use once_cell::sync::Lazy;
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+pub struct StaticFolder {
+    /// URL Path to folder (must include trailing slash)
+    pub url: String,
+    /// Physical path to folder
+    pub path: String,
+    /// Serve folder from nndb
+    pub serve: bool,
+}
+
+#[derive(Deserialize, Clone, Copy)]
+#[serde(rename_all = "lowercase")] 
+pub enum LogLevel {
+    Off,
+    Error,
+    Warn,
+    Info,
+    Debug,
+    Trace
+}
+
+impl From<LogLevel> for tracing::level_filters::LevelFilter {
+    fn from(value: LogLevel) -> Self {
+        match value {
+            LogLevel::Off   => Self::OFF,
+            LogLevel::Error => Self::ERROR,
+            LogLevel::Warn  => Self::WARN,
+            LogLevel::Info  => Self::INFO,
+            LogLevel::Debug => Self::DEBUG,
+            LogLevel::Trace => Self::TRACE,
+        }
+    }
+}
 
 /// Application config
+#[derive(Deserialize)]
 pub struct Config {
     /// Url to database
     pub db_url: String,
     /// Testing mode: copy files from input to element pool instead of deleting
     pub testing_mode: bool,
-    /// Directory where renamed element files will be placed
-    pub element_pool: String,
+    /// If true, files in input_folder will be scanned periodically
+    pub auto_scan_files: bool,
+    /// Set max log level
+    pub log_level: LogLevel,
+    /// Directory where renamed element files will be placed.
+    pub element_pool: StaticFolder,
     /// Directory that will be scanned to find new element files
     pub input_folder: String,
     /// Serve thumbnails from this folder
-    pub thumbnails_folder: String,
-    /// URL Path to static files (must include trailing slash)
-    pub static_files_path: String,
-    /// URL Path to elements (must include trailing slash)
-    pub elements_path: String,
-    /// URL Path to thumbnails (must include trailing slash)
-    pub thumbnails_path: String,
+    pub thumbnails_folder: StaticFolder,
     /// IP address to bind server to
     pub bind_address: String,
     /// Server port
     pub port: u16,
-    /// If Some, serve static files from this folder
-    pub static_folder: Option<String>,
+    /// Folder with miscellaneous static files  
+    pub static_folder: StaticFolder,
     /// File to write logs
     pub log_file: String,
 }
-
-/// Global config
-pub static CONFIG: Lazy<Config> = Lazy::new(|| Config {
-    db_url: "test.db".to_string(),
-    testing_mode: true,
-    element_pool: "pool".to_string(),
-    input_folder: "res".to_string(),
-    thumbnails_folder: "thumbs".to_string(),
-    static_files_path: "/static/".to_string(),
-    elements_path: "/pool/".to_string(),
-    thumbnails_path: "/thumbs/".to_string(),
-    bind_address: "0.0.0.0".to_string(),
-    port: 8080,
-    static_folder: Some("static".to_string()),
-    log_file: "log.txt".to_string(),
-});

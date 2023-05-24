@@ -12,7 +12,7 @@ use crate::{
         read::{self, PendingImport}, 
         Summary, Md5Hash, GroupMetadata, AIMetadata
     }, 
-    config::CONFIG
+    CONFIG
 };
 use futures::{StreamExt, future::BoxFuture};
 
@@ -414,7 +414,7 @@ impl Sqlite {
     pub async fn add_elements<E>(&self, elements: &[E]) -> Result<u32, StorageError>
     where E: AsRef<ElementWithMetadata> {
         let mut hashes = self.get_hashes().await?;
-        let mut o_path = PathBuf::from(&CONFIG.element_pool);
+        let mut o_path = PathBuf::from(&CONFIG.element_pool.path);
         let mut count = 0;
         
         for elem in elements {

@@ -2,7 +2,14 @@ use maud::{Render, DOCTYPE, Markup, html_to};
 use serde::Serialize;
 use enum_iterator::all;
 
-use crate::{config::CONFIG, model::{read::{Tag, Element, ElementMetadata}, TagType}, util::Crc32Hash};
+use crate::{
+    CONFIG, 
+    model::{
+        read::{Tag, Element, ElementMetadata}, 
+        TagType
+    },
+    util::Crc32Hash
+};
 
 mod index;
 mod element;
@@ -97,7 +104,7 @@ where F: Fn(&mut String) {
 struct Static<'a>(&'a str);
 impl Render for Static<'_> {
     fn render_to(&self, buffer: &mut String) {
-        buffer.push_str(&CONFIG.static_files_path);
+        buffer.push_str(&CONFIG.static_folder.url);
         buffer.push_str(self.0);
     }
 }
@@ -106,7 +113,7 @@ impl Render for Static<'_> {
 struct ElementLink<'a>(&'a Element);
 impl Render for ElementLink<'_> {
     fn render_to(&self, buffer: &mut String) {
-        buffer.push_str(&CONFIG.elements_path);
+        buffer.push_str(&CONFIG.element_pool.url);
         buffer.push_str(&self.0.filename);
     }
 }
@@ -115,7 +122,7 @@ impl Render for ElementLink<'_> {
 struct ElementThumbnail<'a>(&'a Element);
 impl Render for ElementThumbnail<'_> {
     fn render_to(&self, buffer: &mut String) {
-        buffer.push_str(&CONFIG.thumbnails_path);
+        buffer.push_str(&CONFIG.thumbnails_folder.url);
         buffer.push_str(self.0.filename.split('.').next().unwrap());
         buffer.push_str(".jpeg");
     }

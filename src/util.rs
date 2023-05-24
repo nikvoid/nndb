@@ -1,11 +1,19 @@
 use std::{path::Path, io::SeekFrom, sync::atomic::AtomicBool, sync::atomic::Ordering, time::Duration};
 use anyhow::Context;
 use futures::Future;
+use once_cell::sync::OnceCell;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tracing::error;
 use std::fmt::Write;
 use itertools::Itertools;
-use crate::{model::{Signature, write::{self, ElementToParse, ElementWithMetadata}, SIGNATURE_LEN}, import::{TAG_TRIGGER, ElementPrefab, Importer, ANIMATION_EXTS}, config::CONFIG};
+use crate::{
+    model::{Signature, 
+        write::{self, ElementToParse, ElementWithMetadata}, 
+        SIGNATURE_LEN
+    },
+    import::{TAG_TRIGGER, ElementPrefab, Importer, ANIMATION_EXTS},
+    CONFIG
+};
 
 /// Derive crc32
 pub trait Crc32Hash {
@@ -201,3 +209,24 @@ where F: Fn() + Send + Sync + Clone + Copy + 'static {
         }
     });
 } 
+
+/// Lazy that can be manually initialized.
+/// Taken directly from https://docs.rs/once_cell/latest/once_cell/index.html#lateinit
+pub struct LateInit<T> { cell: OnceCell<T> }
+
+impl<T> LateInit<T> {
+    pub const fn new() -> Self {
+        Self { cell: OnceCell::new() }
+    }
+    
+    pub fn init(&self, value: T) {
+        assert!(self.cell.set(value).is_ok())
+    }
+}
+
+impl<T> std::ops::Deref for LateInit<T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        self.cell.get().unwrap()
+    }
+}

@@ -2,11 +2,11 @@ use std::time::Duration;
 
 use actix_files::Files;
 use actix_web::{HttpServer, App, web::redirect};
+use config::Config;
 use tracing::{info, error};
 use tracing_actix_web::TracingLogger;
 use tracing_subscriber::fmt::writer::Tee;
-
-use crate::config::CONFIG;
+use util::LateInit;
 
 mod model;
 mod dao;
@@ -20,7 +20,7 @@ mod search;
 /// Spawn periodic import tasks
 async fn import_spawner() {
     // Different delays are used here to drive tasks out of sync
-    // TODO: Random delays?..
+    // TODO: Random delays or maybe make this thing more pipelined?..
     
     util::blocking_task_with_interval(|| match service::scan_files() {
         Ok(count) => info!(count, "added elements to db"),
@@ -52,22 +52,38 @@ async fn import_spawner() {
     }, Duration::from_secs(330)).await;
 }
 
+/// Default config path
+const DEF_CONFIG_FILE: &str = "config.toml";
+
+/// Global config
+pub static CONFIG: LateInit<Config> = LateInit::new();
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    let cfg_path = match std::env::args().nth(1) {
+        Some(p) => p,
+        None => DEF_CONFIG_FILE.to_string()
+    };
+
+    let cfg_str = std::fs::read_to_string(cfg_path)?;
+    CONFIG.init(toml::from_str(&cfg_str).unwrap());
+    
     let log_file = std::fs::File::options()
         .append(true)
         .create(true)
         .open(&CONFIG.log_file)?;
-
     
     tracing_subscriber::fmt()
         .with_writer(Tee::new(std::io::stdout, log_file))
         .with_file(true)
         .with_line_number(true)
+        .with_max_level(CONFIG.log_level)
         .init();
 
-    info!("Spawning import tasks");
-    tokio::spawn(import_spawner()).await.unwrap();
+    if CONFIG.auto_scan_files {
+        info!("Spawning import tasks");
+        import_spawner().await;
+    }
 
     info!(addr=CONFIG.bind_address, port=CONFIG.port, "Starting server");
     HttpServer::new(|| {
@@ -92,14 +108,25 @@ async fn main() -> std::io::Result<()> {
             .service(view::alias_tag)
         ;
 
-        // Serve static folder if needed
-        app = match &CONFIG.static_folder {
-            Some(folder) => app
-                .service(Files::new(&CONFIG.static_files_path, folder))
-                .service(Files::new(&CONFIG.thumbnails_path, &CONFIG.thumbnails_folder))
-                .service(Files::new(&CONFIG.elements_path, &CONFIG.element_pool)),
-            None => app
-        };
+        // Serve static folders if needed
+        app = if CONFIG.static_folder.serve {
+            app.service(Files::new(
+                &CONFIG.static_folder.url,
+                &CONFIG.static_folder.path
+            ))
+        } else { app };
+        app = if CONFIG.element_pool.serve {
+            app.service(Files::new(
+                &CONFIG.element_pool.url, 
+                &CONFIG.element_pool.path
+            ))
+        } else { app };
+        app = if CONFIG.thumbnails_folder.serve {
+            app.service(Files::new(
+                &CONFIG.thumbnails_folder.url,
+                &CONFIG.thumbnails_folder.path
+            ))
+        } else { app };
 
         app
     })

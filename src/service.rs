@@ -10,7 +10,7 @@ use crate::{
     dao::{STORAGE, FutureBlock}, 
     import::{ElementPrefab, ANIMATION_EXTS, IMAGE_EXTS}, 
     model::write::ElementWithMetadata, 
-    config::CONFIG, util::{self, AutoBool}
+    CONFIG, util::{self, AutoBool}
 };
 
 /// Experimentaly decided optimal image signature distance 
@@ -67,27 +67,24 @@ pub fn scan_files() -> anyhow::Result<u32> {
         .collect();
 
     let elements: Vec<_> = files.into_par_iter()
-        .map(|(path, is_anim)| -> anyhow::Result<ElementWithMetadata> {
+        .map(|(path, _)| -> anyhow::Result<ElementWithMetadata> {
             // TODO: Will write option return error if file is busy now?..
             let mut file = std::fs::File::options()
                 .write(true)
                 .read(true)
                 .open(&path)?;
 
-            // TODO: Handle animations differently
-            let element = match is_anim {
-                true | false => {
-                    let mut data = vec![];
-                    file.read_to_end(&mut data)?;
+            let element = {
+                let mut data = vec![];
+                file.read_to_end(&mut data)?;
 
-                    let prefab = ElementPrefab {
-                        path: path.clone(),
-                        data,
-                    };
+                let prefab = ElementPrefab {
+                    path: path.clone(),
+                    data,
+                };
 
-                    util::hash_file(prefab)
-                        .context(path.display().to_string())?
-                },
+                util::hash_file(prefab)
+                    .context(path.display().to_string())?
             };
 
             Ok(element)
@@ -245,7 +242,7 @@ pub fn make_thumbnails() -> anyhow::Result<()> {
         // TODO: Thumbs for animated
         .filter(|e| !e.has_thumb && !e.animated)
         .map_with(
-            (PathBuf::from(&CONFIG.element_pool), PathBuf::from(&CONFIG.thumbnails_folder)),
+            (PathBuf::from(&CONFIG.element_pool.path), PathBuf::from(&CONFIG.thumbnails_folder.path)),
             |(pool, thumb), e| {
                 pool.push(&e.filename);
                 thumb.push(&e.filename);
@@ -285,7 +282,7 @@ pub fn fix_thumbnails() -> anyhow::Result<()> {
         STORAGE.search_elements("", 0, None, 0).blocking_run()?.0
     };
 
-    let thumbs = std::fs::read_dir(&CONFIG.thumbnails_folder)?
+    let thumbs = std::fs::read_dir(&CONFIG.thumbnails_folder.path)?
         .flat_map(|e| -> anyhow::Result<String> {
             let entry = e?;
             let path = entry.path();
