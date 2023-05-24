@@ -96,7 +96,7 @@ pub async fn add_tags(query: web::Json<AddTagsRequest>) -> impl Responder {
     let tags = query.tags
         .split_whitespace()
         // New tags will be created with Tag type, existing won't be changed
-        .filter_map(|t| write::Tag::new(&t, None, TagType::Tag))
+        .filter_map(|t| write::Tag::new(t, None, TagType::Tag))
         .collect_vec();
     
     match STORAGE.add_tags(Some(query.element_id), &tags).await {

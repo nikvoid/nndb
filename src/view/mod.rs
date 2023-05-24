@@ -116,7 +116,7 @@ struct ElementThumbnail<'a>(&'a Element);
 impl Render for ElementThumbnail<'_> {
     fn render_to(&self, buffer: &mut String) {
         buffer.push_str(&CONFIG.thumbnails_path);
-        buffer.push_str(&self.0.filename.split('.').next().unwrap());
+        buffer.push_str(self.0.filename.split('.').next().unwrap());
         buffer.push_str(".jpeg");
     }
 }
@@ -284,7 +284,7 @@ impl Render for AsideTags<'_> {
                             query: Some(&tag.name),
                             page: None
                         })) {
-                            @for part in tag.name.split("_") {
+                            @for part in tag.name.split('_') {
                                 (part) " "     
                             }
                             (tag.count) 

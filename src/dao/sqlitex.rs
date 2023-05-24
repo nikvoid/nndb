@@ -20,7 +20,6 @@ use tracing::error;
 
 pub struct Sqlite(SqlitePool);
 
-// TEMP:
 pub type StorageError = anyhow::Error;
 
 /// Private methods and associated functions
@@ -116,7 +115,6 @@ impl Sqlite {
         Ok(id as u32)
     }
     
-    // FIXME:
     async fn add_metadata_tx(
         tx: &mut SqliteConnection,
         element_id: u32, 

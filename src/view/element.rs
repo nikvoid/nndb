@@ -85,7 +85,7 @@ pub async fn element_page(id: web::Path<u32>) -> impl Responder {
             @if assoc.clone().count() > 0 {
                 .index-side { 
                     @for e in assoc {
-                        (ElementListContainer(&e))
+                        (ElementListContainer(e))
                     } 
                 }
             }

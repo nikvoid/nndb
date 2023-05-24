@@ -62,9 +62,8 @@ pub fn get_sig_distance(sig1: &Signature, sig2: &Signature) -> f32 {
 
 /// Extract tags from path
 pub fn get_tags_from_path(path: &Path) -> Vec<write::Tag> {
-    path.into_iter()
-        .map(|p| p.to_str())
-        .flatten()
+    path.iter()
+        .filter_map(|p| p.to_str())
         .filter(|seg| seg.starts_with(TAG_TRIGGER))
         .flat_map(|seg| seg.strip_prefix(TAG_TRIGGER).unwrap().split('.'))
         .tuples()
@@ -191,7 +190,7 @@ where
 
 /// Spawn task that will periodically spawn blocking task 
 pub async fn blocking_task_with_interval<F>(f: F, interval: Duration) 
-where F: Fn() -> () + Send + Sync + Clone + Copy + 'static {
+where F: Fn() + Send + Sync + Clone + Copy + 'static {
     tokio::spawn(async move {
         loop {
             match tokio::task::spawn_blocking(f).await {

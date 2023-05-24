@@ -58,10 +58,7 @@ pub struct Request<S> where S: AsRef<str> {
 
 #[get("/index")]
 pub async fn index_page(query: web::Query<Request<String>>) -> impl Responder {
-    let page = match query.0.page {
-        Some(page) => page,
-        None => 1
-    };
+    let page = query.0.page.unwrap_or(1);
 
     let query_str = match &query.0.query {
         Some(q) => q,

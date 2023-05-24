@@ -130,7 +130,7 @@ pub async fn update_metadata() -> anyhow::Result<()> {
 
             for imp in group {
                 if importer.available() {
-                    match importer.fetch_metadata(&imp).await {
+                    match importer.fetch_metadata(imp).await {
                         Ok(meta) => match STORAGE
                             .add_metadata(imp.id, meta)
                             .await {
@@ -193,27 +193,27 @@ pub async fn group_elements_by_signature() -> anyhow::Result<()> {
     // Compare each signature with each other (except self)
     for elem in &ungrouped {
         for pot in &group_metas {
-            if elem.element_id != pot.element_id {
-                if util::get_sig_distance(
+            if elem.element_id != pot.element_id 
+                && util::get_sig_distance(
                     &elem.signature,
                     &pot.signature
                 ) < SIGNATURE_DISTANCE_THRESHOLD {
-                    let group_id = match pot.group_id {
-                        // Add to known group
-                        Some(g) => g,
-                        // Create new group
-                        None => match groups.get_group(pot.element_id) {
-                                // Get existing
-                                Some(id) => id,
-                                // Or create
-                                None => STORAGE
-                                    .add_to_group(&[pot.element_id, elem.element_id], None)
-                                    .await?,
-                            }
-                    };
-                    groups.add(group_id, elem.element_id);
-                    groups.add(group_id, pot.element_id);
-                }
+                
+                let group_id = match pot.group_id {
+                    // Add to known group
+                    Some(g) => g,
+                    // Create new group
+                    None => match groups.get_group(pot.element_id) {
+                            // Get existing
+                            Some(id) => id,
+                            // Or create
+                            None => STORAGE
+                                .add_to_group(&[pot.element_id, elem.element_id], None)
+                                .await?,
+                        }
+                };
+                groups.add(group_id, elem.element_id);
+                groups.add(group_id, pot.element_id);
             }
         }
     }
@@ -251,7 +251,7 @@ pub fn make_thumbnails() -> anyhow::Result<()> {
                 thumb.push(&e.filename);
                 thumb.set_extension("jpeg");
             
-                let err = util::make_thumbnail(&pool, &thumb, THUMBNAIL_SIZE);
+                let err = util::make_thumbnail(pool, thumb, THUMBNAIL_SIZE);
                 
                 pool.pop();
                 thumb.pop();
@@ -285,8 +285,8 @@ pub fn fix_thumbnails() -> anyhow::Result<()> {
         STORAGE.search_elements("", 0, None, 0).blocking_run()?.0
     };
 
-    let thumbs = std::fs::read_dir(&CONFIG.thumbnails_folder)?.map(
-        |e| -> anyhow::Result<String> {
+    let thumbs = std::fs::read_dir(&CONFIG.thumbnails_folder)?
+        .flat_map(|e| -> anyhow::Result<String> {
             let entry = e?;
             let path = entry.path();
             let filename = path
@@ -294,16 +294,13 @@ pub fn fix_thumbnails() -> anyhow::Result<()> {
                 .ok_or(anyhow!("expected file stem"))?
                 .to_string_lossy();
             Ok(filename.into_owned())
-        }
-    )
-    .flatten()
+        })
     .collect_vec();
 
     // Retain only elements that have thumbnail
     elems.retain(|e| {
         let filename = e.filename.split('.').next().unwrap();
-        thumbs.iter().find(|t| t.starts_with(filename))
-            .is_some()
+        thumbs.iter().any(|t| t.starts_with(filename))
     });
     
     let ids = elems.into_iter()

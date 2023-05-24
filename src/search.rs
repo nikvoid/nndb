@@ -11,22 +11,22 @@ pub enum Term<'q> {
 }
 
 /// Creates an iterator that will output parsed query parts
-pub fn parse_query<'q>(query: &'q str) -> impl Iterator<Item = Term<'q>> {
+pub fn parse_query(query: &str) -> impl Iterator<Item = Term<'_>> {
     query.split_whitespace()
         .filter_map(|term| {
-            if term.contains(":") {
+            if term.contains(':') {
                 let (left, right) = term
                     .split(':')
                     .tuples()
                     .next()?;
 
                 match (left, right) {
-                    ("group", id) => id.parse().ok().map(|id| Term::Group(id)),
-                    ("extgroup", id) => id.parse().ok().map(|id| Term::ExtGroup(id)),
+                    ("group", id) => id.parse().ok().map(Term::Group),
+                    ("extgroup", id) => id.parse().ok().map(Term::ExtGroup),
                     _ => None,
                 }
             } else {
-                let pos = !term.starts_with("!");
+                let pos = !term.starts_with('!');
                 Some(Term::Tag(pos, if pos { term } else { &term[1..] }))
             }
         })
