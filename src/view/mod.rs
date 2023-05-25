@@ -313,7 +313,7 @@ where OnSubmit: Render {
     fn render_to(&self, buffer: &mut String) {
         let ident = html_in! { "TAG_EDIT_FIELD_" (self.1.crc32()) };
         html_to! { buffer,
-            form onsubmit={ (self.0)"; return false;" } {
+            form autocomplete="off" onsubmit={ (self.0)"; return false;" } {
                 (ScriptVar(&ident, self.1))
                 input.tag-field #{ (self.1) "_box" } name="tag" type="text"
                     onKeyUp={ "getCompletions(this, " (ident) ")" } 

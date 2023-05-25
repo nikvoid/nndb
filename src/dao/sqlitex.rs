@@ -379,7 +379,7 @@ impl Sqlite {
                     .map(|id| format!("AND g.group_id = {id}"))
                     .unwrap_or_default(),
                 cond_ext_group = ext_group
-                    .map(|id| format!("m.ext_group = {id}"))
+                    .map(|id| format!("AND m.ext_group = {id}"))
                     .unwrap_or_default(),
             ))
             .bind(pos_tags)

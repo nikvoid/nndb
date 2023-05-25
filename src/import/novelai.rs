@@ -106,7 +106,7 @@ impl MetadataImporter for NovelAI {
         Ok(ElementMetadata {
             src_link: None,
             src_time: None,
-            group: None,
+            group: Some(meta.seed),
             ai_meta: Some(AIMetadata {
                 positive_prompt: prompt.to_string(),
                 negative_prompt: Some(meta.uc.to_string()),

@@ -151,8 +151,8 @@ impl MetadataImporter for Webui {
         Ok(ElementMetadata {
             src_link: None,
             src_time: None,
+            group: Some(ai_meta.seed),
             ai_meta: Some(ai_meta),
-            group: None,
             tags
         })
     }

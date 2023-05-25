@@ -40,7 +40,7 @@ pub struct Element {
     pub group_id: Option<u32>,
     /// Group info derived from external source
     #[sqlx(rename = "ext_group")]
-    pub group: Option<u32>,
+    pub group: Option<i64>,
 }   
 
 /// Element waiting for metadata download/parse

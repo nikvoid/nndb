@@ -46,9 +46,10 @@ pub async fn dashboard_page() -> impl Responder {
             (ScriptButton("importBtnOnClick()", "Start import manually"))
         }),
         content: Some(html! {
-            .log-window-outline {
-                // textarea.log-window-inner.code #log-window readonly disabled wrap="off" {} 
-                pre.log-window-inner.code #log-window readonly disabled wrap="off" {} 
+            .index-main {
+                .log-window-outline {
+                    pre.log-window-inner.code #log-window readonly disabled wrap="off" {} 
+                }
             }
         }),
         ..Default::default()

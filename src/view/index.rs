@@ -76,20 +76,28 @@ pub async fn index_page(query: web::Query<Request<String>>) -> impl Responder {
             Ok(out) => out,
             Err(e) => log_n_bail!("failed to perform search", ?e)
         };
+    
     let maxpage = (count / ELEMENTS_ON_PAGE) + 1;
     
     let answ = BaseContainer {
         content: Some(html! {
-            (PageButtons(maxpage, page, query.0.query.as_deref()))
-            .index-main {
-                // FIXME: Fix typo in class
-                .list-constainer {
-                    @for e in elements {
-                        (ElementListContainer(&e))
+            @if count > 0 {
+                (PageButtons(maxpage, page, query.0.query.as_deref()))
+                .index-main {
+                    // FIXME: Fix typo in class
+                    .list-constainer {
+                        @for e in elements {
+                            (ElementListContainer(&e))
+                        }
                     }
                 }
+                (PageButtons(maxpage, page, query.0.query.as_deref()))
+            } @else {
+                .index-center {
+                    "Please, go to dashboard and start import manually, " 
+                    "or wait for automatic import to end"    
+                }
             }
-            (PageButtons(maxpage, page, query.0.query.as_deref()))
         }),
         aside: Some(AsideTags(&tags, None).render()),
         query: query_str, 

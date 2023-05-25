@@ -64,7 +64,8 @@ pub async fn element_page(id: web::Path<u32>) -> impl Responder {
 
     let assoc = associated.iter()
         .chain(associated_ext.iter())
-        .flatten();
+        .flatten()
+        .filter(|e| e.id != id);
 
     let page = BaseContainer {
         content: Some(html! {

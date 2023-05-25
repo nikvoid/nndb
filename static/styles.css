@@ -127,14 +127,22 @@ footer {
     margin-left: 30px;
 }
 
+.index-center {
+    grid-row: 3;
+    grid-column: 1/4;
+    text-align: center;
+}
+    
 .index-side {
     margin-left: auto;
-    margin-right: 30px;
+    right: 50px;
     grid-row: 3;
     grid-column: 3;
     flex-wrap: wrap;
     display: flex;
-    max-width: 60%;
+    max-width: 35vw;
+    height: fit-content;
+    position: relative;
 }
 
 .image-list-element {
@@ -303,11 +311,21 @@ a.button-large {
         -moz-text-size-adjust: none;
     }
 
+    input[type="checkbox"] {
+        width: 1em;
+        height: 1em;
+    }
+    
+    select {
+       font-size: inherit;
+    }
+
     .result ul li {
         font-size: 44px;
     }
 
     body {
+        font-size: 44px;
         -moz-text-size-adjust: none;
     }
 
@@ -337,6 +355,11 @@ a.button-large {
         grid-column: 1;
     }
 
+    .index-center {
+        grid-row: 3;
+        grid-column: 1;
+    }
+
     .index-side {
         margin-left: auto;
         margin-right: auto;
@@ -347,6 +370,7 @@ a.button-large {
         margin-top: 50px;
         grid-row: 4;
         grid-column: 1;
+        position: static;
     }
 
     .log-window-outline {

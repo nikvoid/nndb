@@ -104,7 +104,7 @@ pub struct ElementMetadata {
     /// Stable Diffusion/etc metadata
     pub ai_meta: Option<AIMetadata>,
     /// External group info
-    pub group: Option<u32>,
+    pub group: Option<i64>,
     /// Tags of the element
     pub tags: Vec<Tag>,
 }  
