@@ -109,6 +109,17 @@ pub struct ElementMetadata {
     pub tags: Vec<Tag>,
 }  
 
+pub struct Wiki {
+    /// Wiki id
+    pub id: u32,
+    /// Wiki title (primary tag name)
+    pub title: String,
+    /// Tag aliases
+    pub aliases: Vec<String>,
+    /// Tag type
+    pub category: TagType,    
+}
+
 impl AsRef<ElementMetadata> for ElementMetadata {
     fn as_ref(&self) -> &ElementMetadata {
         self
@@ -118,6 +129,12 @@ impl AsRef<ElementMetadata> for ElementMetadata {
 pub struct ElementWithMetadata(pub ElementToParse, pub Option<ElementMetadata>); 
 impl AsRef<ElementWithMetadata> for ElementWithMetadata {
     fn as_ref(&self) -> &ElementWithMetadata {
+        self
+    }
+}
+
+impl AsRef<Wiki> for Wiki {
+    fn as_ref(&self) -> &Wiki {
         self
     }
 }

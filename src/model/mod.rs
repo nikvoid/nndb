@@ -16,6 +16,7 @@ use crate::dao::SliceShim;
 
 pub mod read;
 pub mod write;
+pub mod danbooru;
 
 /// Generative Neural Network (SD primarily) metadata
 #[derive(Default, sqlx::FromRow)]

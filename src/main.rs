@@ -110,6 +110,7 @@ async fn main() -> std::io::Result<()> {
             .service(view::fix_thumbnails)
             .service(view::retry_imports)
             .service(view::alias_tag)
+            .service(view::fetch_wikis)
         ;
 
         // Serve static folders if needed

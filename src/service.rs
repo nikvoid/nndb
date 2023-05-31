@@ -9,7 +9,7 @@ use itertools::Itertools;
 use crate::{
     dao::{STORAGE, FutureBlock}, 
     import::{ElementPrefab, ANIMATION_EXTS, IMAGE_EXTS}, 
-    model::write::ElementWithMetadata, 
+    model::{write::{ElementWithMetadata, Wiki}, danbooru}, 
     CONFIG, util::{self, AutoBool}
 };
 
@@ -27,6 +27,8 @@ pub static UPDATE_METADATA_LOCK: AutoBool = AutoBool::new();
 pub static GROUP_ELEMENTS_LOCK: AutoBool = AutoBool::new();
 /// Indicate state of make_thumbnails()
 pub static MAKE_THUMBNAILS_LOCK: AutoBool = AutoBool::new();
+/// Indicate state if update_danbooru_wikis()
+pub static FETCH_WIKI_LOCK: AutoBool = AutoBool::new();
 
 /// Scan `CONFIG.input_folder` directory for new files and import them.
 /// Will do nothing if already running
@@ -323,5 +325,71 @@ pub async fn manual_import() -> anyhow::Result<()> {
     tokio::task::spawn_blocking(make_thumbnails).await??;
     info!("Made thumbnails");
 
+    Ok(())
+}
+
+/// Fetch danbooru wikis to get tags categories and translations.
+/// This may take quite a bit of time.
+pub async fn update_danbooru_wikis() -> anyhow::Result<()> {
+    use crate::model::danbooru::*;
+    let _guard = match FETCH_WIKI_LOCK.acquire() {
+        Some(guard) => guard,
+        None => return Ok(())
+    };
+
+    let client = reqwest::Client::new();
+
+    // Construct query
+    let mut query = WikiQuery {
+        search: WikiSearch {
+            order: Order::PostCount,
+            other_names_present: true,
+        },
+        pagination: PaginatedRequest {
+            page: 0,
+            limit: 1000,
+            // Leave only necessary parts
+            only: "tag[category],title,other_names,id".into(),
+        },
+    };
+    
+    loop {
+        // Use format! because reqwest use serde_urlencoded which is subset(?)
+        // of serde_qs
+        let url = format!(
+            "https://danbooru.donmai.us/wiki_pages.json?{}",
+            serde_qs::to_string(&query)?
+        );
+        
+        let data: Vec<WikiEntry> = client
+            .get(url)
+            // Custom useragent is mandatory
+            .header(
+                "user-agent", 
+                "i-just-need-to-fetch-entire-wiki"
+            )
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        if data.is_empty() {
+            break;
+        }
+
+        // Convert to internal model
+        let data: Vec<Wiki> = data
+            .into_iter()
+            .flat_map(|w| w.try_into().ok())
+            .collect();
+
+        STORAGE.add_wikis(&data).await?;
+
+        // TODO: Make better state indication
+        info!(page=query.pagination.page, "fetched wikis");
+        
+        query.pagination.page += 1;
+    }
+    
     Ok(())
 }

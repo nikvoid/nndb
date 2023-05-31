@@ -195,3 +195,12 @@ pub async fn retry_imports() -> impl Responder {
         Err(e) => log_n_bail!("failed to retry imports", ?e)
     }
 }
+
+/// Fetch fresh tag data from danbooru 
+#[get("/api/write/fetch_wikis")]
+pub async fn fetch_wikis() -> impl Responder {
+    match service::update_danbooru_wikis().await {
+        Ok(_) => log_n_ok!("fetched fresh danbooru wikis"),
+        Err(e) => log_n_bail!("failed to fetch wikis", ?e)
+    }
+}

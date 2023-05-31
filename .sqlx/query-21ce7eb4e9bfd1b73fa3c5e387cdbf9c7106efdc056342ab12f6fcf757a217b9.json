@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "REPLACE INTO wiki (id, title, category)\n            VALUES (?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "21ce7eb4e9bfd1b73fa3c5e387cdbf9c7106efdc056342ab12f6fcf757a217b9"
+}

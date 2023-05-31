@@ -4,6 +4,8 @@ use futures::FutureExt;
 use sqlx::Executor;
 use sqlx::{SqlitePool, migrate::MigrateDatabase, SqliteConnection};
 
+use crate::model::danbooru;
+use crate::model::write::Wiki;
 use crate::search::{self, Term};
 use crate::util::{self, Crc32Hash};
 use crate::{
@@ -392,6 +394,34 @@ impl Sqlite {
 
         
         Ok(ids)
+    }
+    
+    /// Add danbooru wiki to db
+    async fn add_wiki_tx(
+        tx: &mut SqliteConnection, 
+        wiki: &Wiki
+    ) -> Result<(), StorageError> {
+        let rowid = sqlx::query!(
+            "REPLACE INTO wiki (id, title, category)
+            VALUES (?, ?, ?)",
+            wiki.id, wiki.title, wiki.category 
+        )
+        .execute(&mut *tx)
+        .await?
+        .last_insert_rowid();
+
+        for alias in &wiki.aliases {
+            sqlx::query!(
+                "INSERT INTO wiki_alias (wiki_id, alias)
+                VALUES (?, ?)
+                ON CONFLICT (alias) DO NOTHING",
+                rowid, alias
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+        
+        Ok(())
     }
 }
 
@@ -908,6 +938,21 @@ impl Sqlite {
         .execute(&self.0)
         .await?;
         
+        Ok(())
+    }
+
+    /// Add danbooru wikis to db
+    pub async fn add_wikis<W>(&self, wikis: &[W]) -> Result<(), StorageError>
+    where W: AsRef<Wiki> {
+        let mut tx = self.0.begin().await?;
+
+        for wiki in wikis {
+            let wiki = wiki.as_ref();
+            Self::add_wiki_tx(&mut tx, wiki).await?;
+        }
+
+        tx.commit().await?;
+
         Ok(())
     }
 }

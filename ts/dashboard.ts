@@ -99,3 +99,10 @@ function retryImportsOnClick() {
   req.open("GET", "/api/write/retry_imports");
   req.send();
 }
+
+/// Fetch danbooru wikis onclick handler
+function fetchWikisOnClick() {
+  let req = new XMLHttpRequestExt();
+  req.open("GET", "/api/write/fetch_wikis");
+  req.send();
+}

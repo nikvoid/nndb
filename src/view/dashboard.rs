@@ -37,6 +37,7 @@ pub async fn dashboard_page() -> impl Responder {
             (ScriptButton("clearGroupsOnClick()", "Clear element group data"))
             (ScriptButton("fixThumbsOnClick()", "Fix thumbnails"))
             (ScriptButton("retryImportsOnClick()", "Retry imports"))
+            (ScriptButton("fetchWikisOnClick()", "Fetch danbooru wikis"))
 
             .tag { "Import" }
             (IdParam("scan-files", "Scan files running: ", "unknown"))

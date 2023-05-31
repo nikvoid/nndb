@@ -21,18 +21,7 @@ pub use index::index_page;
 pub use element::element_page;
 pub use tag::tag_page;
 pub use dashboard::dashboard_page;
-pub use api::tag_autocomplete;
-pub use api::add_tags;
-pub use api::delete_tag;
-pub use api::edit_tag;
-pub use api::read_log;
-pub use api::import_status;
-pub use api::start_import;
-pub use api::update_tag_count;
-pub use api::clear_group_data;
-pub use api::fix_thumbnails;
-pub use api::retry_imports;
-pub use api::alias_tag;
+pub use api::*;
 
 /// Helper for writing nested html_to!
 /// Basically a lazy html! that can be rendered(-to) on demand
