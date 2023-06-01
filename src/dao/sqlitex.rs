@@ -809,9 +809,22 @@ impl Sqlite {
     }
 
     /// Get full data for tag by it's primary name
-    pub async fn get_tag_data(&self, name: &str) -> Result<Option<read::Tag>, StorageError> {
+    pub async fn get_tag_data_by_name(&self, name: &str) -> Result<Option<read::Tag>, StorageError> {
         let mut conn = self.pool.acquire().await?;
         Self::get_tag_data_tx(&mut conn, name).await
+    } 
+    
+    /// Get full data for tag by id
+    pub async fn get_tag_data_by_id(&self, id: u32) -> Result<Option<read::Tag>, StorageError> {
+        let opt = sqlx::query_as(
+            "SELECT * FROM tag
+            WHERE id = ?"
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(opt)
     } 
 
     /// Remove tag from element
@@ -865,12 +878,22 @@ impl Sqlite {
         .bind(data.id)
         .execute(&mut *tx)
         .await?;
+        
+        // If alias with new tag name exists, remove it
+        sqlx::query(
+            "DELETE FROM tag_alias WHERE alias = ? AND tag_id = ?",
+        )
+        .bind(tag.name())
+        .bind(data.id)
+        .execute(&mut *tx)
+        .await?;
 
         // If tag primary name was changed, insert former name as alias 
         // to remap this tag during import
         if name != tag.name() {
             sqlx::query!(
-                "INSERT INTO tag_alias (tag_id, alias) VALUES (?, ?)",
+                "INSERT INTO tag_alias (tag_id, alias) VALUES (?1, ?2)
+                ON CONFLICT (alias) WHERE tag_id = ?1 DO NOTHING",
                 data.id, name
             )
             .execute(&mut *tx)
@@ -899,11 +922,11 @@ impl Sqlite {
             return Ok(())
         }
         
-        let Some(tag) = self.get_tag_data(from_name).await? else {
+        let Some(tag) = self.get_tag_data_by_name(from_name).await? else {
             anyhow::bail!("no such tag");
         };
         
-        let alias_to = self.get_tag_data(to_name).await?;
+        let alias_to = self.get_tag_data_by_name(to_name).await?;
 
         // Start transaction
         let mut tx = self.pool.begin().await?;
