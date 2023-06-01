@@ -41,11 +41,6 @@ async fn import_spawner() {
         }        
     }, Duration::from_secs(320)).await;
 
-    util::blocking_task_with_interval(|| match service::update_tag_count() {
-        Ok(_) => info!("updated tag count"),
-        Err(e) => error!(?e, "failed to update tag count"),
-    }, Duration::from_secs(325)).await;
-
     util::blocking_task_with_interval(|| match service::make_thumbnails() {
         Ok(_) => info!("made thumbnails"),
         Err(e) => error!(?e, "failed to make thumbnails"),

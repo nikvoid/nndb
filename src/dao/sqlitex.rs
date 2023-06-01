@@ -5,7 +5,6 @@ use scc::HashIndex;
 use sqlx::Executor;
 use sqlx::{SqlitePool, migrate::MigrateDatabase, SqliteConnection};
 
-use crate::model::TagType;
 use crate::search::{self, Term};
 use crate::util::{self, Crc32Hash};
 use crate::{
@@ -152,22 +151,46 @@ impl Sqlite {
         Ok(())
     }
 
+    /// Add all tags from slice, optionally add join rows for element.
+    /// Increment tag's `count` if trying to insert duplicate and `element_id` is `Some`
     async fn add_tags_tx<T>(
         tx: &mut SqliteConnection,
         element_id: Option<u32>, 
         tags: &[T]
     ) -> Result<(), StorageError> 
     where T: AsRef<write::Tag> {    
-        let hashes = Self::get_tags_hashes_tx(&mut *tx).await?;
-    
         for t in tags {
             let t = t.as_ref();
             let hash = t.name_hash();
             let name = t.name();
             let alt_name = t.alt_name();
             let typ: u8 = t.tag_type().into();
-
-            if !hashes.contains(&hash) {
+            
+            if let Some(id) = element_id {
+                // Update count if tag already exists
+                sqlx::query!(
+                    "INSERT INTO tag (name_hash, tag_name, alt_name, tag_type, count)
+                    VALUES (?, ?, ?, ?, 1)
+                    ON CONFLICT (name_hash) DO UPDATE SET count = count + 1",
+                    hash,
+                    name,
+                    alt_name,
+                    typ
+                )
+                .execute(&mut *tx)
+                .await?;
+                
+                sqlx::query!(
+                    "INSERT INTO element_tag (element_id, tag_hash)                 
+                    VALUES (?, ?)
+                    ON CONFLICT (element_id, tag_hash) DO NOTHING",
+                    id, 
+                    hash
+                )
+                .execute(&mut *tx)
+                .await?;
+            } else {
+                // Just insert tag
                 sqlx::query!(
                     "INSERT INTO tag (name_hash, tag_name, alt_name, tag_type)
                     VALUES (?, ?, ?, ?)
@@ -176,18 +199,6 @@ impl Sqlite {
                     name,
                     alt_name,
                     typ
-                )
-                .execute(&mut *tx)
-                .await?;
-            }
-            
-            if let Some(id) = element_id {
-                sqlx::query!(
-                    "INSERT INTO element_tag (element_id, tag_hash)                 
-                    VALUES (?, ?)
-                    ON CONFLICT (element_id, tag_hash) DO NOTHING",
-                    id, 
-                    hash
                 )
                 .execute(&mut *tx)
                 .await?;
@@ -696,16 +707,21 @@ impl Sqlite {
         Ok(Some((elem, meta)))
     }
 
-    /// Update count of elements with tag for each tag
+    /// Update count of elements with tag for each tag.
     pub async fn update_tag_count(&self) -> Result<(), StorageError> {
         sqlx::query!(
-            "UPDATE tag SET count = (
-                SELECT count(*) FROM element_tag WHERE tag_hash = name_hash
+            "WITH tag_count(tag_hash, count) AS (
+                SELECT tag_hash, count(tag_hash)
+                FROM element_tag
+                GROUP BY tag_hash
+            )
+            UPDATE tag SET count = (
+                ifnull((SELECT count FROM tag_count WHERE tag_hash = name_hash), 0)
             )"
         )
         .execute(&self.0)
         .await?;
-
+        
         Ok(())
     }
 

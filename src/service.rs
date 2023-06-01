@@ -226,11 +226,6 @@ pub async fn group_elements_by_signature() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Update count of elements with tag for each tag
-pub fn update_tag_count() -> anyhow::Result<()> {
-    STORAGE.update_tag_count().blocking_run()
-}
-
 /// Make thumbnails for all files that don't have one.
 /// Will do nothing if already running
 pub fn make_thumbnails() -> anyhow::Result<()> {
@@ -321,8 +316,6 @@ pub async fn manual_import() -> anyhow::Result<()> {
     info!("Updated metadata");
     group_elements_by_signature().await?;
     info!("Grouped images");
-    tokio::task::spawn_blocking(update_tag_count).await??;
-    info!("Updated tag counts");
     tokio::task::spawn_blocking(make_thumbnails).await??;
     info!("Made thumbnails");
 
