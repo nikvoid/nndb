@@ -737,8 +737,10 @@ impl Sqlite {
     }
 
     /// Update count of elements with tag for each tag.
+    /// FIXME: For some reason it sometimes does not finish, only when using sqlx
+    /// Also it seems to take much longer time, compared to other tools 
     pub async fn update_tag_count(&self) -> Result<(), StorageError> {
-        sqlx::query!(
+        sqlx::query( // sql
             "WITH tag_count(tag_hash, count) AS (
                 SELECT tag_hash, count(tag_hash)
                 FROM element_tag

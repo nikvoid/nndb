@@ -119,3 +119,7 @@ fn trim_braces(expr: &str) -> Option<&str> {
 pub async fn reload_tag_aliases() -> anyhow::Result<()> {
     STORAGE.load_tag_aliases_index(&TAG_ALIASES).await
 }
+
+fn lookup_alias(alias: &str) -> Option<String> {
+    TAG_ALIASES.read(alias, |_, v| v.clone())
+}
