@@ -25,12 +25,14 @@ function updateDashboard() {
   let meta = document.querySelector("#update-meta");
   let group = document.querySelector("#group-elems");
   let thumbs = document.querySelector("#make-thumbs");
+  let wikis = document.querySelector("#fetch-wikis");
 
   if (
     scan instanceof HTMLElement
     && meta instanceof HTMLElement
     && group instanceof HTMLElement
     && thumbs instanceof HTMLElement
+    && wikis instanceof HTMLElement
   ) {
     let requesta = new XMLHttpRequestExt();
 
@@ -38,7 +40,8 @@ function updateDashboard() {
       scan_files: boolean,
       update_metadata: boolean,
       group_elements: boolean,
-      make_thumbnails: boolean
+      make_thumbnails: boolean,
+      wiki_fetch: [boolean, number]
     };
     
     requesta.success_cb = () => {
@@ -47,6 +50,7 @@ function updateDashboard() {
       meta.innerText = data.update_metadata;
       group.innerText = data.group_elements;
       thumbs.innerText = data.make_thumbnails;
+      wikis.innerText = data.wiki_fetch;
     };
     requesta.error_cb = () => {};
 

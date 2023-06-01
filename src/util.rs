@@ -1,5 +1,6 @@
-use std::{path::Path, io::SeekFrom, sync::atomic::AtomicBool, sync::atomic::Ordering, time::Duration};
+use std::{path::Path, io::SeekFrom, sync::atomic::Ordering, time::Duration};
 use anyhow::Context;
+use atomic::Atomic;
 use futures::Future;
 use once_cell::sync::OnceCell;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
@@ -15,33 +16,51 @@ use crate::{
     CONFIG
 };
 
-/// AtomicBool that will be automatically set to `false` on guard drop
-pub struct AutoBool(AtomicBool);
-impl AutoBool {
+/// AtomicBool that will be automatically set to `false` on guard drop.
+/// May carry additional value that will be set to default on guard drop.
+pub struct AutoAtom<T> {
+    def_state: T,
+    atom: Atomic<T>,
+    state: Atomic<bool>
+}
+
+impl<T> AutoAtom<T> where T: Copy {
     /// Create new AutoBool in released state
-    pub const fn new() -> Self {
-        AutoBool(AtomicBool::new(false))
+    pub const fn new(default: T) -> Self {
+        AutoAtom {
+            def_state: default,
+            atom: Atomic::new(default),
+            state: Atomic::new(false),
+        }
     }
         
     /// Acquire bool guard if bool is `false`
-    pub fn acquire(&self) -> Option<AutoBoolGuard> {
-        match self.0.compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed) {
-            Ok(false) => Some(AutoBoolGuard(&self.0)),
+    pub fn acquire(&self) -> Option<AutoAtomGuard<T>> {
+        match self.state.compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed) {
+            Ok(false) => Some(AutoAtomGuard(self)),
             _ => None
         }
     }
 
-    /// Get bool state
-    pub fn inspect(&self) -> bool {
-        self.0.load(Ordering::Relaxed)
+    /// Get atom state
+    pub fn inspect(&self) -> (bool, T) {
+        (self.state.load(Ordering::Relaxed), self.atom.load(Ordering::Relaxed))
     }
 }
 
-/// Guard that will set inner AtomicBool to `false` on drop
-pub struct AutoBoolGuard<'a>(&'a AtomicBool);
-impl Drop for AutoBoolGuard<'_> {
+/// Guard that will set inner Atomic to default value and
+/// Atomic Bool to `false` on drop
+pub struct AutoAtomGuard<'a, T>(&'a AutoAtom<T>) where T: Copy;
+impl<T> AutoAtomGuard<'_, T> where T: Copy {
+    /// Update additional internal atomic value
+    pub fn update(&self, val: T) {
+        self.0.atom.store(val, Ordering::Relaxed);
+    }
+}
+impl<T> Drop for AutoAtomGuard<'_, T> where T: Copy {
     fn drop(&mut self) {
-        self.0.store(false, Ordering::Relaxed);
+        self.0.atom.store(self.0.def_state, Ordering::Relaxed);
+        self.0.state.store(false, Ordering::Relaxed);
     }
 }
 

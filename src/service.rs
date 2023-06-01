@@ -11,7 +11,7 @@ use crate::{
     dao::{STORAGE, FutureBlock}, 
     import::{ElementPrefab, ANIMATION_EXTS, IMAGE_EXTS, self}, 
     model::{write::{ElementWithMetadata, Wiki}, danbooru}, 
-    CONFIG, util::{self, AutoBool}
+    CONFIG, util::{self, AutoAtom}
 };
 
 /// Experimentaly decided optimal image signature distance 
@@ -21,15 +21,15 @@ pub const SIGNATURE_DISTANCE_THRESHOLD: f32 = 35.0;
 pub const THUMBNAIL_SIZE: (u32, u32) = (256, 256);
 
 /// Indicate state of scan_files()
-pub static SCAN_FILES_LOCK: AutoBool = AutoBool::new();
+pub static SCAN_FILES_LOCK: AutoAtom::<()> = AutoAtom::new(());
 /// Indicate state of update_metadata()
-pub static UPDATE_METADATA_LOCK: AutoBool = AutoBool::new();
+pub static UPDATE_METADATA_LOCK: AutoAtom::<()> = AutoAtom::new(());
 /// Indicate state of group_elements_by_signature()
-pub static GROUP_ELEMENTS_LOCK: AutoBool = AutoBool::new();
+pub static GROUP_ELEMENTS_LOCK: AutoAtom::<()> = AutoAtom::new(());
 /// Indicate state of make_thumbnails()
-pub static MAKE_THUMBNAILS_LOCK: AutoBool = AutoBool::new();
+pub static MAKE_THUMBNAILS_LOCK: AutoAtom::<()> = AutoAtom::new(());
 /// Indicate state if update_danbooru_wikis()
-pub static FETCH_WIKI_LOCK: AutoBool = AutoBool::new();
+pub static FETCH_WIKI_LOCK: AutoAtom::<u32> = AutoAtom::new(0);
 
 /// Scan `CONFIG.input_folder` directory for new files and import them.
 /// Will do nothing if already running
@@ -347,6 +347,8 @@ pub async fn update_danbooru_wikis() -> anyhow::Result<()> {
     };
     
     loop {
+        _guard.update(query.pagination.page);
+        
         // Use format! because reqwest use serde_urlencoded which is subset(?)
         // of serde_qs
         let url = format!(
@@ -387,9 +389,6 @@ pub async fn update_danbooru_wikis() -> anyhow::Result<()> {
 
         STORAGE.add_wikis(&data).await?;
 
-        // TODO: Make better state indication
-        info!(page=query.pagination.page, "fetched wikis");
-        
         // Max page for unauthorized/non-premium user is 1000th page
         // 1M tags sorted by post count should be sufficient anyway
         query.pagination.page += 1;

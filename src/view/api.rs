@@ -3,7 +3,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tracing::{info, error};
 
-use crate::{dao::STORAGE, log_n_bail, model::{write, TagType}, util, service::{SCAN_FILES_LOCK, UPDATE_METADATA_LOCK, GROUP_ELEMENTS_LOCK, MAKE_THUMBNAILS_LOCK, self}, log_n_ok, search::{self, Term}};
+use crate::{dao::STORAGE, log_n_bail, model::{write, TagType}, util, service::{SCAN_FILES_LOCK, UPDATE_METADATA_LOCK, GROUP_ELEMENTS_LOCK, MAKE_THUMBNAILS_LOCK, self, FETCH_WIKI_LOCK}, log_n_ok, search::{self, Term}};
 
 /// Tag autocompletion max tags
 const TAG_LIMIT: u32 = 15;
@@ -48,7 +48,8 @@ pub struct ImportTasksStatus {
     scan_files: bool,
     update_metadata: bool,
     group_elements: bool,
-    make_thumbnails: bool
+    make_thumbnails: bool,
+    wiki_fetch: (bool, u32)
 }
 
 /// Tag autocompletion
@@ -82,10 +83,11 @@ pub async fn read_log() -> impl Responder {
 #[get("/api/read/import")]
 pub async fn import_status() -> impl Responder {
     let status = ImportTasksStatus {
-        scan_files: SCAN_FILES_LOCK.inspect(),
-        update_metadata: UPDATE_METADATA_LOCK.inspect(),
-        group_elements: GROUP_ELEMENTS_LOCK.inspect(),
-        make_thumbnails: MAKE_THUMBNAILS_LOCK.inspect()
+        scan_files: SCAN_FILES_LOCK.inspect().0,
+        update_metadata: UPDATE_METADATA_LOCK.inspect().0,
+        group_elements: GROUP_ELEMENTS_LOCK.inspect().0,
+        make_thumbnails: MAKE_THUMBNAILS_LOCK.inspect().0,
+        wiki_fetch: FETCH_WIKI_LOCK.inspect(),
     };
 
     web::Json(status)

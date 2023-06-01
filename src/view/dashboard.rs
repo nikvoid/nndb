@@ -44,6 +44,7 @@ pub async fn dashboard_page() -> impl Responder {
             (IdParam("update-meta", "Update metadata running: ", "unknown"))
             (IdParam("group-elems", "Group elements running: ", "unknown"))
             (IdParam("make-thumbs", "Make thumbnails running: ", "unknown"))
+            (IdParam("fetch-wikis", "Wikis are fetching: ", "unknown"))
             (ScriptButton("importBtnOnClick()", "Start import manually"))
         }),
         content: Some(html! {
