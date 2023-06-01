@@ -15,6 +15,7 @@ impl Render for TagInfo<'_> {
     fn render_to(&self, buffer: &mut String) {
         html_to! { buffer,
             .tag { "Tag info" }
+            .tag.tag-block { "Id: " (self.0.id) }
             .tag.tag-block { "Name: " (&self.0.name) }
             @if let Some(alt) = &self.0.alt_name {
                 .tag.tag-block { "Name alias: " (alt) }
@@ -31,9 +32,9 @@ pub struct Request {
     pub element_ref: Option<u32>
 }
 
-#[get("/tag/{name}")]
-pub async fn tag_page(name: web::Path<String>, query: web::Query<Request>) -> impl Responder {
-    let tag = match STORAGE.get_tag_data(&name).await {
+#[get("/tag/{id}")]
+pub async fn tag_page(id: web::Path<u32>, query: web::Query<Request>) -> impl Responder {
+    let tag = match STORAGE.get_tag_data_by_id(*id).await {
         Ok(Some(tag)) => tag,
         Ok(None) => return Err(ErrorNotFound("no such tag")),
         Err(e) => log_n_bail!("failed to get tag data", ?e),
@@ -61,6 +62,12 @@ pub async fn tag_page(name: web::Path<String>, query: web::Query<Request>) -> im
                             }
                         }
                     }
+                    br;
+                    "Name"
+                    br;
+                    input.name type="text" value=(tag.name);
+                    br;
+                    "Alternative name"
                     br;
                     input.alt-name type="text" 
                         value=(tag.alt_name.as_deref().unwrap_or_default());

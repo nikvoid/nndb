@@ -31,6 +31,7 @@ pub struct DeleteTagRequest {
 #[derive(Deserialize)]
 pub struct EditTagRequest {
     tag_name: String,
+    new_name: String,
     alt_name: Option<String>,
     tag_type: TagType,
     hidden: bool,
@@ -119,12 +120,12 @@ pub async fn delete_tag(req: web::Json<DeleteTagRequest>) -> impl Responder {
 /// Edit tag
 #[post("/api/write/edit_tag")]
 pub async fn edit_tag(req: web::Json<EditTagRequest>) -> impl Responder {
-    let tag = match write::Tag::new(&req.tag_name, req.alt_name.clone(), req.tag_type) {
+    let tag = match write::Tag::new(&req.new_name, req.alt_name.clone(), req.tag_type) {
         Some(tag) => tag,
         None => log_n_bail!("failed to create tag struct")
     };
 
-    match STORAGE.update_tag(&tag, req.hidden).await {
+    match STORAGE.update_tag(&req.tag_name, &tag, req.hidden).await {
         Ok(_) => log_n_ok!("edited tag"),
         Err(e) => log_n_bail!("failed to update tag", ?e)
     }

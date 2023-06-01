@@ -7,8 +7,7 @@ use crate::{
     model::{
         read::{Tag, Element, ElementMetadata}, 
         TagType
-    },
-    util::Crc32Hash
+    }
 };
 
 mod index;
@@ -42,7 +41,7 @@ macro_rules! resolve {
     // Element page
     (/element/$eid:expr) => { $crate::html_in! { "/element/" ($eid) }};
     // Tag page
-    (/tag/$name:expr) => { $crate::html_in! { "/tag/" ($name) }};
+    (/tag/$id:expr) => { $crate::html_in! { "/tag/" ($id) }};
     // Dashboard page
     (/dashboard) => { "/dashboard" };
     ($($tt:tt)*) => { stringify!($($tt)*) };
@@ -270,7 +269,7 @@ impl Render for AsideTags<'_> {
                 .tag { (typ.label()) }
                 @for tag in tags {
                     .tag-container-grid {
-                        a.tag.tag-hash href=(Link(resolve!(/tag/tag.name), tag::Request {
+                        a.tag.tag-hash href=(Link(resolve!(/tag/tag.id), tag::Request {
                             element_ref: (self.1.map(|e| e.id))
                         })) {
                             "#" 
@@ -300,7 +299,8 @@ struct TagEditForm<'a, OnSubmit>(OnSubmit, &'a str, &'a str);
 impl<OnSubmit> Render for TagEditForm<'_, OnSubmit>
 where OnSubmit: Render {
     fn render_to(&self, buffer: &mut String) {
-        let ident = html_in! { "TAG_EDIT_FIELD_" (self.1.crc32()) };
+        let salt = (self.1.len() & 0b1010) + self.1.as_bytes()[0] as usize;
+        let ident = html_in! { "TAG_EDIT_FIELD_" (salt) };
         html_to! { buffer,
             form autocomplete="off" onsubmit={ (self.0)"; return false;" } {
                 (ScriptVar(&ident, self.1))
