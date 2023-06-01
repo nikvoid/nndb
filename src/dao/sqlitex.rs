@@ -737,21 +737,51 @@ impl Sqlite {
     }
 
     /// Update count of elements with tag for each tag.
-    /// FIXME: For some reason it sometimes does not finish, only when using sqlx
-    /// Also it seems to take much longer time, compared to other tools 
     pub async fn update_tag_count(&self) -> Result<(), StorageError> {
-        sqlx::query( // sql
-            "WITH tag_count(tag_hash, count) AS (
-                SELECT tag_hash, count(tag_hash)
-                FROM element_tag
-                GROUP BY tag_hash
-            )
-            UPDATE tag SET count = (
-                ifnull((SELECT count FROM tag_count WHERE tag_hash = name_hash), 0)
-            )"
+        // FIXME: For some reason it sometimes does not finish, only when using sqlx
+        // Also it seems to take much longer time, compared to other tools 
+        // sqlx::query( // sql
+        //     "WITH tag_count(tag_hash, count) AS (
+        //         SELECT tag_hash, count(tag_hash)
+        //         FROM element_tag
+        //         GROUP BY tag_hash
+        //     )
+        //     UPDATE tag SET count = (
+        //         ifnull((SELECT count FROM tag_count WHERE tag_hash = name_hash), 0)
+        //     )"
+        // )
+        // .execute(&self.pool)
+        // .await?;
+
+        let mut tx = self.pool.begin().await?;
+        
+        let counts = sqlx::query!(
+            "SELECT tag_hash, count(tag_hash) as count
+            FROM element_tag
+            GROUP BY tag_hash"
         )
-        .execute(&self.pool)
+        .fetch_all(&mut *tx)
         .await?;
+
+        // Reset all counts
+        sqlx::query!(
+            "UPDATE tag SET count = 0"
+        )
+        .execute(&mut *tx)
+        .await?;
+        
+        // Set counts back one by one
+        for record in counts {
+            sqlx::query!(
+                "UPDATE tag SET count = ?
+                WHERE name_hash = ?",
+                record.count, record.tag_hash
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        tx.commit().await?;
         
         Ok(())
     }
