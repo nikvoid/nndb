@@ -59,7 +59,7 @@ const DEF_CONFIG_FILE: &str = "config.toml";
 pub static CONFIG: LateInit<Config> = LateInit::new();
 
 #[actix_web::main]
-async fn main() -> std::io::Result<()> {
+async fn main() -> anyhow::Result<()> {
     let cfg_path = match std::env::args().nth(1) {
         Some(p) => p,
         None => DEF_CONFIG_FILE.to_string()
@@ -88,6 +88,8 @@ async fn main() -> std::io::Result<()> {
         info!("Spawning import tasks");
         import_spawner().await;
     }
+
+    import::reload_tag_aliases().await?;
 
     info!(addr=CONFIG.bind_address, port=CONFIG.port, "Starting server");
     HttpServer::new(|| {
@@ -137,5 +139,7 @@ async fn main() -> std::io::Result<()> {
     })
     .bind((CONFIG.bind_address.as_str(), CONFIG.port))?
     .run()
-    .await
+    .await?;
+
+    Ok(())
 }

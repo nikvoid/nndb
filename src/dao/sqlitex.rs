@@ -396,26 +396,22 @@ impl Sqlite {
         Ok(ids)
     }
     
-    /// Add danbooru wiki to db
-    async fn add_wiki_tx(
+    /// Add tag aliases to db
+    async fn add_tag_aliases_tx<A>(
         tx: &mut SqliteConnection, 
-        wiki: &write::Wiki
-    ) -> Result<(), StorageError> {
-        let rowid = sqlx::query!(
-            "REPLACE INTO wiki (id, title, category)
-            VALUES (?, ?, ?)",
-            wiki.id, wiki.title, wiki.category 
-        )
-        .execute(&mut *tx)
-        .await?
-        .last_insert_rowid();
-
-        for alias in &wiki.aliases {
+        tag: &str,
+        aliases: &[A]
+    ) -> Result<(), StorageError>
+    where A: AsRef<str> {
+        let hash = tag.crc32();
+        
+        for alias in aliases {
+            let alias = alias.as_ref();
             sqlx::query!(
-                "INSERT INTO wiki_alias (wiki_id, alias)
+                "INSERT INTO tag_alias (tag_hash, alias)
                 VALUES (?, ?)
                 ON CONFLICT (alias) DO NOTHING",
-                rowid, alias
+                hash, alias
             )
             .execute(&mut *tx)
             .await?;
@@ -944,11 +940,25 @@ impl Sqlite {
     /// Add danbooru wikis to db
     pub async fn add_wikis<W>(&self, wikis: &[W]) -> Result<(), StorageError>
     where W: AsRef<write::Wiki> {
+        let data: Vec<_> = wikis
+            .iter()
+            .flat_map(|w| 
+                write::Tag::new(&w.as_ref().title, None, w.as_ref().category)
+                    .map(|t| (t, &w.as_ref().aliases))
+            )
+            .collect();
+        
         let mut tx = self.0.begin().await?;
 
-        for wiki in wikis {
-            let wiki = wiki.as_ref();
-            Self::add_wiki_tx(&mut tx, wiki).await?;
+        let tags: Vec<_> = data
+            .iter()
+            .map(|d| &d.0)
+            .collect();
+
+        Self::add_tags_tx(&mut tx, None, &tags).await?;
+        
+        for (tag, aliases) in data {
+            Self::add_tag_aliases_tx(&mut tx, tag.name(), &aliases).await?;
         }
 
         tx.commit().await?;
@@ -957,22 +967,22 @@ impl Sqlite {
     }
 
     /// Loads tag aliases to memory in order to speed up multiple lookups 
-    pub async fn tag_aliases_index(&self) -> Result<HashIndex<String, String>, StorageError> {
+    pub async fn load_tag_aliases_index(&self, index: &HashIndex<String, String>) -> Result<(), StorageError> {
         let mut stream = sqlx::query!(
-            "SELECT alias, title
-            FROM wiki w
-            JOIN wiki_alias a ON a.wiki_id = w.id",
+            "SELECT alias, tag_name
+            FROM tag t 
+            JOIN tag_alias a ON a.tag_hash = t.name_hash",
         )
-        .map(|anon| (anon.alias, anon.title))
+        .map(|anon| (anon.alias, anon.tag_name))
         .fetch(&self.0);
 
-        let out = HashIndex::new();
+        index.clear_async().await;
         
         while let Some(Ok((k, v))) = stream.next().await {
-            out.insert_async(k, v).await.ok();
+            index.insert_async(k, v).await.ok();
         }
         
-        Ok(out)
+        Ok(())
     }
 }
 

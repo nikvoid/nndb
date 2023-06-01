@@ -2,13 +2,14 @@ use std::{io::Read, path::PathBuf};
 use anyhow::{Context, anyhow};
 use futures::{stream::FuturesUnordered, StreamExt};
 use rayon::prelude::*;
+use reqwest::StatusCode;
 use tracing::{error, info};
 use walkdir::WalkDir;
 use itertools::Itertools;
 
 use crate::{
     dao::{STORAGE, FutureBlock}, 
-    import::{ElementPrefab, ANIMATION_EXTS, IMAGE_EXTS}, 
+    import::{ElementPrefab, ANIMATION_EXTS, IMAGE_EXTS, self}, 
     model::{write::{ElementWithMetadata, Wiki}, danbooru}, 
     CONFIG, util::{self, AutoBool}
 };
@@ -340,16 +341,15 @@ pub async fn update_danbooru_wikis() -> anyhow::Result<()> {
     let client = reqwest::Client::new();
 
     // Construct query
-    let mut query = WikiQuery {
-        search: WikiSearch {
-            order: Order::PostCount,
-            other_names_present: true,
+    let mut query = TagQuery {
+        search: TagSearch {
+            order: Order::Count,
         },
         pagination: PaginatedRequest {
             page: 0,
             limit: 1000,
             // Leave only necessary parts
-            only: "tag[category],title,other_names,id".into(),
+            only: "name,category,wiki_page[other_names]".into(),
         },
     };
     
@@ -357,21 +357,30 @@ pub async fn update_danbooru_wikis() -> anyhow::Result<()> {
         // Use format! because reqwest use serde_urlencoded which is subset(?)
         // of serde_qs
         let url = format!(
-            "https://danbooru.donmai.us/wiki_pages.json?{}",
+            "https://danbooru.donmai.us/tags.json?{}",
             serde_qs::to_string(&query)?
         );
         
-        let data: Vec<WikiEntry> = client
-            .get(url)
+        let data: Vec<TagEntry> = { 
+            let resp = client.get(url)
             // Custom useragent is mandatory
             .header(
                 "user-agent", 
-                "i-just-need-to-fetch-entire-wiki"
+                "i-just-need-to-fetch-tags"
             )
             .send()
-            .await?
-            .json()
             .await?;
+
+            match resp.status() {
+                // Pagination end
+                StatusCode::GONE => vec![],
+                StatusCode::OK => resp.json().await?,
+                _ => { 
+                    resp.error_for_status()?;
+                    vec![]
+                }
+            }
+        };
 
         if data.is_empty() {
             break;
@@ -388,8 +397,13 @@ pub async fn update_danbooru_wikis() -> anyhow::Result<()> {
         // TODO: Make better state indication
         info!(page=query.pagination.page, "fetched wikis");
         
+        // Max page for unauthorized/non-premium user is 1000th page
+        // 1M tags sorted by post count should be sufficient anyway
         query.pagination.page += 1;
     }
+
+    // Tag aliases were updated, reload cache
+    import::reload_tag_aliases().await?;
     
     Ok(())
 }

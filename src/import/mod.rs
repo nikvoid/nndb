@@ -1,9 +1,11 @@
 use std::path::PathBuf;
 
-use crate::model::{Md5Hash, write::ElementMetadata, read::PendingImport};
+use crate::{model::{Md5Hash, write::ElementMetadata, read::PendingImport}, dao::STORAGE};
 use async_trait::async_trait;
 use md5::{Digest, Md5};
 use num_enum::{FromPrimitive, IntoPrimitive};
+use once_cell::sync::Lazy;
+use scc::HashIndex;
 
 mod passthrough;
 mod novelai;
@@ -15,6 +17,10 @@ pub const ANIMATION_EXTS: &[&str] = &["mp4", "mov", "webm", "m4v"];
 /// Name directory as `TAG.<tag_type>.<tag_name>.<tag_type>.<tag_name>...`
 /// to add `<tag_name>...` to elements in this directory 
 pub const TAG_TRIGGER: &str = "TAG.";
+
+/// In-memory map of alias -> tag.
+/// Used to speed up tag resolution.
+static TAG_ALIASES: Lazy<HashIndex<String, String>> = Lazy::new(HashIndex::new); 
 
 #[derive(FromPrimitive, IntoPrimitive, Clone, Copy, Debug, PartialEq, sqlx::Type)]
 #[repr(u8)]
@@ -107,4 +113,9 @@ fn trim_braces(expr: &str) -> Option<&str> {
         .count();
     
     expr.get(braces..expr.len() - braces)
+}
+
+/// Reload tag aliases cache
+pub async fn reload_tag_aliases() -> anyhow::Result<()> {
+    STORAGE.load_tag_aliases_index(&TAG_ALIASES).await
 }

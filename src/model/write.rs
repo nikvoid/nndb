@@ -110,8 +110,6 @@ pub struct ElementMetadata {
 }  
 
 pub struct Wiki {
-    /// Wiki id
-    pub id: u32,
     /// Wiki title (primary tag name)
     pub title: String,
     /// Tag aliases
