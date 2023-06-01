@@ -1743,6 +1743,7 @@ dependencies = [
  "rayon",
  "regex",
  "reqwest",
+ "scc",
  "serde",
  "serde_json",
  "serde_qs",
@@ -2483,6 +2484,12 @@ checksum = "93fc1dc3aaa9bfed95e02e6eadabb4baf7e3078b0bd1b4d7b6b0b68378900502"
 dependencies = [
  "winapi-util",
 ]
+
+[[package]]
+name = "scc"
+version = "1.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d9bf5e8953149d84e5bbcdbc48841b8a2fcf9790b6b5da09fe45a166e3bcc17"
 
 [[package]]
 name = "schannel"

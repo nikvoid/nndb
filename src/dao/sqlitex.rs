@@ -1,11 +1,11 @@
 use std::path::PathBuf;
 
 use futures::FutureExt;
+use scc::HashIndex;
 use sqlx::Executor;
 use sqlx::{SqlitePool, migrate::MigrateDatabase, SqliteConnection};
 
-use crate::model::danbooru;
-use crate::model::write::Wiki;
+use crate::model::TagType;
 use crate::search::{self, Term};
 use crate::util::{self, Crc32Hash};
 use crate::{
@@ -399,7 +399,7 @@ impl Sqlite {
     /// Add danbooru wiki to db
     async fn add_wiki_tx(
         tx: &mut SqliteConnection, 
-        wiki: &Wiki
+        wiki: &write::Wiki
     ) -> Result<(), StorageError> {
         let rowid = sqlx::query!(
             "REPLACE INTO wiki (id, title, category)
@@ -943,7 +943,7 @@ impl Sqlite {
 
     /// Add danbooru wikis to db
     pub async fn add_wikis<W>(&self, wikis: &[W]) -> Result<(), StorageError>
-    where W: AsRef<Wiki> {
+    where W: AsRef<write::Wiki> {
         let mut tx = self.0.begin().await?;
 
         for wiki in wikis {
@@ -954,6 +954,25 @@ impl Sqlite {
         tx.commit().await?;
 
         Ok(())
+    }
+
+    /// Loads tag aliases to memory in order to speed up multiple lookups 
+    pub async fn tag_aliases_index(&self) -> Result<HashIndex<String, String>, StorageError> {
+        let mut stream = sqlx::query!(
+            "SELECT alias, title
+            FROM wiki w
+            JOIN wiki_alias a ON a.wiki_id = w.id",
+        )
+        .map(|anon| (anon.alias, anon.title))
+        .fetch(&self.0);
+
+        let out = HashIndex::new();
+        
+        while let Some(Ok((k, v))) = stream.next().await {
+            out.insert_async(k, v).await.ok();
+        }
+        
+        Ok(out)
     }
 }
 
