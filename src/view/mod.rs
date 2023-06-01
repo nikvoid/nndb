@@ -7,8 +7,7 @@ use crate::{
     model::{
         read::{Tag, Element, ElementMetadata}, 
         TagType
-    },
-    util::Crc32Hash
+    }
 };
 
 mod index;
@@ -300,7 +299,7 @@ struct TagEditForm<'a, OnSubmit>(OnSubmit, &'a str, &'a str);
 impl<OnSubmit> Render for TagEditForm<'_, OnSubmit>
 where OnSubmit: Render {
     fn render_to(&self, buffer: &mut String) {
-        let ident = html_in! { "TAG_EDIT_FIELD_" (self.1.crc32()) };
+        let ident = html_in! { "TAG_EDIT_FIELD_" (self.1) };
         html_to! { buffer,
             form autocomplete="off" onsubmit={ (self.0)"; return false;" } {
                 (ScriptVar(&ident, self.1))

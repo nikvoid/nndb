@@ -117,6 +117,7 @@ pub async fn delete_tag(req: web::Json<DeleteTagRequest>) -> impl Responder {
 }
 
 /// Edit tag
+/// TODO: Make name editable
 #[post("/api/write/edit_tag")]
 pub async fn edit_tag(req: web::Json<EditTagRequest>) -> impl Responder {
     let tag = match write::Tag::new(&req.tag_name, req.alt_name.clone(), req.tag_type) {
@@ -124,7 +125,7 @@ pub async fn edit_tag(req: web::Json<EditTagRequest>) -> impl Responder {
         None => log_n_bail!("failed to create tag struct")
     };
 
-    match STORAGE.update_tag(&tag, req.hidden).await {
+    match STORAGE.update_tag(&req.tag_name, &tag, req.hidden).await {
         Ok(_) => log_n_ok!("edited tag"),
         Err(e) => log_n_bail!("failed to update tag", ?e)
     }

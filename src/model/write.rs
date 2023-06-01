@@ -12,7 +12,7 @@ pub static TAG_REX: Lazy<Regex> = Lazy::new(||
     Regex::new(r#"[\s:,.@#$*'"`|%{}\[\]]+"#).unwrap()
 );
 
-/// Tag to write. Internal primary key is crc32 name hash 
+/// Tag to write
 pub struct Tag {
     /// Primary name
     name: String,
@@ -54,11 +54,6 @@ impl Tag {
     
     pub fn tag_type(&self) -> TagType { 
         self.tag_type 
-    }
-    
-    /// Get crc32 hash of name
-    pub fn name_hash(&self) -> u32 {
-        crc32fast::hash(self.name.as_bytes())
     }
 }
 

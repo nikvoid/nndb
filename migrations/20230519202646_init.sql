@@ -67,8 +67,7 @@ CREATE TABLE IF NOT EXISTS tag_group (
 );
 
 CREATE TABLE IF NOT EXISTS tag (
-    -- crc32 hash of tag name
-    name_hash INTEGER PRIMARY KEY NOT NULL,
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
     tag_name  TEXT NOT NULL UNIQUE,
     alt_name  TEXT,
     -- id of alias group, NULL for tag not in group
@@ -86,14 +85,23 @@ CREATE TABLE IF NOT EXISTS tag (
 -- join table for element and tag
 CREATE TABLE IF NOT EXISTS element_tag (
     element_id INTEGER NOT NULL,
-    tag_hash   INTEGER NOT NULL,
+    tag_id     INTEGER NOT NULL,
 
     FOREIGN KEY (element_id) REFERENCES element (id)
         ON DELETE CASCADE
         ON UPDATE RESTRICT,
-    FOREIGN KEY (tag_hash) REFERENCES tag (name_hash)
+    FOREIGN KEY (tag_id)     REFERENCES tag (id)
         ON DELETE CASCADE
         ON UPDATE CASCADE,
 
-    PRIMARY KEY (element_id, tag_hash)
+    PRIMARY KEY (element_id, tag_id)
+);
+
+-- tag aliases that may be used for tag renaming
+CREATE TABLE tag_alias (
+    tag_id   INTEGER NOT NULL,
+    alias    TEXT NOT NULL UNIQUE,
+
+    FOREIGN KEY (tag_id) REFERENCES tag (id) 
+    ON DELETE CASCADE ON UPDATE RESTRICT
 );

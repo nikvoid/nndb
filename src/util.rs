@@ -15,18 +15,6 @@ use crate::{
     CONFIG
 };
 
-/// Derive crc32
-pub trait Crc32Hash {
-    /// Derive crc32
-    fn crc32(&self) -> u32;
-}
-
-impl Crc32Hash for str {
-    fn crc32(&self) -> u32 {
-        crc32fast::hash(self.as_bytes())
-    }
-}
-
 /// AtomicBool that will be automatically set to `false` on guard drop
 pub struct AutoBool(AtomicBool);
 impl AutoBool {
