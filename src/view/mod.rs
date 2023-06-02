@@ -7,8 +7,7 @@ use crate::{
     model::{
         read::{Tag, Element, ElementMetadata}, 
         TagType
-    },
-    util::Crc32Hash
+    }
 };
 
 mod index;
@@ -21,18 +20,7 @@ pub use index::index_page;
 pub use element::element_page;
 pub use tag::tag_page;
 pub use dashboard::dashboard_page;
-pub use api::tag_autocomplete;
-pub use api::add_tags;
-pub use api::delete_tag;
-pub use api::edit_tag;
-pub use api::read_log;
-pub use api::import_status;
-pub use api::start_import;
-pub use api::update_tag_count;
-pub use api::clear_group_data;
-pub use api::fix_thumbnails;
-pub use api::retry_imports;
-pub use api::alias_tag;
+pub use api::*;
 
 /// Helper for writing nested html_to!
 /// Basically a lazy html! that can be rendered(-to) on demand
@@ -53,7 +41,7 @@ macro_rules! resolve {
     // Element page
     (/element/$eid:expr) => { $crate::html_in! { "/element/" ($eid) }};
     // Tag page
-    (/tag/$name:expr) => { $crate::html_in! { "/tag/" ($name) }};
+    (/tag/$id:expr) => { $crate::html_in! { "/tag/" ($id) }};
     // Dashboard page
     (/dashboard) => { "/dashboard" };
     ($($tt:tt)*) => { stringify!($($tt)*) };
@@ -281,7 +269,7 @@ impl Render for AsideTags<'_> {
                 .tag { (typ.label()) }
                 @for tag in tags {
                     .tag-container-grid {
-                        a.tag.tag-hash href=(Link(resolve!(/tag/tag.name), tag::Request {
+                        a.tag.tag-hash href=(Link(resolve!(/tag/tag.id), tag::Request {
                             element_ref: (self.1.map(|e| e.id))
                         })) {
                             "#" 
@@ -311,7 +299,8 @@ struct TagEditForm<'a, OnSubmit>(OnSubmit, &'a str, &'a str);
 impl<OnSubmit> Render for TagEditForm<'_, OnSubmit>
 where OnSubmit: Render {
     fn render_to(&self, buffer: &mut String) {
-        let ident = html_in! { "TAG_EDIT_FIELD_" (self.1.crc32()) };
+        let salt = (self.1.len() & 0b1010) + self.1.as_bytes()[0] as usize;
+        let ident = html_in! { "TAG_EDIT_FIELD_" (salt) };
         html_to! { buffer,
             form autocomplete="off" onsubmit={ (self.0)"; return false;" } {
                 (ScriptVar(&ident, self.1))

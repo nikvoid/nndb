@@ -41,11 +41,6 @@ async fn import_spawner() {
         }        
     }, Duration::from_secs(320)).await;
 
-    util::blocking_task_with_interval(|| match service::update_tag_count() {
-        Ok(_) => info!("updated tag count"),
-        Err(e) => error!(?e, "failed to update tag count"),
-    }, Duration::from_secs(325)).await;
-
     util::blocking_task_with_interval(|| match service::make_thumbnails() {
         Ok(_) => info!("made thumbnails"),
         Err(e) => error!(?e, "failed to make thumbnails"),
@@ -59,7 +54,7 @@ const DEF_CONFIG_FILE: &str = "config.toml";
 pub static CONFIG: LateInit<Config> = LateInit::new();
 
 #[actix_web::main]
-async fn main() -> std::io::Result<()> {
+async fn main() -> anyhow::Result<()> {
     let cfg_path = match std::env::args().nth(1) {
         Some(p) => p,
         None => DEF_CONFIG_FILE.to_string()
@@ -89,6 +84,8 @@ async fn main() -> std::io::Result<()> {
         import_spawner().await;
     }
 
+    import::reload_tag_aliases().await?;
+
     info!(addr=CONFIG.bind_address, port=CONFIG.port, "Starting server");
     HttpServer::new(|| {
         let mut app = App::new()
@@ -110,6 +107,7 @@ async fn main() -> std::io::Result<()> {
             .service(view::fix_thumbnails)
             .service(view::retry_imports)
             .service(view::alias_tag)
+            .service(view::fetch_wikis)
         ;
 
         // Serve static folders if needed
@@ -136,5 +134,7 @@ async fn main() -> std::io::Result<()> {
     })
     .bind((CONFIG.bind_address.as_str(), CONFIG.port))?
     .run()
-    .await
+    .await?;
+
+    Ok(())
 }

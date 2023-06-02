@@ -3,7 +3,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tracing::{info, error};
 
-use crate::{dao::STORAGE, log_n_bail, model::{write, TagType}, util, service::{SCAN_FILES_LOCK, UPDATE_METADATA_LOCK, GROUP_ELEMENTS_LOCK, MAKE_THUMBNAILS_LOCK, self}, log_n_ok, search::{self, Term}};
+use crate::{dao::STORAGE, log_n_bail, model::{write, TagType}, util, service::{SCAN_FILES_LOCK, UPDATE_METADATA_LOCK, GROUP_ELEMENTS_LOCK, MAKE_THUMBNAILS_LOCK, self, FETCH_WIKI_LOCK}, log_n_ok, search::{self, Term}};
 
 /// Tag autocompletion max tags
 const TAG_LIMIT: u32 = 15;
@@ -31,6 +31,7 @@ pub struct DeleteTagRequest {
 #[derive(Deserialize)]
 pub struct EditTagRequest {
     tag_name: String,
+    new_name: String,
     alt_name: Option<String>,
     tag_type: TagType,
     hidden: bool,
@@ -47,7 +48,8 @@ pub struct ImportTasksStatus {
     scan_files: bool,
     update_metadata: bool,
     group_elements: bool,
-    make_thumbnails: bool
+    make_thumbnails: bool,
+    wiki_fetch: (bool, u32)
 }
 
 /// Tag autocompletion
@@ -81,10 +83,11 @@ pub async fn read_log() -> impl Responder {
 #[get("/api/read/import")]
 pub async fn import_status() -> impl Responder {
     let status = ImportTasksStatus {
-        scan_files: SCAN_FILES_LOCK.inspect(),
-        update_metadata: UPDATE_METADATA_LOCK.inspect(),
-        group_elements: GROUP_ELEMENTS_LOCK.inspect(),
-        make_thumbnails: MAKE_THUMBNAILS_LOCK.inspect()
+        scan_files: SCAN_FILES_LOCK.inspect().0,
+        update_metadata: UPDATE_METADATA_LOCK.inspect().0,
+        group_elements: GROUP_ELEMENTS_LOCK.inspect().0,
+        make_thumbnails: MAKE_THUMBNAILS_LOCK.inspect().0,
+        wiki_fetch: FETCH_WIKI_LOCK.inspect(),
     };
 
     web::Json(status)
@@ -119,12 +122,12 @@ pub async fn delete_tag(req: web::Json<DeleteTagRequest>) -> impl Responder {
 /// Edit tag
 #[post("/api/write/edit_tag")]
 pub async fn edit_tag(req: web::Json<EditTagRequest>) -> impl Responder {
-    let tag = match write::Tag::new(&req.tag_name, req.alt_name.clone(), req.tag_type) {
+    let tag = match write::Tag::new(&req.new_name, req.alt_name.clone(), req.tag_type) {
         Some(tag) => tag,
         None => log_n_bail!("failed to create tag struct")
     };
 
-    match STORAGE.update_tag(&tag, req.hidden).await {
+    match STORAGE.update_tag(&req.tag_name, &tag, req.hidden).await {
         Ok(_) => log_n_ok!("edited tag"),
         Err(e) => log_n_bail!("failed to update tag", ?e)
     }
@@ -193,5 +196,14 @@ pub async fn retry_imports() -> impl Responder {
     match STORAGE.unmark_failed_imports().await {
         Ok(_) => log_n_ok!("cleared failed imports state"),
         Err(e) => log_n_bail!("failed to retry imports", ?e)
+    }
+}
+
+/// Fetch fresh tag data from danbooru 
+#[get("/api/write/fetch_wikis")]
+pub async fn fetch_wikis() -> impl Responder {
+    match service::update_danbooru_wikis().await {
+        Ok(_) => log_n_ok!("fetched fresh danbooru wikis"),
+        Err(e) => log_n_bail!("failed to fetch wikis", ?e)
     }
 }

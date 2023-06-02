@@ -2,15 +2,16 @@ use std::{io::Read, path::PathBuf};
 use anyhow::{Context, anyhow};
 use futures::{stream::FuturesUnordered, StreamExt};
 use rayon::prelude::*;
+use reqwest::StatusCode;
 use tracing::{error, info};
 use walkdir::WalkDir;
 use itertools::Itertools;
 
 use crate::{
     dao::{STORAGE, FutureBlock}, 
-    import::{ElementPrefab, ANIMATION_EXTS, IMAGE_EXTS}, 
-    model::write::ElementWithMetadata, 
-    CONFIG, util::{self, AutoBool}
+    import::{ElementPrefab, ANIMATION_EXTS, IMAGE_EXTS, self}, 
+    model::{write::{ElementWithMetadata, Wiki}, danbooru}, 
+    CONFIG, util::{self, AutoAtom}
 };
 
 /// Experimentaly decided optimal image signature distance 
@@ -20,13 +21,15 @@ pub const SIGNATURE_DISTANCE_THRESHOLD: f32 = 35.0;
 pub const THUMBNAIL_SIZE: (u32, u32) = (256, 256);
 
 /// Indicate state of scan_files()
-pub static SCAN_FILES_LOCK: AutoBool = AutoBool::new();
+pub static SCAN_FILES_LOCK: AutoAtom::<()> = AutoAtom::new(());
 /// Indicate state of update_metadata()
-pub static UPDATE_METADATA_LOCK: AutoBool = AutoBool::new();
+pub static UPDATE_METADATA_LOCK: AutoAtom::<()> = AutoAtom::new(());
 /// Indicate state of group_elements_by_signature()
-pub static GROUP_ELEMENTS_LOCK: AutoBool = AutoBool::new();
+pub static GROUP_ELEMENTS_LOCK: AutoAtom::<()> = AutoAtom::new(());
 /// Indicate state of make_thumbnails()
-pub static MAKE_THUMBNAILS_LOCK: AutoBool = AutoBool::new();
+pub static MAKE_THUMBNAILS_LOCK: AutoAtom::<()> = AutoAtom::new(());
+/// Indicate state if update_danbooru_wikis()
+pub static FETCH_WIKI_LOCK: AutoAtom::<u32> = AutoAtom::new(0);
 
 /// Scan `CONFIG.input_folder` directory for new files and import them.
 /// Will do nothing if already running
@@ -223,11 +226,6 @@ pub async fn group_elements_by_signature() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Update count of elements with tag for each tag
-pub fn update_tag_count() -> anyhow::Result<()> {
-    STORAGE.update_tag_count().blocking_run()
-}
-
 /// Make thumbnails for all files that don't have one.
 /// Will do nothing if already running
 pub fn make_thumbnails() -> anyhow::Result<()> {
@@ -318,10 +316,86 @@ pub async fn manual_import() -> anyhow::Result<()> {
     info!("Updated metadata");
     group_elements_by_signature().await?;
     info!("Grouped images");
-    tokio::task::spawn_blocking(update_tag_count).await??;
-    info!("Updated tag counts");
     tokio::task::spawn_blocking(make_thumbnails).await??;
     info!("Made thumbnails");
 
+    Ok(())
+}
+
+/// Fetch danbooru wikis to get tags categories and translations.
+/// This may take quite a bit of time.
+pub async fn update_danbooru_wikis() -> anyhow::Result<()> {
+    use crate::model::danbooru::*;
+    let _guard = match FETCH_WIKI_LOCK.acquire() {
+        Some(guard) => guard,
+        None => return Ok(())
+    };
+
+    let client = reqwest::Client::new();
+
+    // Construct query
+    let mut query = TagQuery {
+        search: TagSearch {
+            order: Order::Count,
+        },
+        pagination: PaginatedRequest {
+            page: 0,
+            limit: 1000,
+            // Leave only necessary parts
+            only: "name,category,wiki_page[other_names]".into(),
+        },
+    };
+    
+    loop {
+        _guard.update(query.pagination.page);
+        
+        // Use format! because reqwest use serde_urlencoded which is subset(?)
+        // of serde_qs
+        let url = format!(
+            "https://danbooru.donmai.us/tags.json?{}",
+            serde_qs::to_string(&query)?
+        );
+        
+        let data: Vec<TagEntry> = { 
+            let resp = client.get(url)
+            // Custom useragent is mandatory
+            .header(
+                "user-agent", 
+                "i-just-need-to-fetch-tags"
+            )
+            .send()
+            .await?;
+
+            match resp.status() {
+                // Pagination end
+                StatusCode::GONE => vec![],
+                StatusCode::OK => resp.json().await?,
+                _ => { 
+                    resp.error_for_status()?;
+                    vec![]
+                }
+            }
+        };
+
+        if data.is_empty() {
+            break;
+        }
+
+        // Convert to internal model
+        let data: Vec<Wiki> = data
+            .into_iter()
+            .flat_map(|w| w.try_into().ok())
+            .collect();
+
+        STORAGE.add_wikis(&data).await?;
+
+        // Max page for unauthorized/non-premium user is 1000th page
+        // 1M tags sorted by post count should be sufficient anyway
+        query.pagination.page += 1;
+    }
+
+    // Tag aliases were updated, reload cache
+    import::reload_tag_aliases().await?;
+    
     Ok(())
 }

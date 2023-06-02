@@ -37,12 +37,14 @@ pub async fn dashboard_page() -> impl Responder {
             (ScriptButton("clearGroupsOnClick()", "Clear element group data"))
             (ScriptButton("fixThumbsOnClick()", "Fix thumbnails"))
             (ScriptButton("retryImportsOnClick()", "Retry imports"))
+            (ScriptButton("fetchWikisOnClick()", "Fetch danbooru wikis"))
 
             .tag { "Import" }
             (IdParam("scan-files", "Scan files running: ", "unknown"))
             (IdParam("update-meta", "Update metadata running: ", "unknown"))
             (IdParam("group-elems", "Group elements running: ", "unknown"))
             (IdParam("make-thumbs", "Make thumbnails running: ", "unknown"))
+            (IdParam("fetch-wikis", "Wikis are fetching: ", "unknown"))
             (ScriptButton("importBtnOnClick()", "Start import manually"))
         }),
         content: Some(html! {

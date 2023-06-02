@@ -12,7 +12,7 @@ pub static TAG_REX: Lazy<Regex> = Lazy::new(||
     Regex::new(r#"[\s:,.@#$*'"`|%{}\[\]]+"#).unwrap()
 );
 
-/// Tag to write. Internal primary key is crc32 name hash 
+/// Tag to write
 pub struct Tag {
     /// Primary name
     name: String,
@@ -54,11 +54,6 @@ impl Tag {
     
     pub fn tag_type(&self) -> TagType { 
         self.tag_type 
-    }
-    
-    /// Get crc32 hash of name
-    pub fn name_hash(&self) -> u32 {
-        crc32fast::hash(self.name.as_bytes())
     }
 }
 
@@ -109,6 +104,15 @@ pub struct ElementMetadata {
     pub tags: Vec<Tag>,
 }  
 
+pub struct Wiki {
+    /// Wiki title (primary tag name)
+    pub title: String,
+    /// Tag aliases
+    pub aliases: Vec<String>,
+    /// Tag type
+    pub category: TagType,    
+}
+
 impl AsRef<ElementMetadata> for ElementMetadata {
     fn as_ref(&self) -> &ElementMetadata {
         self
@@ -118,6 +122,12 @@ impl AsRef<ElementMetadata> for ElementMetadata {
 pub struct ElementWithMetadata(pub ElementToParse, pub Option<ElementMetadata>); 
 impl AsRef<ElementWithMetadata> for ElementWithMetadata {
     fn as_ref(&self) -> &ElementWithMetadata {
+        self
+    }
+}
+
+impl AsRef<Wiki> for Wiki {
+    fn as_ref(&self) -> &Wiki {
         self
     }
 }

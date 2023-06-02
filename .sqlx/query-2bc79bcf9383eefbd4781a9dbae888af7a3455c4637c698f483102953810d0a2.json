@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO wiki_alias (wiki_id, alias)\n                VALUES (?, ?)\n                ON CONFLICT (alias) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "2bc79bcf9383eefbd4781a9dbae888af7a3455c4637c698f483102953810d0a2"
+}

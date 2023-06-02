@@ -1,11 +1,12 @@
 use std::path::PathBuf;
 
 use futures::FutureExt;
+use scc::{HashIndex, HashCache};
 use sqlx::Executor;
 use sqlx::{SqlitePool, migrate::MigrateDatabase, SqliteConnection};
 
 use crate::search::{self, Term};
-use crate::util::{self, Crc32Hash};
+use crate::util;
 use crate::{
     model::{
         write::{self, ElementWithMetadata}, 
@@ -18,24 +19,15 @@ use futures::{StreamExt, future::BoxFuture};
 
 use tracing::error;
 
-pub struct Sqlite(SqlitePool);
+pub struct Sqlite {
+    pool: SqlitePool,
+    id_cache: HashCache<String, Vec<u32>>
+}
 
 pub type StorageError = anyhow::Error;
 
 /// Private methods and associated functions
 impl Sqlite {
-    async fn get_tags_hashes_tx(
-        tx: &mut SqliteConnection
-    ) -> Result<Vec<u32>, StorageError> {
-        let hashes = sqlx::query_scalar!(
-            r#"SELECT name_hash as "h: u32" FROM tag"#
-        )
-        .fetch_all(tx)
-        .await?;
-
-        Ok(hashes)
-    }
-
     async fn add_ai_metadata_tx(
         tx: &mut SqliteConnection,
         element_id: u32, 
@@ -150,42 +142,50 @@ impl Sqlite {
         Ok(())
     }
 
+    /// Add all tags from slice, optionally add join rows for element.
+    /// Increment tag's `count` if trying to insert duplicate and `element_id` is `Some`
     async fn add_tags_tx<T>(
         tx: &mut SqliteConnection,
         element_id: Option<u32>, 
         tags: &[T]
     ) -> Result<(), StorageError> 
     where T: AsRef<write::Tag> {    
-        let hashes = Self::get_tags_hashes_tx(&mut *tx).await?;
-    
         for t in tags {
             let t = t.as_ref();
-            let hash = t.name_hash();
             let name = t.name();
             let alt_name = t.alt_name();
             let typ: u8 = t.tag_type().into();
-
-            if !hashes.contains(&hash) {
+            
+            if let Some(id) = element_id {
+                // Update count if tag already exists
                 sqlx::query!(
-                    "INSERT INTO tag (name_hash, tag_name, alt_name, tag_type)
-                    VALUES (?, ?, ?, ?)
-                    ON CONFLICT (name_hash) DO NOTHING",
-                    hash,
+                    "INSERT INTO tag (tag_name, alt_name, tag_type, count)
+                    VALUES (?, ?, ?, 1)
+                    ON CONFLICT (tag_name) DO UPDATE SET count = count + 1",
                     name,
                     alt_name,
                     typ
                 )
                 .execute(&mut *tx)
                 .await?;
-            }
-            
-            if let Some(id) = element_id {
+                
                 sqlx::query!(
-                    "INSERT INTO element_tag (element_id, tag_hash)                 
-                    VALUES (?, ?)
-                    ON CONFLICT (element_id, tag_hash) DO NOTHING",
-                    id, 
-                    hash
+                    "INSERT INTO element_tag (element_id, tag_id)                 
+                    VALUES (?, (SELECT id FROM tag WHERE tag_name = ?))
+                    ON CONFLICT (element_id, tag_id) DO NOTHING",
+                    id, name
+                )
+                .execute(&mut *tx)
+                .await?;
+            } else {
+                // Just insert tag
+                sqlx::query!(
+                    "INSERT INTO tag (tag_name, alt_name, tag_type)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT (tag_name) DO NOTHING",
+                    name,
+                    alt_name,
+                    typ
                 )
                 .execute(&mut *tx)
                 .await?;
@@ -201,9 +201,9 @@ impl Sqlite {
     ) -> Result<Option<read::Tag>, StorageError> {
         let data = sqlx::query_as(
             "SELECT * FROM tag
-            WHERE name_hash = ?"
+            WHERE tag_name = ?"
         )
-        .bind(name.crc32())
+        .bind(name)
         .fetch_optional(&mut *tx)
         .await?;
             
@@ -290,12 +290,13 @@ impl Sqlite {
         
         for tag in search::parse_query(query) {
             let Term::Tag(pos, name) = tag else { continue };
-            let hash = name.crc32();
 
-            if pos {
-                pos_tag_set.push(hash);
-            } else {
-                neg_tag_set.push(hash);
+            match (pos, Self::get_tag_data_tx(tx, name).await?) {
+                // Return empty vec if one of positive tags not in db
+                (true, None) => return Ok(vec![]),
+                (true, Some(data)) => pos_tag_set.push(data.id),
+                (false, Some(data)) => neg_tag_set.push(data.id),
+                _ => ()
             }
         }
         
@@ -311,10 +312,10 @@ impl Sqlite {
 
         let mut pos_aliases = vec![];
 
-        for hash in &pos_tag_set {
+        for pos_id in &pos_tag_set {
             let opt: Option<i64> = sqlx::query_scalar!(
-                "SELECT group_id FROM tag WHERE name_hash = ?",
-                hash
+                "SELECT group_id FROM tag WHERE id = ?",
+                pos_id
             )
             .fetch_optional(&mut *tx)
             .await?
@@ -329,7 +330,7 @@ impl Sqlite {
             ("pos_aliases", pos_aliases.as_slice()),
         ];
         
-        // Combined checksum
+        // Count of positive tags
         let pos_tags: i64 = pos_tag_set.len() as i64;
         let ids = Self::with_temp_array_tx(tx, "mem", &arrays, |tx| async move {
             let ids: Vec<u32> = sqlx::query_scalar(
@@ -337,7 +338,7 @@ impl Sqlite {
                 "
                 SELECT DISTINCT e.id FROM element e
                 JOIN element_tag et ON et.element_id = e.id
-                JOIN tag t ON t.name_hash = et.tag_hash
+                JOIN tag t ON t.id = et.tag_id
                 {join_group_meta}
                 {join_metadata}
                 -- When no pos tags: exclude hidden (by clearing group)
@@ -347,9 +348,9 @@ impl Sqlite {
                     CASE ?1
                     WHEN 0 THEN 1
                     ELSE   
-                        et.tag_hash IN mem.pos_tags OR t.group_id IN mem.pos_aliases 
+                        et.tag_id IN mem.pos_tags OR t.group_id IN mem.pos_aliases 
                         -- Pass this to HAVING       
-                        OR et.tag_hash IN mem.neg_tags OR t.hidden = 1
+                        OR et.tag_id IN mem.neg_tags OR t.hidden = 1
                     END 
                     {cond_group}
                     {cond_ext_group}
@@ -360,12 +361,12 @@ impl Sqlite {
                         sum(t.hidden) = 0
                     ELSE 
                         sum(
-                            et.tag_hash IN mem.pos_tags 
+                            et.tag_id IN mem.pos_tags 
                             OR t.group_id IN mem.pos_aliases AND t.hidden = 0
                         ) >= ?1
                     END
                     AND
-                    sum(et.tag_hash IN mem.neg_tags) = 0 
+                    sum(et.tag_id IN mem.neg_tags) = 0 
                 ORDER BY e.add_time DESC",
                 // Add joins on demand
                 join_metadata = ext_group.is_some()
@@ -393,6 +394,32 @@ impl Sqlite {
         
         Ok(ids)
     }
+    
+    /// Add tag aliases to db
+    async fn add_tag_aliases_tx<A>(
+        tx: &mut SqliteConnection, 
+        tag: &str,
+        aliases: &[A]
+    ) -> Result<(), StorageError>
+    where A: AsRef<str> {
+        let Some(data) = Self::get_tag_data_tx(tx, tag).await? else {
+            return Ok(());
+        };
+
+        for alias in aliases {
+            let alias = alias.as_ref();
+            sqlx::query!(
+                "INSERT INTO tag_alias (tag_id, alias)
+                VALUES (?, ?)
+                ON CONFLICT (alias) DO NOTHING",
+                data.id, alias
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+        
+        Ok(())
+    }
 }
 
 /// Public API
@@ -406,7 +433,10 @@ impl Sqlite {
         let pool = SqlitePool::connect(url).await?;
         // Apply migrations if needed
         sqlx::migrate!().run(&pool).await?;
-        Ok(Self(pool))
+        Ok(Self {
+            pool,
+            id_cache: HashCache::with_capacity(64, 256), 
+        })
     }
 
     /// Add all elements from slice (optionally with metadata)
@@ -429,7 +459,7 @@ impl Sqlite {
                 _ => ()
             };
             
-            let mut tx = self.0.begin().await?;
+            let mut tx = self.pool.begin().await?;
         
             o_path.push(&e.filename);
             
@@ -464,6 +494,9 @@ impl Sqlite {
             // Add recently inserted hash
             hashes.push(e.hash);
 
+            // Invalidate element id cache
+            self.id_cache.clear_async().await;
+
             count += 1;
         }
  
@@ -476,7 +509,7 @@ impl Sqlite {
             r#"SELECT hash FROM element"#
         )
         .map(|anon| anon.hash.try_into().unwrap())
-        .fetch_all(&self.0)
+        .fetch_all(&self.pool)
         .await?;
         
         Ok(hashes)
@@ -489,8 +522,15 @@ impl Sqlite {
         tags: &[T]
     ) -> Result<(), StorageError>
     where T: AsRef<write::Tag> {
-        let mut conn = self.0.acquire().await?;
-        Self::add_tags_tx(&mut conn, element_id, tags).await
+        let mut conn = self.pool.acquire().await?;
+        Self::add_tags_tx(&mut conn, element_id, tags).await?;
+
+        if element_id.is_some() {
+            // Invalidate element id cache
+            self.id_cache.clear_async().await;
+        }
+
+        Ok(())
     }
 
     /// Get all elements waiting on metadata
@@ -501,7 +541,7 @@ impl Sqlite {
             WHERE e.id = i.element_id AND i.failed = 0
             ORDER BY i.importer_id ASC"
         )
-        .fetch_all(&self.0)
+        .fetch_all(&self.pool)
         .await?;
         
         Ok(v)
@@ -511,8 +551,13 @@ impl Sqlite {
     pub async fn add_metadata<M>(&self, element_id: u32, metadata: M) -> Result<(), StorageError>
     where M: AsRef<write::ElementMetadata> + Send {
         let m = metadata.as_ref();
-        let mut conn = self.0.acquire().await?;
-        Self::add_metadata_tx(&mut conn, element_id, m).await
+        let mut conn = self.pool.acquire().await?;
+        Self::add_metadata_tx(&mut conn, element_id, m).await?;
+        
+        // Invalidate element id cache
+        self.id_cache.clear_async().await;
+
+        Ok(())
     }
 
     /// Get all image signature groups stored in db
@@ -520,7 +565,7 @@ impl Sqlite {
         let metas = sqlx::query_as(
             "SELECT * FROM group_metadata"
         )
-        .fetch_all(&self.0)
+        .fetch_all(&self.pool)
         .await?;
         
         Ok(metas)
@@ -534,7 +579,7 @@ impl Sqlite {
         element_ids: &[u32],
         group: Option<u32>
     ) -> Result<u32, StorageError> {
-        let mut tx = self.0.begin().await?;
+        let mut tx = self.pool.begin().await?;
 
         let group_id = match group {
             None => sqlx::query!("INSERT INTO group_ids (id) VALUES (NULL)")
@@ -569,9 +614,18 @@ impl Sqlite {
     ) -> Result<(Vec<read::Element>, Vec<read::Tag>, u32), StorageError> {
         let limit = limit.unwrap_or(u32::MAX);
 
-        let mut conn = self.0.acquire().await?;
+        let mut conn = self.pool.acquire().await?;
 
-        let ids = Self::get_element_ids_by_query_tx(&mut conn, query).await?;
+        // Memoize ids
+        // FIXME: errors sometimes with 'attempt to subract with overflow'
+        let ids = match self.id_cache.get_async(query).await {
+            Some(ids) => ids.get().clone(),
+            None => {
+                let ids = Self::get_element_ids_by_query_tx(&mut conn, query).await?;
+                self.id_cache.put_async(query.into(), ids.clone()).await.ok();                
+                ids
+            }
+        };
         
         let (elems, tags) =
         Self::with_temp_array_tx(&mut conn, "mem", &[("ids", &ids)], |conn| async move {
@@ -592,10 +646,9 @@ impl Sqlite {
             let tags = sqlx::query_as( // sql
                 "SELECT t.*
                 FROM tag t
-                WHERE t.name_hash IN (
-                    SELECT tag_hash FROM element_tag
-                    WHERE element_id in mem.ids  
-                )
+                JOIN element_tag et ON et.tag_id = t.id
+                WHERE et.element_id IN mem.ids
+                GROUP BY t.id                
                 ORDER BY t.count DESC
                 LIMIT ?",
             )
@@ -625,7 +678,7 @@ impl Sqlite {
             WHERE e.id = ?"
         )
         .bind(id)
-        .fetch_optional(&self.0)
+        .fetch_optional(&self.pool)
         .await?;
 
         let Some(elem) = elem else {
@@ -643,7 +696,7 @@ impl Sqlite {
             WHERE m.element_id = ?"
         )
         .bind(id)
-        .fetch_optional(&self.0)
+        .fetch_optional(&self.pool)
         .await?;
         
         let Some(mut meta) = meta else {
@@ -655,31 +708,68 @@ impl Sqlite {
             WHERE element_id = ?"    
         )
         .bind(id)
-        .fetch_optional(&self.0)
+        .fetch_optional(&self.pool)
         .await?;
 
         meta.tags = sqlx::query_as( // sql
             "SELECT t.*
             FROM tag t, element_tag et
-            WHERE t.name_hash = et.tag_hash AND et.element_id = ?"
+            WHERE t.id = et.tag_id AND et.element_id = ?"
         )
         .bind(id)
-        .fetch_all(&self.0)
+        .fetch_all(&self.pool)
         .await?;
         
         Ok(Some((elem, meta)))
     }
 
-    /// Update count of elements with tag for each tag
+    /// Update count of elements with tag for each tag.
     pub async fn update_tag_count(&self) -> Result<(), StorageError> {
-        sqlx::query!(
-            "UPDATE tag SET count = (
-                SELECT count(*) FROM element_tag WHERE tag_hash = name_hash
-            )"
+        // FIXME: For some reason it sometimes does not finish, only when using sqlx
+        // Also it seems to take much longer time, compared to other tools 
+        // sqlx::query( // sql
+        //     "WITH tag_count(tag_hash, count) AS (
+        //         SELECT tag_hash, count(tag_hash)
+        //         FROM element_tag
+        //         GROUP BY tag_hash
+        //     )
+        //     UPDATE tag SET count = (
+        //         ifnull((SELECT count FROM tag_count WHERE tag_hash = name_hash), 0)
+        //     )"
+        // )
+        // .execute(&self.pool)
+        // .await?;
+
+        let mut tx = self.pool.begin().await?;
+        
+        let counts = sqlx::query!(
+            "SELECT tag_id, count(tag_id) as count
+            FROM element_tag
+            GROUP BY tag_id"
         )
-        .execute(&self.0)
+        .fetch_all(&mut *tx)
         .await?;
 
+        // Reset all counts
+        sqlx::query!(
+            "UPDATE tag SET count = 0"
+        )
+        .execute(&mut *tx)
+        .await?;
+        
+        // Set counts back one by one
+        for record in counts {
+            sqlx::query!(
+                "UPDATE tag SET count = ?
+                WHERE id = ?",
+                record.count, record.tag_id
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        tx.commit().await?;
+        
         Ok(())
     }
 
@@ -694,7 +784,7 @@ impl Sqlite {
         )
         .bind(fmt)
         .bind(limit)
-        .fetch_all(&self.0)
+        .fetch_all(&self.pool)
         .await?;
         
         Ok(tags)
@@ -702,7 +792,7 @@ impl Sqlite {
 
     /// Mark that `element_ids` have thumbnails
     pub async fn add_thumbnails(&self, element_ids: &[u32]) -> Result<(), StorageError> {
-        let mut conn = self.0.acquire().await?;
+        let mut conn = self.pool.acquire().await?;
         
         Self::with_temp_array_tx(&mut conn, "mem", &[("ids", element_ids)], |tx| async {
             sqlx::query(
@@ -719,20 +809,36 @@ impl Sqlite {
     }
 
     /// Get full data for tag by it's primary name
-    pub async fn get_tag_data(&self, name: &str) -> Result<Option<read::Tag>, StorageError> {
-        let mut conn = self.0.acquire().await?;
+    pub async fn get_tag_data_by_name(&self, name: &str) -> Result<Option<read::Tag>, StorageError> {
+        let mut conn = self.pool.acquire().await?;
         Self::get_tag_data_tx(&mut conn, name).await
+    } 
+    
+    /// Get full data for tag by id
+    pub async fn get_tag_data_by_id(&self, id: u32) -> Result<Option<read::Tag>, StorageError> {
+        let opt = sqlx::query_as(
+            "SELECT * FROM tag
+            WHERE id = ?"
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(opt)
     } 
 
     /// Remove tag from element
     pub async fn remove_tag_from_element(&self, element_id: u32, tag_name: &str) -> Result<(), StorageError> {
-        let mut tx = self.0.begin().await?;
-        let hash = tag_name.crc32();
+        let mut tx = self.pool.begin().await?;
 
+        let Some(data) = Self::get_tag_data_tx(&mut tx, tag_name).await? else {
+            return Ok(())
+        };
+        
         let rows = sqlx::query!(
             "DELETE FROM element_tag
-            WHERE element_id = ? AND tag_hash = ?",
-            element_id, hash
+            WHERE element_id = ? AND tag_id = ?",
+            element_id, data.id
         )
         .execute(&mut *tx)
         .await?
@@ -741,8 +847,8 @@ impl Sqlite {
         if rows > 0 {
             sqlx::query!(
                 "UPDATE tag SET count = count - 1
-                WHERE name_hash = ?",
-                hash
+                WHERE id = ?",
+                data.id
             )
             .execute(&mut *tx)
             .await?;
@@ -754,17 +860,47 @@ impl Sqlite {
     }
 
     /// Update tag data
-    pub async fn update_tag(&self, tag: &write::Tag, hidden: bool) -> Result<(), StorageError> {
+    pub async fn update_tag(&self, name: &str, tag: &write::Tag, hidden: bool) -> Result<(), StorageError> {
+        let mut tx = self.pool.begin().await?;
+                
+        let Some(data) = Self::get_tag_data_tx(&mut tx, name).await? else {
+            return Ok(())
+        };
+        
         sqlx::query(
-            "UPDATE tag SET alt_name = ?, tag_type = ?, hidden = ?
-            WHERE name_hash = ?"
+            "UPDATE tag SET tag_name = ?, alt_name = ?, tag_type = ?, hidden = ?
+            WHERE id = ?"
         )
+        .bind(tag.name())
         .bind(tag.alt_name())
         .bind(tag.tag_type())
         .bind(hidden)
-        .bind(tag.name_hash())
-        .execute(&self.0)
+        .bind(data.id)
+        .execute(&mut *tx)
         .await?;
+        
+        // If alias with new tag name exists, remove it
+        sqlx::query(
+            "DELETE FROM tag_alias WHERE alias = ? AND tag_id = ?",
+        )
+        .bind(tag.name())
+        .bind(data.id)
+        .execute(&mut *tx)
+        .await?;
+
+        // If tag primary name was changed, insert former name as alias 
+        // to remap this tag during import
+        if name != tag.name() {
+            sqlx::query!(
+                "INSERT INTO tag_alias (tag_id, alias) VALUES (?1, ?2)
+                ON CONFLICT (alias) WHERE tag_id = ?1 DO NOTHING",
+                data.id, name
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        tx.commit().await?;
         
         Ok(())
     }
@@ -772,39 +908,39 @@ impl Sqlite {
     /// Add `tag` to group that have `to` tag, or create new
     /// If `to` does not exist, it will be created 
     /// If `tag == to`, `tag` will be removed from group
-    pub async fn alias_tag(&self, tag: &str, to: &str) -> Result<(), StorageError> {
+    pub async fn alias_tag(&self, from_name: &str, to_name: &str) -> Result<(), StorageError> {
         // Special case: alias to self - remove from group 
-        if tag == to {
+        if from_name == to_name {
             sqlx::query(
                 "UPDATE tag SET group_id = NULL
-                WHERE name_hash = ?"
+                WHERE tag_name = ?"
             )
-            .bind(tag.crc32())
-            .execute(&self.0)
+            .bind(from_name)
+            .execute(&self.pool)
             .await?;
 
             return Ok(())
         }
         
-        let Some(tag) = self.get_tag_data(tag).await? else {
+        let Some(tag) = self.get_tag_data_by_name(from_name).await? else {
             anyhow::bail!("no such tag");
         };
         
-        let alias_to = self.get_tag_data(to).await?;
+        let alias_to = self.get_tag_data_by_name(to_name).await?;
 
         // Start transaction
-        let mut tx = self.0.begin().await?;
+        let mut tx = self.pool.begin().await?;
         
         let alias_to = match alias_to {
             Some(to) => to,
             // Add new tag
             None => {
-                let Some(alias) = write::Tag::new(to, None, tag.tag_type) else {
+                let Some(alias) = write::Tag::new(to_name, None, tag.tag_type) else {
                     anyhow::bail!("expected alias name");
                 };
                 Self::add_tags_tx(&mut tx, None, &[alias]).await?;
                 // If add_tags suceeded, tag should be present
-                Self::get_tag_data_tx(&mut tx, to).await?.unwrap()
+                Self::get_tag_data_tx(&mut tx, to_name).await?.unwrap()
             } 
         };
 
@@ -823,11 +959,11 @@ impl Sqlite {
 
         sqlx::query(
             "UPDATE tag SET group_id = ?
-            WHERE name_hash in (?, ?)"
+            WHERE tag_name in (?, ?)"
         )
         .bind(group_id)
-        .bind(tag.name.crc32())
-        .bind(alias_to.name.crc32())
+        .bind(from_name)
+        .bind(to_name)
         .execute(&mut *tx)
         .await?;
 
@@ -842,11 +978,11 @@ impl Sqlite {
             "SELECT * FROM tag
             WHERE group_id = (
                 SELECT tg.id FROM tag_group tg, tag t
-                WHERE t.group_id = tg.id AND t.name_hash = ?
+                WHERE t.group_id = tg.id AND t.tag_name = ?
             )"
         )
-        .bind(tag.crc32())
-        .fetch_all(&self.0)
+        .bind(tag)
+        .fetch_all(&self.pool)
         .await?;
         
         Ok(aliases)
@@ -859,7 +995,7 @@ impl Sqlite {
                 (SELECT count(*) FROM tag) as tag_count, 
                 (SELECT count(*) FROM element) as element_count"
         )
-        .fetch_one(&self.0)
+        .fetch_one(&self.pool)
         .await?;
 
         Ok(summary)
@@ -872,7 +1008,7 @@ impl Sqlite {
             WHERE element_id = ?",
             element_id
         )
-        .execute(&self.0)
+        .execute(&self.pool)
         .await?;
         
         Ok(())
@@ -883,7 +1019,7 @@ impl Sqlite {
         sqlx::query!(
             "UPDATE element SET has_thumb = 0"
         )
-        .execute(&self.0)
+        .execute(&self.pool)
         .await?;
         
         Ok(())
@@ -894,7 +1030,7 @@ impl Sqlite {
         sqlx::query!(
             "UPDATE import SET failed = 0"
         )
-        .execute(&self.0)
+        .execute(&self.pool)
         .await?;
         
         Ok(())
@@ -905,8 +1041,56 @@ impl Sqlite {
         sqlx::query!(
             "DELETE FROM group_ids"
         )
-        .execute(&self.0)
+        .execute(&self.pool)
         .await?;
+        
+        Ok(())
+    }
+
+    /// Add danbooru wikis to db
+    pub async fn add_wikis<W>(&self, wikis: &[W]) -> Result<(), StorageError>
+    where W: AsRef<write::Wiki> {
+        let data: Vec<_> = wikis
+            .iter()
+            .flat_map(|w| 
+                write::Tag::new(&w.as_ref().title, None, w.as_ref().category)
+                    .map(|t| (t, &w.as_ref().aliases))
+            )
+            .collect();
+        
+        let mut tx = self.pool.begin().await?;
+
+        let tags: Vec<_> = data
+            .iter()
+            .map(|d| &d.0)
+            .collect();
+
+        Self::add_tags_tx(&mut tx, None, &tags).await?;
+        
+        for (tag, aliases) in data {
+            Self::add_tag_aliases_tx(&mut tx, tag.name(), aliases).await?;
+        }
+
+        tx.commit().await?;
+
+        Ok(())
+    }
+
+    /// Loads tag aliases to memory in order to speed up multiple lookups 
+    pub async fn load_tag_aliases_index(&self, index: &HashIndex<String, String>) -> Result<(), StorageError> {
+        let mut stream = sqlx::query!(
+            "SELECT alias, tag_name
+            FROM tag t 
+            JOIN tag_alias a ON a.tag_id = t.id",
+        )
+        .map(|anon| (anon.alias, anon.tag_name))
+        .fetch(&self.pool);
+
+        index.clear_async().await;
+        
+        while let Some(Ok((k, v))) = stream.next().await {
+            index.insert_async(k, v).await.ok();
+        }
         
         Ok(())
     }

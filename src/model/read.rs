@@ -7,6 +7,8 @@ use super::*;
 
 #[derive(Serialize, sqlx::FromRow)]
 pub struct Tag {
+    /// Tag id
+    pub id: u32,
     /// Primary name
     #[sqlx(rename = "tag_name")]
     pub name: String,

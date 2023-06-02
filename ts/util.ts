@@ -116,15 +116,18 @@ function deleteTagOnClick(elem_id: number, tag_name: string) {
 /// Edit tag onclick handler
 function editTagOnClick(event: Event, form: HTMLFormElement, tag_name: string) {
   let type_select = form.getElementsByClassName("set-type")[0]!;
+  let name_text = form.getElementsByClassName("name")[0]!;
   let alt_name_text = form.getElementsByClassName("alt-name")[0]!;
   let hidden_box = form.getElementsByClassName("is-hidden")[0]!;
 
   if (type_select instanceof HTMLSelectElement 
+    && name_text instanceof HTMLInputElement
     && alt_name_text instanceof HTMLInputElement
     && hidden_box instanceof HTMLInputElement) {
 
     let payload = {
       tag_name: tag_name,
+      new_name: name_text.value,
       alt_name: alt_name_text.value.length == 0? null : alt_name_text.value,
       tag_type: type_select.selectedOptions[0].value,
       hidden: hidden_box.checked

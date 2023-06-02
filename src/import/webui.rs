@@ -8,7 +8,7 @@ use regex::Regex;
 
 use crate::model::{read::PendingImport, write::{ElementMetadata, Tag}, TagType, AIMetadata};
 
-use super::{MetadataImporter, ElementPrefab, is_png};
+use super::{MetadataImporter, ElementPrefab, is_png, lookup_alias};
 
 /// Escaped with \ braces, etc
 static ESCAPE_REX: Lazy<Regex> = Lazy::new(|| {
@@ -115,7 +115,10 @@ impl MetadataImporter for Webui {
             .join(" ");
 
         let tags = parse_prompt(&prompt)
-            .filter_map(|t| Tag::new(&t, None, TagType::Tag))
+            .filter_map(|t| { 
+                let name = lookup_alias(&t).unwrap_or(t);                
+                Tag::new(&name, None, TagType::Tag)
+            })
             // Append source tag 
             .chain(Tag::new("webui_generated", None, TagType::Metadata))
             .collect();        
