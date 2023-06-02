@@ -499,11 +499,11 @@ impl Sqlite {
             // Add recently inserted hash
             hashes.push(e.hash);
 
-            // Invalidate element id cache
-            self.id_cache.invalidate_all();
-
             count += 1;
         }
+        
+        // Invalidate element id cache
+        self.id_cache.invalidate_all();
  
         Ok(count)
     }
