@@ -9,8 +9,8 @@ use itertools::Itertools;
 
 use crate::{
     dao::{STORAGE, FutureBlock}, 
-    import::{ElementPrefab, ANIMATION_EXTS, IMAGE_EXTS, self}, 
-    model::{write::{ElementWithMetadata, Wiki}, danbooru}, 
+    import::{ElementPrefab, ANIMATION_EXTS, IMAGE_EXTS}, 
+    model::write::{ElementWithMetadata, Wiki}, 
     CONFIG, util::{self, AutoAtom}
 };
 
@@ -395,7 +395,7 @@ pub async fn update_danbooru_wikis() -> anyhow::Result<()> {
     }
 
     // Tag aliases were updated, reload cache
-    import::reload_tag_aliases().await?;
+    STORAGE.reload_tag_aliases_index().await?;
     
     Ok(())
 }

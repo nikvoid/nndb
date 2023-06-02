@@ -8,6 +8,8 @@ use tracing_actix_web::TracingLogger;
 use tracing_subscriber::fmt::writer::Tee;
 use util::LateInit;
 
+use crate::dao::STORAGE;
+
 mod model;
 mod dao;
 mod import;
@@ -84,7 +86,7 @@ async fn main() -> anyhow::Result<()> {
         import_spawner().await;
     }
 
-    import::reload_tag_aliases().await?;
+    STORAGE.reload_tag_aliases_index().await?;
 
     info!(addr=CONFIG.bind_address, port=CONFIG.port, "Starting server");
     HttpServer::new(|| {

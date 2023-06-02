@@ -1,9 +1,12 @@
+use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use futures::FutureExt;
-use scc::{HashIndex, HashCache};
+use moka::future::Cache;
 use sqlx::Executor;
 use sqlx::{SqlitePool, migrate::MigrateDatabase, SqliteConnection};
+use tokio::sync::RwLock;
 
 use crate::search::{self, Term};
 use crate::util;
@@ -21,7 +24,8 @@ use tracing::error;
 
 pub struct Sqlite {
     pool: SqlitePool,
-    id_cache: HashCache<String, Vec<u32>>
+    id_cache: Cache<String, Arc<Vec<u32>>>,
+    alias_cache: RwLock<BTreeMap<String, String>>
 }
 
 pub type StorageError = anyhow::Error;
@@ -435,7 +439,8 @@ impl Sqlite {
         sqlx::migrate!().run(&pool).await?;
         Ok(Self {
             pool,
-            id_cache: HashCache::with_capacity(64, 256), 
+            id_cache: Cache::new(64),
+            alias_cache: RwLock::new(BTreeMap::new()), 
         })
     }
 
@@ -495,7 +500,7 @@ impl Sqlite {
             hashes.push(e.hash);
 
             // Invalidate element id cache
-            self.id_cache.clear_async().await;
+            self.id_cache.invalidate_all();
 
             count += 1;
         }
@@ -527,7 +532,7 @@ impl Sqlite {
 
         if element_id.is_some() {
             // Invalidate element id cache
-            self.id_cache.clear_async().await;
+            self.id_cache.invalidate_all();
         }
 
         Ok(())
@@ -555,7 +560,7 @@ impl Sqlite {
         Self::add_metadata_tx(&mut conn, element_id, m).await?;
         
         // Invalidate element id cache
-        self.id_cache.clear_async().await;
+        self.id_cache.invalidate_all();
 
         Ok(())
     }
@@ -617,13 +622,11 @@ impl Sqlite {
         let mut conn = self.pool.acquire().await?;
 
         // Memoize ids
-        // FIXME: errors sometimes with 'attempt to subract with overflow'
-        let ids = match self.id_cache.get_async(query).await {
-            Some(ids) => ids.get().clone(),
+        let ids = match self.id_cache.get(query) {
+            Some(ids) => ids,
             None => {
                 let ids = Self::get_element_ids_by_query_tx(&mut conn, query).await?;
-                self.id_cache.put_async(query.into(), ids.clone()).await.ok();                
-                ids
+                self.id_cache.get_with_by_ref(query, async { Arc::new(ids) }).await
             }
         };
         
@@ -898,6 +901,8 @@ impl Sqlite {
             )
             .execute(&mut *tx)
             .await?;
+
+            self.alias_cache.write().await.insert(name.into(), tag.name().into());
         }
 
         tx.commit().await?;
@@ -1077,7 +1082,7 @@ impl Sqlite {
     }
 
     /// Loads tag aliases to memory in order to speed up multiple lookups 
-    pub async fn load_tag_aliases_index(&self, index: &HashIndex<String, String>) -> Result<(), StorageError> {
+    pub async fn reload_tag_aliases_index(&self) -> Result<(), StorageError> {
         let mut stream = sqlx::query!(
             "SELECT alias, tag_name
             FROM tag t 
@@ -1086,13 +1091,20 @@ impl Sqlite {
         .map(|anon| (anon.alias, anon.tag_name))
         .fetch(&self.pool);
 
-        index.clear_async().await;
+        let mut write = self.alias_cache.write().await;
+
+        write.clear();
         
         while let Some(Ok((k, v))) = stream.next().await {
-            index.insert_async(k, v).await.ok();
+            write.insert(k, v);
         }
         
         Ok(())
+    }
+
+    /// Look for tag that corresponds to alias
+    pub fn lookup_alias(&self, alias: &str) -> Option<String> {
+        self.alias_cache.blocking_read().get(alias).cloned() 
     }
 }
 
