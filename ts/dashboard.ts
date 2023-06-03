@@ -37,7 +37,7 @@ function updateDashboard() {
     let requesta = new XMLHttpRequestExt();
 
     type Resp = {
-      scan_files: boolean,
+      scan_files: [boolean, number, number],
       update_metadata: boolean,
       group_elements: boolean,
       make_thumbnails: boolean,
@@ -46,7 +46,7 @@ function updateDashboard() {
     
     requesta.success_cb = () => {
       let data: Resp = JSON.parse(requesta.responseText);
-      scan.innerText = data.scan_files;
+      scan.innerText = `${data.scan_files[0]} : ${data.scan_files[2]} / ${data.scan_files[1]}`;
       meta.innerText = data.update_metadata;
       group.innerText = data.group_elements;
       thumbs.innerText = data.make_thumbnails;

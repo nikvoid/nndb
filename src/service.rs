@@ -4,6 +4,7 @@ use atomic::{Atomic, Ordering};
 use futures::{stream::FuturesUnordered, StreamExt};
 use rayon::prelude::*;
 use reqwest::StatusCode;
+use tokio::sync::mpsc::channel;
 use tracing::{error, info};
 use walkdir::WalkDir;
 use itertools::Itertools;
@@ -21,91 +22,119 @@ pub const SIGNATURE_DISTANCE_THRESHOLD: f32 = 35.0;
 /// Width and height of thumbnails
 pub const THUMBNAIL_SIZE: (u32, u32) = (256, 256);
 
-/// Indicate state of scan_files()
-pub static SCAN_FILES_LOCK: AutoAtom::<()> = AutoAtom::new(());
+/// Indicate state of scan_files() (to_scan, scanned)
+pub static SCAN_FILES_LOCK: AutoAtom::<(u32, u32)> = AutoAtom::new((0, 0));
 /// Indicate state of update_metadata()
 pub static UPDATE_METADATA_LOCK: AutoAtom::<()> = AutoAtom::new(());
 /// Indicate state of group_elements_by_signature()
 pub static GROUP_ELEMENTS_LOCK: AutoAtom::<()> = AutoAtom::new(());
 /// Indicate state of make_thumbnails()
 pub static MAKE_THUMBNAILS_LOCK: AutoAtom::<()> = AutoAtom::new(());
-/// Indicate state if update_danbooru_wikis()
+/// Indicate state if update_danbooru_wikis() (current_page)
 pub static FETCH_WIKI_LOCK: AutoAtom::<u32> = AutoAtom::new(0);
 
 /// Scan `CONFIG.input_folder` directory for new files and import them.
 /// Will do nothing if already running
-pub fn scan_files() -> anyhow::Result<u32> {
-    let _guard = match SCAN_FILES_LOCK.acquire() {
-        Some(guard) => guard,
-        None => return Ok(0)
-    };
-    
-    let files: Vec<_> = WalkDir::new(&CONFIG.input_folder)
-        .into_iter()
-        .filter_map(|e| {
-            let e = match e {
-                Ok(e) => e,
-                Err(e) => {
-                    error!(?e, "failed to get entry");
-                    return None;
-                },
-            };
+pub async fn scan_files() -> anyhow::Result<u32> {
+    let (tx, mut rx) = channel(8);
 
-            let path = e.path();   
+    // CPU-heavy task: read and hash files
+    let cpu_task = tokio::task::spawn_blocking(move || {
+        let _guard = match SCAN_FILES_LOCK.acquire() {
+            Some(guard) => guard,
+            None => return None
+        };
 
-            if !path.is_file() {
-                return None;
-            }
-
-            let ext = path
-                .extension()
-                .and_then(|e| e.to_str())
-                .map(|e| e.to_lowercase());
-            
-            match ext.as_deref() {
-                Some(e) if IMAGE_EXTS.contains(&e) => Some((path.to_owned(), false)),
-                Some(e) if ANIMATION_EXTS.contains(&e) => Some((path.to_owned(), true)),
-                _ => None,
-            }
-        })
-        .collect();
-
-    let elements: Vec<_> = files.into_par_iter()
-        .map(|(path, _)| -> anyhow::Result<ElementWithMetadata> {
-            // TODO: Will write option return error if file is busy now?..
-            let mut file = std::fs::File::options()
-                .write(true)
-                .read(true)
-                .open(&path)?;
-
-            let element = {
-                let mut data = vec![];
-                file.read_to_end(&mut data)?;
-
-                let prefab = ElementPrefab {
-                    path: path.clone(),
-                    data,
+        let files: Vec<_> = WalkDir::new(&CONFIG.input_folder)
+            .into_iter()
+            .filter_map(|e| {
+                let e = match e {
+                    Ok(e) => e,
+                    Err(e) => {
+                        error!(?e, "failed to get entry");
+                        return None;
+                    },
                 };
 
-                util::hash_file(prefab)
-                    .context(path.display().to_string())?
-            };
+                let path = e.path();   
 
-            Ok(element)
-        }).collect();
+                if !path.is_file() {
+                    return None;
+                }
 
-    let elements: Vec<_> = elements
-        .iter()
-        .filter_map(|res| match res {
-            Ok(r) => Some(r),
-            Err(e) => {
-                error!(?e, "failed to hash element");
-                None   
-            }
-        })
-        .collect();
+                let ext = path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .map(|e| e.to_lowercase());
+            
+                match ext.as_deref() {
+                    Some(e) if IMAGE_EXTS.contains(&e) => Some((path.to_owned(), false)),
+                    Some(e) if ANIMATION_EXTS.contains(&e) => Some((path.to_owned(), true)),
+                    _ => None,
+                }
+            })
+            .collect();
 
-    STORAGE.add_elements(&elements).blocking_run()
+        _guard.store((files.len() as u32, 0));
+
+        let chunks = files.into_par_iter()
+            .map(|(path, _)| -> anyhow::Result<ElementWithMetadata> {
+                // TODO: Will write option return error if file is busy now?..
+                let mut file = std::fs::File::options()
+                    .write(true)
+                    .read(true)
+                    .open(&path)?;
+
+                let element = {
+                    let mut data = vec![];
+                    file.read_to_end(&mut data)?;
+
+                    let prefab = ElementPrefab {
+                        path: path.clone(),
+                        data,
+                    };
+
+                    util::hash_file(prefab)
+                        .context(path.display().to_string())?
+                };
+
+                // Report that file was processed
+                _guard.fetch_update(|(all, processed)| Some((all, processed + 1)));
+
+                Ok(element)
+            })
+            // Add files to db in chunks of 1000
+            .chunks(1000)
+            .for_each(|chunk| {
+                // Send data, cause we cant access tokio context on this thread
+                tx.blocking_send(chunk);
+            });
+
+        // Send guard back
+        Some(_guard)
+        // tx should be dropped here
+    });
+
+    let mut count = 0;
+    // This won't run if there are no elements in input folder
+    while let Some(chunk) = rx.recv().await {
+        let elements: Vec<_> = chunk
+            .iter()
+            .filter_map(|res| match res {
+                Ok(r) => Some(r),
+                Err(e) => {
+                    error!(?e, "failed to hash element");
+                    None   
+                }
+            })
+            .collect();
+        count += STORAGE.add_elements(&elements).await?;
+    }
+
+    // Guard should be dropped here
+    cpu_task.await?;
+
+    Ok(count)
 }
 
 
@@ -326,7 +355,7 @@ pub fn fix_thumbnails() -> anyhow::Result<()> {
 
 /// Manually start import task in strict sequence
 pub async fn manual_import() -> anyhow::Result<()> {
-    tokio::task::spawn_blocking(scan_files).await??;
+    scan_files().await?;
     info!("Scanned files");
     update_metadata().await?;
     info!("Updated metadata");
@@ -363,7 +392,7 @@ pub async fn update_danbooru_wikis() -> anyhow::Result<()> {
     };
     
     loop {
-        _guard.update(query.pagination.page);
+        _guard.store(query.pagination.page);
         
         // Use format! because reqwest use serde_urlencoded which is subset(?)
         // of serde_qs

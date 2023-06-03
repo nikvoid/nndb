@@ -53,8 +53,12 @@ impl<T> AutoAtom<T> where T: Copy {
 pub struct AutoAtomGuard<'a, T>(&'a AutoAtom<T>) where T: Copy;
 impl<T> AutoAtomGuard<'_, T> where T: Copy {
     /// Update additional internal atomic value
-    pub fn update(&self, val: T) {
+    pub fn store(&self, val: T) {
         self.0.atom.store(val, Ordering::Relaxed);
+    }
+
+    pub fn fetch_update<F>(&self, f: F) where F: FnMut(T) -> Option<T> {
+        self.0.atom.fetch_update(Ordering::Relaxed, Ordering::Relaxed, f).ok();
     }
 }
 impl<T> Drop for AutoAtomGuard<'_, T> where T: Copy {

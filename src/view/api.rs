@@ -45,7 +45,7 @@ pub struct AliasTagRequest {
 
 #[derive(Serialize)]
 pub struct ImportTasksStatus {
-    scan_files: bool,
+    scan_files: (bool, u32, u32),
     update_metadata: bool,
     group_elements: bool,
     make_thumbnails: bool,
@@ -83,7 +83,10 @@ pub async fn read_log() -> impl Responder {
 #[get("/api/read/import")]
 pub async fn import_status() -> impl Responder {
     let status = ImportTasksStatus {
-        scan_files: SCAN_FILES_LOCK.inspect().0,
+        scan_files: {
+            let (active, (all, scanned)) = SCAN_FILES_LOCK.inspect();
+            (active, all, scanned)
+        },
         update_metadata: UPDATE_METADATA_LOCK.inspect().0,
         group_elements: GROUP_ELEMENTS_LOCK.inspect().0,
         make_thumbnails: MAKE_THUMBNAILS_LOCK.inspect().0,
