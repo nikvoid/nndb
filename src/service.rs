@@ -1,5 +1,6 @@
 use std::{io::Read, path::PathBuf};
 use anyhow::{Context, anyhow};
+use atomic::{Atomic, Ordering};
 use futures::{stream::FuturesUnordered, StreamExt};
 use rayon::prelude::*;
 use reqwest::StatusCode;
@@ -9,8 +10,8 @@ use itertools::Itertools;
 
 use crate::{
     dao::{STORAGE, FutureBlock}, 
-    import::{ElementPrefab, ANIMATION_EXTS, IMAGE_EXTS, self}, 
-    model::{write::{ElementWithMetadata, Wiki}, danbooru}, 
+    import::{ElementPrefab, ANIMATION_EXTS, IMAGE_EXTS}, 
+    model::write::{ElementWithMetadata, Wiki}, 
     CONFIG, util::{self, AutoAtom}
 };
 
@@ -160,13 +161,6 @@ pub async fn group_elements_by_signature() -> anyhow::Result<()> {
         Some(guard) => guard,
         None => return Ok(())
     };
-    // Get all signatures
-    let group_metas = STORAGE.get_groups().await?;
-
-    // Get elements without assigned group
-    let ungrouped = group_metas.iter()
-        .filter(|m| m.group_id.is_none())
-        .collect_vec();
 
     /// Group registry
     struct Groups(Vec<(u32, Vec<u32>)>);
@@ -187,40 +181,62 @@ pub async fn group_elements_by_signature() -> anyhow::Result<()> {
                 .map(|g| g.0)
         }
     }
-
-    let mut groups = Groups(vec![]);
     
-    // Compare each signature with each other (except self)
-    for elem in &ungrouped {
-        for pot in &group_metas {
-            if elem.element_id != pot.element_id 
-                && util::get_sig_distance(
-                    &elem.signature,
-                    &pot.signature
-                ) < SIGNATURE_DISTANCE_THRESHOLD {
-                
-                let group_id = match pot.group_id {
-                    // Add to known group
-                    Some(g) => g,
-                    // Create new group
-                    None => match groups.get_group(pot.element_id) {
-                            // Get existing
-                            Some(id) => id,
-                            // Or create
-                            None => STORAGE
-                                .add_to_group(&[pot.element_id, elem.element_id], None)
-                                .await?,
-                        }
-                };
-                groups.add(group_id, elem.element_id);
-                groups.add(group_id, pot.element_id);
-            }
-        }
-    }
+    // Get all signatures
+    let group_metas = STORAGE.get_groups().await?;
 
+    // Compare each signature with each other (except self)
+
+    let groups = tokio::task::spawn_blocking(move || {
+        // Find current autoincrement value to avoid calling to DB
+        let current_group_id = group_metas
+            .iter()
+            .filter_map(|g| g.group_id)
+            .max()
+            .unwrap_or(1);
+
+        let current_group_id = Atomic::new(current_group_id);
+
+        // Get elements without assigned group
+        let ungrouped = group_metas.iter()
+            .filter(|m| m.group_id.is_none())
+            .collect_vec();
+        let groups = parking_lot::RwLock::new(Groups(vec![]));
+        
+        ungrouped
+            .par_iter()
+            .map(|ungroup| {
+                for pot in &group_metas {
+                    if ungroup.element_id != pot.element_id 
+                        && util::get_sig_distance(
+                            &ungroup.signature,
+                            &pot.signature
+                        ) < SIGNATURE_DISTANCE_THRESHOLD {
+                
+                        let group_id = match pot.group_id {
+                            // Add to known group
+                            Some(g) => g,
+                            // Create new group
+                            None => match groups.read().get_group(pot.element_id) {
+                                    // Get existing
+                                    Some(id) => id,
+                                    // Or create
+                                    None => current_group_id.fetch_add(1, Ordering::Relaxed),
+                                }
+                        };
+                        let mut groups = groups.write();
+                        groups.add(group_id, ungroup.element_id);
+                        groups.add(group_id, pot.element_id);
+                    }
+                }
+            })
+            .count();
+        groups.into_inner()
+    }).await?;
+    
     // Add remaining
-    for (group_id, elem_ids) in groups.0 {
-        STORAGE.add_to_group(&elem_ids, Some(group_id)).await?;
+    for (group_id, elem_ids) in &groups.0 {
+        STORAGE.add_to_group(elem_ids, Some(*group_id)).await?;
     }
     
     Ok(())
@@ -395,7 +411,7 @@ pub async fn update_danbooru_wikis() -> anyhow::Result<()> {
     }
 
     // Tag aliases were updated, reload cache
-    import::reload_tag_aliases().await?;
+    STORAGE.reload_tag_aliases_index().await?;
     
     Ok(())
 }

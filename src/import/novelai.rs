@@ -4,9 +4,9 @@ use anyhow::{bail, Context};
 use async_trait::async_trait;
 use serde::Deserialize;
 
-use crate::model::{read::PendingImport, write::{ElementMetadata, Tag}, TagType, AIMetadata};
+use crate::{model::{read::PendingImport, write::{ElementMetadata, Tag}, TagType, AIMetadata}, dao::STORAGE};
 
-use super::{MetadataImporter, ElementPrefab, is_png, lookup_alias};
+use super::{MetadataImporter, ElementPrefab, is_png};
 
 pub struct NovelAI;
 
@@ -99,7 +99,7 @@ impl MetadataImporter for NovelAI {
         let meta: Metadata = serde_json::from_str(others)?;
 
         let tags = parse_prompt(&prompt)
-            .filter_map(|t| match lookup_alias(t) {
+            .filter_map(|t| match STORAGE.lookup_alias(t) {
                 Some(name) => Tag::new(&name, None, TagType::Tag),
                 None => Tag::new(t, None, TagType::Tag)
             })

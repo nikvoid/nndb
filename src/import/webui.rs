@@ -6,9 +6,9 @@ use itertools::Itertools;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::model::{read::PendingImport, write::{ElementMetadata, Tag}, TagType, AIMetadata};
+use crate::{model::{read::PendingImport, write::{ElementMetadata, Tag}, TagType, AIMetadata}, dao::STORAGE};
 
-use super::{MetadataImporter, ElementPrefab, is_png, lookup_alias};
+use super::{MetadataImporter, ElementPrefab, is_png};
 
 /// Escaped with \ braces, etc
 static ESCAPE_REX: Lazy<Regex> = Lazy::new(|| {
@@ -116,7 +116,7 @@ impl MetadataImporter for Webui {
 
         let tags = parse_prompt(&prompt)
             .filter_map(|t| { 
-                let name = lookup_alias(&t).unwrap_or(t);                
+                let name = STORAGE.lookup_alias(&t).unwrap_or(t);                
                 Tag::new(&name, None, TagType::Tag)
             })
             // Append source tag 
