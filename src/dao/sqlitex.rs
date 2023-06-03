@@ -586,14 +586,14 @@ impl Sqlite {
     ) -> Result<u32, StorageError> {
         let mut tx = self.pool.begin().await?;
 
-        let group_id = match group {
-            None => sqlx::query!("INSERT INTO group_ids (id) VALUES (NULL)")
-                .execute(&mut *tx)
-                .await?
-                .last_insert_rowid() as u32,
-            Some(id) => id
-        };
-
+        let group_id = sqlx::query!(
+            "REPLACE INTO group_ids (id) VALUES (?)",
+            group
+        )
+        .execute(&mut *tx)
+        .await?
+        .last_insert_rowid() as u32;
+        
         for id in element_ids {
             sqlx::query!(
                 "UPDATE group_metadata SET group_id = ? WHERE element_id = ?",

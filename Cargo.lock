@@ -1877,6 +1877,7 @@ dependencies = [
  "moka",
  "num_enum",
  "once_cell",
+ "parking_lot",
  "png",
  "rayon",
  "regex",
