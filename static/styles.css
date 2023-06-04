@@ -135,14 +135,16 @@ footer {
     
 .index-side {
     margin-left: auto;
-    right: 50px;
     grid-row: 3;
     grid-column: 3;
+    max-width: 45vw;
+    height: fit-content;
+    margin-right: 50px;
+}
+
+.flex-block {
     flex-wrap: wrap;
     display: flex;
-    max-width: 35vw;
-    height: fit-content;
-    position: relative;
 }
 
 .image-list-element {
@@ -364,13 +366,15 @@ a.button-large {
         margin-left: auto;
         margin-right: auto;
         max-width: 100%;
-        justify-content: center;
-        display: flex;
-        flex-wrap: wrap;
         margin-top: 50px;
         grid-row: 4;
         grid-column: 1;
-        position: static;
+    }
+    
+    .flex-block {
+        flex-wrap: wrap;
+        display: flex;
+        justify-content: center;
     }
 
     .log-window-outline {

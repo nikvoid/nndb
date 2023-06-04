@@ -125,7 +125,7 @@ impl Render for ElementListContainer<'_> {
             .image-container-list.image-container-list-video[self.0.animated] {
                 a href=(resolve!(/element/self.0.id)) {
                     (ScriptVar(&ident, &ElementLink(self.0)))
-                    img.def-img.image-list-element src=(ElementThumbnail(self.0))
+                    img.def-img.image-list-element loading="lazy" src=(ElementThumbnail(self.0))
                         alt={ @if self.0.broken { "broken" } @else { "no image" } }
                         onerror = { 
                             @if !self.0.animated {

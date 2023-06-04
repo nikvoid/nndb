@@ -46,7 +46,7 @@ pub async fn element_page(id: web::Path<u32>) -> impl Responder {
     let mut groups = vec![];
 
     if let Some(assoc) = associated {
-        groups.push(("Signature", assoc));
+        groups.push(("Signature", elem.group_id.unwrap() as i64, assoc));
     }
     
     for (fetcher, group) in &meta.ext_groups {
@@ -57,7 +57,7 @@ pub async fn element_page(id: web::Path<u32>) -> impl Responder {
             Ok((elems, ..)) if elems
                 .iter()
                 .filter(|e| e.id != elem.id)
-                .count() > 0 => groups.push((fetcher.name(), elems)),
+                .count() > 0 => groups.push((fetcher.name(), *group, elems)),
             Err(e) => error!(?e, "failed to fetch external element group"), 
             _ => ()
         }
@@ -65,7 +65,7 @@ pub async fn element_page(id: web::Path<u32>) -> impl Responder {
 
     let has_group = groups
         .iter()
-        .map(|(_, g)| g.len())
+        .map(|(.., g)| g.len())
         .sum::<usize>() > 0;
     
     let page = BaseContainer {
@@ -85,11 +85,15 @@ pub async fn element_page(id: web::Path<u32>) -> impl Responder {
             } 
             @if has_group {
                 .index-side { 
-                    @for (fetcher, group) in groups {
-                        // TODO: Separate groups with something
-                        @for e in group {
-                            (ElementListContainer(&e))
-                        } 
+                    @for (fetcher, grp_id, group) in groups {
+                        .tag.tag-block style="margin: 0 0 15px 5px" { 
+                            (fetcher) ": " (grp_id) 
+                        }
+                        .flex-block {
+                            @for e in group {
+                                (ElementListContainer(&e))
+                            } 
+                        }
                     }
                 }
             }
