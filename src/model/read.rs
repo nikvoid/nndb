@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use crate::import::Importer;
+use crate::import::Parser;
 use crate::dao::SliceShim;
 
 use super::*;
@@ -51,7 +51,7 @@ pub struct PendingImport {
     /// Element id
     pub id: u32, 
     /// Importer assigned to element
-    pub importer_id: Importer,
+    pub importer_id: Parser,
     /// Name that file had before rename
     pub orig_filename: String,
     /// Hash of whole file

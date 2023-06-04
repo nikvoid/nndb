@@ -143,44 +143,44 @@ pub async fn update_metadata() -> anyhow::Result<()> {
         None => return Ok(())
     };
     
-    let imports = STORAGE
-        .get_pending_imports()
-        .await?;
+    // let imports = STORAGE
+    //     .get_pending_imports()
+    //     .await?;
 
-    let updater = _guard.updater();
-    updater.set_action_count(imports.len() as u32);
+    // let updater = _guard.updater();
+    // updater.set_action_count(imports.len() as u32);
 
-    let mut groups: FuturesUnordered<_> = imports.iter()
-        .group_by(|imp| imp.importer_id)
-        .into_iter()
-        .map(|(_, group)| group.collect_vec())
-        .filter(|group| !group.is_empty())
-        // Run all importers concurrently 
-        .map(|group| async {
-            let importer = group.first().unwrap().importer_id.get_singleton();
+    // let mut groups: FuturesUnordered<_> = imports.iter()
+    //     .group_by(|imp| imp.importer_id)
+    //     .into_iter()
+    //     .map(|(_, group)| group.collect_vec())
+    //     .filter(|group| !group.is_empty())
+    //     // Run all importers concurrently 
+    //     .map(|group| async {
+    //         let importer = group.first().unwrap().importer_id.get_singleton();
 
-            for imp in group {
-                if importer.available() {
-                    match importer.fetch_metadata(imp).await {
-                            Ok(meta) => match STORAGE
-                                .add_metadata(imp.id, meta)
-                                .await {
-                                    Ok(_) => (),
-                                    Err(e) => error!(?e, ?imp, "failed to add metadata"),
-                                }
-                            Err(e) => {
-                                error!(?e, ?imp, "failed to fetch metadata");
-                                STORAGE.mark_failed_import(imp.id).await.ok();
-                            },
-                        }
-                    }
-                    updater.increment();
-            }
-        })
-        .collect();
+    //         for imp in group {
+    //             if importer.available() {
+    //                 match importer.fetch_metadata(imp).await {
+    //                         Ok(meta) => match STORAGE
+    //                             .add_metadata(imp.id, meta)
+    //                             .await {
+    //                                 Ok(_) => (),
+    //                                 Err(e) => error!(?e, ?imp, "failed to add metadata"),
+    //                             }
+    //                         Err(e) => {
+    //                             error!(?e, ?imp, "failed to fetch metadata");
+    //                             STORAGE.mark_failed_import(imp.id).await.ok();
+    //                         },
+    //                     }
+    //                 }
+    //                 updater.increment();
+    //         }
+    //     })
+    //     .collect();
 
-    // Wait for all importers to finish
-    while groups.next().await.is_some() {}
+    // // Wait for all importers to finish
+    // while groups.next().await.is_some() {}
     
     Ok(())
 }

@@ -2,6 +2,7 @@ use std::{path::Path, io::SeekFrom, sync::atomic::Ordering, time::Duration};
 use anyhow::Context;
 use atomic::Atomic;
 use futures::Future;
+use md5::{Md5, Digest};
 use once_cell::sync::OnceCell;
 use serde::Serialize;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
@@ -13,7 +14,7 @@ use crate::{
         write::{self, ElementToParse, ElementWithMetadata}, 
         SIGNATURE_LEN
     },
-    import::{TAG_TRIGGER, ElementPrefab, Importer, ANIMATION_EXTS},
+    import::{TAG_TRIGGER, ElementPrefab, Parser, ANIMATION_EXTS},
     CONFIG
 };
 
@@ -134,10 +135,10 @@ pub fn get_tags_from_path(path: &Path) -> Vec<write::Tag> {
 
 /// Derive file hash, signature, and, if possible, metadata
 pub fn hash_file(prefab: ElementPrefab) -> anyhow::Result<ElementWithMetadata> {
-    let importer_id = Importer::scan(&prefab);
+    let importer_id = Parser::scan(&prefab);
     let importer = importer_id.get_singleton();
 
-    let hash = importer.derive_hash(&prefab);
+    let hash = Md5::digest(&prefab.data).into();
     
     let mut new_name = String::with_capacity(48);
 
@@ -176,10 +177,7 @@ pub fn hash_file(prefab: ElementPrefab) -> anyhow::Result<ElementWithMetadata> {
         true => (None, false),
     };
 
-    let metadata = match importer.can_parse_in_place() {
-        true => Some(importer.parse_metadata(&prefab)?),
-        false => None,
-    };
+    let metadata = importer.parse_metadata(&prefab)?;
      
     let element = ElementToParse {
         filename: new_name,
@@ -192,7 +190,7 @@ pub fn hash_file(prefab: ElementPrefab) -> anyhow::Result<ElementWithMetadata> {
         path: prefab.path,
     };
     
-    Ok(ElementWithMetadata(element, metadata))
+    Ok(ElementWithMetadata(element, Some(metadata)))
 }
 
 /// Make thumnbnail for image `src`.

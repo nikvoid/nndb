@@ -1,8 +1,7 @@
 use std::path::PathBuf;
 
-use crate::model::{Md5Hash, write::ElementMetadata, read::PendingImport};
+use crate::model::{write::ElementMetadata, read::{PendingImport, self}};
 use async_trait::async_trait;
-use md5::{Digest, Md5};
 use num_enum::{FromPrimitive, IntoPrimitive};
 
 mod passthrough;
@@ -18,7 +17,7 @@ pub const TAG_TRIGGER: &str = "TAG.";
 
 #[derive(FromPrimitive, IntoPrimitive, Clone, Copy, Debug, PartialEq, sqlx::Type)]
 #[repr(u8)]
-pub enum Importer {
+pub enum Parser {
     /// No specific metadata
     #[default]
     Passthrough = 0,
@@ -28,7 +27,7 @@ pub enum Importer {
     Webui       = 2,
 }
 
-impl Importer {
+impl Parser {
     /// Decide which importer to use with file
     pub fn scan(element: &ElementPrefab) -> Self  {
         match () {
@@ -39,7 +38,7 @@ impl Importer {
     }
 
     /// Get singleton for chosen importer
-    pub fn get_singleton(self) -> &'static dyn MetadataImporter {
+    pub fn get_singleton(self) -> &'static dyn MetadataParser {
         match self {
             Self::Passthrough => &passthrough::Passthrough,
             Self::NovelAI => &novelai::NovelAI,
@@ -54,24 +53,9 @@ pub struct ElementPrefab {
     pub data: Vec<u8>,
 }
 
-#[async_trait]
-pub trait MetadataImporter: Sync {
+pub trait MetadataParser: Sync {
     /// Check if importer can get metadata for element
     fn can_parse(&self, element: &ElementPrefab) -> bool;
-
-    /// Check if importer can fetch metadata now
-    fn available(&self) -> bool { true }
-    
-    /// Get hash based on file data or name
-    fn derive_hash(
-        &self,
-        element: &ElementPrefab,
-    ) -> Md5Hash {
-        Md5::digest(&element.data).into()
-    }
-
-    /// Check if importer can parse file on hash deriving stage
-    fn can_parse_in_place(&self) -> bool;
 
     /// Parse metadata on hash deriving stage, provided access to file data
     fn parse_metadata(
@@ -79,11 +63,21 @@ pub trait MetadataImporter: Sync {
         element: &ElementPrefab
     ) -> anyhow::Result<ElementMetadata>;
 
+}
+
+#[async_trait]
+pub trait MetadataFetcher: Sync {
+    /// Check if importer can get metadata for element
+    fn supported(&self, element: &read::Element) -> bool;
+    
+    /// Check if importer can fetch metadata now
+    fn available(&self) -> bool { true }
+    
     /// Fetch metadata for pending import (network access implied)
     async fn fetch_metadata(
         &self,
         element: &PendingImport
-    ) -> anyhow::Result<ElementMetadata>;
+    ) -> anyhow::Result<Option<ElementMetadata>>;
 }
 
 // Check PNG header
