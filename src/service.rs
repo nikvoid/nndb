@@ -4,15 +4,16 @@ use atomic::{Atomic, Ordering};
 use futures::{stream::FuturesUnordered, StreamExt};
 use rayon::prelude::*;
 use reqwest::StatusCode;
+use tokio::sync::mpsc::channel;
 use tracing::{error, info};
 use walkdir::WalkDir;
 use itertools::Itertools;
 
 use crate::{
     dao::{STORAGE, FutureBlock}, 
-    import::{ElementPrefab, ANIMATION_EXTS, IMAGE_EXTS}, 
+    import::{ElementPrefab, ANIMATION_EXTS, IMAGE_EXTS, FetchStatus}, 
     model::write::{ElementWithMetadata, Wiki}, 
-    CONFIG, util::{self, AutoAtom}
+    CONFIG, util::{self, Procedure}
 };
 
 /// Experimentaly decided optimal image signature distance 
@@ -22,103 +23,132 @@ pub const SIGNATURE_DISTANCE_THRESHOLD: f32 = 35.0;
 pub const THUMBNAIL_SIZE: (u32, u32) = (256, 256);
 
 /// Indicate state of scan_files()
-pub static SCAN_FILES_LOCK: AutoAtom::<()> = AutoAtom::new(());
+pub static SCAN_FILES_LOCK: Procedure = Procedure::new();
 /// Indicate state of update_metadata()
-pub static UPDATE_METADATA_LOCK: AutoAtom::<()> = AutoAtom::new(());
+pub static UPDATE_METADATA_LOCK: Procedure = Procedure::new();
 /// Indicate state of group_elements_by_signature()
-pub static GROUP_ELEMENTS_LOCK: AutoAtom::<()> = AutoAtom::new(());
+pub static GROUP_ELEMENTS_LOCK: Procedure = Procedure::new();
 /// Indicate state of make_thumbnails()
-pub static MAKE_THUMBNAILS_LOCK: AutoAtom::<()> = AutoAtom::new(());
+pub static MAKE_THUMBNAILS_LOCK: Procedure = Procedure::new();
 /// Indicate state if update_danbooru_wikis()
-pub static FETCH_WIKI_LOCK: AutoAtom::<u32> = AutoAtom::new(0);
+pub static FETCH_WIKI_LOCK: Procedure = Procedure::new();
 
 /// Scan `CONFIG.input_folder` directory for new files and import them.
 /// Will do nothing if already running
-pub fn scan_files() -> anyhow::Result<u32> {
-    let _guard = match SCAN_FILES_LOCK.acquire() {
+pub async fn scan_files() -> anyhow::Result<u32> {
+    let _guard = match SCAN_FILES_LOCK.begin() {
         Some(guard) => guard,
-        None => return Ok(0)
+        None => return Ok(0) 
     };
     
-    let files: Vec<_> = WalkDir::new(&CONFIG.input_folder)
-        .into_iter()
-        .filter_map(|e| {
-            let e = match e {
-                Ok(e) => e,
-                Err(e) => {
-                    error!(?e, "failed to get entry");
-                    return None;
-                },
-            };
+    let (tx, mut rx) = channel(8);
 
-            let path = e.path();   
-
-            if !path.is_file() {
-                return None;
-            }
-
-            let ext = path
-                .extension()
-                .and_then(|e| e.to_str())
-                .map(|e| e.to_lowercase());
-            
-            match ext.as_deref() {
-                Some(e) if IMAGE_EXTS.contains(&e) => Some((path.to_owned(), false)),
-                Some(e) if ANIMATION_EXTS.contains(&e) => Some((path.to_owned(), true)),
-                _ => None,
-            }
-        })
-        .collect();
-
-    let elements: Vec<_> = files.into_par_iter()
-        .map(|(path, _)| -> anyhow::Result<ElementWithMetadata> {
-            // TODO: Will write option return error if file is busy now?..
-            let mut file = std::fs::File::options()
-                .write(true)
-                .read(true)
-                .open(&path)?;
-
-            let element = {
-                let mut data = vec![];
-                file.read_to_end(&mut data)?;
-
-                let prefab = ElementPrefab {
-                    path: path.clone(),
-                    data,
+    let updater = _guard.updater();
+    
+    // CPU-heavy task: read and hash files
+    tokio::task::spawn_blocking(move || {
+        let files: Vec<_> = WalkDir::new(&CONFIG.input_folder)
+            .into_iter()
+            .filter_map(|e| {
+                let e = match e {
+                    Ok(e) => e,
+                    Err(e) => {
+                        error!(?e, "failed to get entry");
+                        return None;
+                    },
                 };
 
-                util::hash_file(prefab)
-                    .context(path.display().to_string())?
-            };
+                let path = e.path();   
 
-            Ok(element)
-        }).collect();
+                if !path.is_file() {
+                    return None;
+                }
 
-    let elements: Vec<_> = elements
-        .iter()
-        .filter_map(|res| match res {
-            Ok(r) => Some(r),
-            Err(e) => {
-                error!(?e, "failed to hash element");
-                None   
-            }
-        })
-        .collect();
+                let ext = path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .map(|e| e.to_lowercase());
+            
+                match ext.as_deref() {
+                    Some(e) if IMAGE_EXTS.contains(&e) => Some((path.to_owned(), false)),
+                    Some(e) if ANIMATION_EXTS.contains(&e) => Some((path.to_owned(), true)),
+                    _ => None,
+                }
+            })
+            .collect();
 
-    STORAGE.add_elements(&elements).blocking_run()
+        updater.set_action_count(files.len() as u32);
+
+        files.into_par_iter()
+            .map(|(path, _)| -> anyhow::Result<ElementWithMetadata> {
+                // TODO: Will write option return error if file is busy now?..
+                let mut file = std::fs::File::options()
+                    .write(true)
+                    .read(true)
+                    .open(&path)?;
+
+                let element = {
+                    let mut data = vec![];
+                    file.read_to_end(&mut data)?;
+
+                    let prefab = ElementPrefab {
+                        path: path.clone(),
+                        data,
+                    };
+
+                    util::hash_file(prefab)
+                        .context(path.display().to_string())?
+                };
+
+                // Report that file was processed
+                updater.increment();
+
+                Ok(element)
+            })
+            // Add files to db in chunks of 1000
+            .chunks(1000)
+            .for_each(|chunk| {
+                // Send data, cause we cant access tokio context on this thread
+                tx.blocking_send(chunk).ok();
+            });
+
+        // tx should be dropped here
+    });
+
+    let mut count = 0;
+    // This won't run if there are no elements in input folder
+    while let Some(chunk) = rx.recv().await {
+        let elements: Vec<_> = chunk
+            .iter()
+            .filter_map(|res| match res {
+                Ok(r) => Some(r),
+                Err(e) => {
+                    error!(?e, "failed to hash element");
+                    None   
+                }
+            })
+            .collect();
+        count += STORAGE.add_elements(&elements).await?;
+    }
+
+    Ok(count)
 }
 
 
 /// Fetch metadata for all pending imports.
 /// Will do nothing if already running
 pub async fn update_metadata() -> anyhow::Result<()> {
-    let _guard = match UPDATE_METADATA_LOCK.acquire() {
+    let _guard = match UPDATE_METADATA_LOCK.begin() {
         Some(guard) => guard,
         None => return Ok(())
     };
+    
     let imports = STORAGE
         .get_pending_imports()
         .await?;
+
+    let updater = _guard.updater();
+    updater.set_action_count(imports.len() as u32);
 
     let mut groups: FuturesUnordered<_> = imports.iter()
         .group_by(|imp| imp.importer_id)
@@ -131,18 +161,23 @@ pub async fn update_metadata() -> anyhow::Result<()> {
 
             for imp in group {
                 if importer.available() {
-                    match importer.fetch_metadata(imp).await {
-                        Ok(meta) => match STORAGE
-                            .add_metadata(imp.id, meta)
-                            .await {
-                                Ok(_) => (),
-                                Err(e) => error!(?e, ?imp, "failed to add metadata"),
+                    let status = if !importer.supported(imp) {
+                        FetchStatus::NotSupported
+                    } else {
+                        match importer.fetch_metadata(imp).await {
+                            Ok(Some(meta)) => FetchStatus::Success(meta),
+                            Ok(None) => FetchStatus::NotSupported,
+                            Err(e) => {
+                                error!(?e, ?imp, "failed to fetch metadata");
+                                FetchStatus::Fail
                             }
-                        Err(e) => {
-                            error!(?e, ?imp, "failed to fetch metadata");
-                            STORAGE.mark_failed_import(imp.id).await.ok();
-                        },
+                        }
+                    };
+                    match STORAGE.add_metadata(imp.id, imp.importer_id, &status).await {
+                            Ok(_) => (),
+                            Err(e) => error!(?e, ?imp, "failed to add metadata"),
                     }
+                    updater.increment();
                 }
             }
         })
@@ -157,7 +192,7 @@ pub async fn update_metadata() -> anyhow::Result<()> {
 /// Group elements by their image signature.
 /// Will do nothing if already running
 pub async fn group_elements_by_signature() -> anyhow::Result<()> {
-    let _guard = match GROUP_ELEMENTS_LOCK.acquire() {
+    let _guard = match GROUP_ELEMENTS_LOCK.begin() {
         Some(guard) => guard,
         None => return Ok(())
     };
@@ -181,6 +216,8 @@ pub async fn group_elements_by_signature() -> anyhow::Result<()> {
                 .map(|g| g.0)
         }
     }
+
+    let updater = _guard.updater();
     
     // Get all signatures
     let group_metas = STORAGE.get_groups().await?;
@@ -202,6 +239,8 @@ pub async fn group_elements_by_signature() -> anyhow::Result<()> {
             .filter(|m| m.group_id.is_none())
             .collect_vec();
         let groups = parking_lot::RwLock::new(Groups(vec![]));
+
+        updater.set_action_count(ungrouped.len() as u32);
         
         ungrouped
             .par_iter()
@@ -229,6 +268,7 @@ pub async fn group_elements_by_signature() -> anyhow::Result<()> {
                         groups.add(group_id, pot.element_id);
                     }
                 }
+                updater.increment();
             })
             .count();
         groups.into_inner()
@@ -245,16 +285,25 @@ pub async fn group_elements_by_signature() -> anyhow::Result<()> {
 /// Make thumbnails for all files that don't have one.
 /// Will do nothing if already running
 pub fn make_thumbnails() -> anyhow::Result<()> {
-    let _guard = match MAKE_THUMBNAILS_LOCK.acquire() {
+    let _guard = match MAKE_THUMBNAILS_LOCK.begin() {
         Some(guard) => guard,
         None => return Ok(())
     };
-    let elems: Vec<_> = STORAGE
+
+    let updater = _guard.updater();
+    
+    let no_thumbnail = STORAGE
         .search_elements("", 0, None, 0)
-        .blocking_run()?
-        .0.into_par_iter()
+        .blocking_run()?.0
+        .into_iter()
         // TODO: Thumbs for animated
         .filter(|e| !e.has_thumb && !e.animated)
+        .collect_vec();
+
+    updater.set_action_count(no_thumbnail.len() as u32);
+    
+    let elems: Vec<_> = no_thumbnail
+        .into_par_iter()
         .map_with(
             (PathBuf::from(&CONFIG.element_pool.path), PathBuf::from(&CONFIG.thumbnails_folder.path)),
             |(pool, thumb), e| {
@@ -267,6 +316,8 @@ pub fn make_thumbnails() -> anyhow::Result<()> {
                 pool.pop();
                 thumb.pop();
 
+                updater.increment();
+                
                 match err {
                     Ok(_) => Some(e.id),
                     Err(err) => {
@@ -286,7 +337,7 @@ pub fn make_thumbnails() -> anyhow::Result<()> {
 
 /// Remove thumbnail mark from elements that don't actually have thumbnail
 pub fn fix_thumbnails() -> anyhow::Result<()> {
-    let _guard = match MAKE_THUMBNAILS_LOCK.acquire() {
+    let _guard = match MAKE_THUMBNAILS_LOCK.begin() {
         Some(guard) => guard,
         None => return Ok(())
     };
@@ -326,7 +377,7 @@ pub fn fix_thumbnails() -> anyhow::Result<()> {
 
 /// Manually start import task in strict sequence
 pub async fn manual_import() -> anyhow::Result<()> {
-    tokio::task::spawn_blocking(scan_files).await??;
+    scan_files().await?;
     info!("Scanned files");
     update_metadata().await?;
     info!("Updated metadata");
@@ -342,7 +393,7 @@ pub async fn manual_import() -> anyhow::Result<()> {
 /// This may take quite a bit of time.
 pub async fn update_danbooru_wikis() -> anyhow::Result<()> {
     use crate::model::danbooru::*;
-    let _guard = match FETCH_WIKI_LOCK.acquire() {
+    let _guard = match FETCH_WIKI_LOCK.begin() {
         Some(guard) => guard,
         None => return Ok(())
     };
@@ -361,9 +412,15 @@ pub async fn update_danbooru_wikis() -> anyhow::Result<()> {
             only: "name,category,wiki_page[other_names]".into(),
         },
     };
+
+    let updater = _guard.updater();
+    
+    // Max page for unauthorized/non-premium user is 1000th page
+    // 1M tags sorted by post count should be sufficient anyway
+    updater.set_action_count(1000);
     
     loop {
-        _guard.update(query.pagination.page);
+        updater.increment();
         
         // Use format! because reqwest use serde_urlencoded which is subset(?)
         // of serde_qs
@@ -405,8 +462,6 @@ pub async fn update_danbooru_wikis() -> anyhow::Result<()> {
 
         STORAGE.add_wikis(&data).await?;
 
-        // Max page for unauthorized/non-premium user is 1000th page
-        // 1M tags sorted by post count should be sufficient anyway
         query.pagination.page += 1;
     }
 

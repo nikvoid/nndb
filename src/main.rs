@@ -24,9 +24,11 @@ async fn import_spawner() {
     // Different delays are used here to drive tasks out of sync
     // TODO: Random delays or maybe make this thing more pipelined?..
     
-    util::blocking_task_with_interval(|| match service::scan_files() {
-        Ok(count) => info!(count, "added elements to db"),
-        Err(e) => error!(?e, "failed to scan files"),
+    util::task_with_interval(|| async {
+        match service::scan_files().await {
+            Ok(count) => info!(count, "added elements to db"),
+            Err(e) => error!(?e, "failed to scan files"),
+        }
     }, Duration::from_secs(300)).await;
 
     util::task_with_interval(|| async {

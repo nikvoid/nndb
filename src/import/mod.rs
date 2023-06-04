@@ -1,11 +1,11 @@
 use std::path::PathBuf;
 
-use crate::model::{Md5Hash, write::ElementMetadata, read::PendingImport};
+use crate::model::{write::ElementMetadata, read::{PendingImport, self}};
 use async_trait::async_trait;
-use md5::{Digest, Md5};
+use enum_iterator::Sequence;
 use num_enum::{FromPrimitive, IntoPrimitive};
 
-mod passthrough;
+mod unknown;
 mod novelai;
 mod webui;
 
@@ -16,9 +16,15 @@ pub const ANIMATION_EXTS: &[&str] = &["mp4", "mov", "webm", "m4v"];
 /// to add `<tag_name>...` to elements in this directory 
 pub const TAG_TRIGGER: &str = "TAG.";
 
+/// Holder with element original filename and data 
+pub struct ElementPrefab {
+    pub path: PathBuf,
+    pub data: Vec<u8>,
+}
+
 #[derive(FromPrimitive, IntoPrimitive, Clone, Copy, Debug, PartialEq, sqlx::Type)]
 #[repr(u8)]
-pub enum Importer {
+pub enum Parser {
     /// No specific metadata
     #[default]
     Passthrough = 0,
@@ -28,7 +34,7 @@ pub enum Importer {
     Webui       = 2,
 }
 
-impl Importer {
+impl Parser {
     /// Decide which importer to use with file
     pub fn scan(element: &ElementPrefab) -> Self  {
         match () {
@@ -39,39 +45,46 @@ impl Importer {
     }
 
     /// Get singleton for chosen importer
-    pub fn get_singleton(self) -> &'static dyn MetadataImporter {
+    pub fn get_singleton(self) -> &'static dyn MetadataParser {
         match self {
-            Self::Passthrough => &passthrough::Passthrough,
+            Self::Passthrough => &unknown::Passthrough,
             Self::NovelAI => &novelai::NovelAI,
             Self::Webui => &webui::Webui,
         }
     }
 }
 
-/// Holder with element original filename and data 
-pub struct ElementPrefab {
-    pub path: PathBuf,
-    pub data: Vec<u8>,
+#[derive(FromPrimitive, IntoPrimitive, Clone, Copy, Debug, PartialEq, sqlx::Type, Sequence)]
+#[repr(u8)]
+pub enum Fetcher {
+    #[default]
+    Unknown = 100,
 }
 
-#[async_trait]
-pub trait MetadataImporter: Sync {
+impl Fetcher {
+    /// Get singleton for chosen importer
+    pub fn get_singleton(self) -> &'static dyn MetadataFetcher {
+        match self {
+            Self::Unknown => &unknown::Unknown,
+        }
+    }
+    
+    pub fn name(self) -> &'static str {
+        match self {
+            Fetcher::Unknown => "Unknown",
+        }
+    }
+}
+
+pub enum FetchStatus {
+    Success(ElementMetadata),
+    Fail,
+    NotSupported,
+}
+
+pub trait MetadataParser: Sync {
     /// Check if importer can get metadata for element
     fn can_parse(&self, element: &ElementPrefab) -> bool;
-
-    /// Check if importer can fetch metadata now
-    fn available(&self) -> bool { true }
-    
-    /// Get hash based on file data or name
-    fn derive_hash(
-        &self,
-        element: &ElementPrefab,
-    ) -> Md5Hash {
-        Md5::digest(&element.data).into()
-    }
-
-    /// Check if importer can parse file on hash deriving stage
-    fn can_parse_in_place(&self) -> bool;
 
     /// Parse metadata on hash deriving stage, provided access to file data
     fn parse_metadata(
@@ -79,11 +92,21 @@ pub trait MetadataImporter: Sync {
         element: &ElementPrefab
     ) -> anyhow::Result<ElementMetadata>;
 
+}
+
+#[async_trait]
+pub trait MetadataFetcher: Sync {
+    /// Check if importer can get metadata for element
+    fn supported(&self, import: &PendingImport) -> bool;
+    
+    /// Check if importer can fetch metadata now
+    fn available(&self) -> bool { true }
+    
     /// Fetch metadata for pending import (network access implied)
     async fn fetch_metadata(
         &self,
-        element: &PendingImport
-    ) -> anyhow::Result<ElementMetadata>;
+        import: &PendingImport
+    ) -> anyhow::Result<Option<ElementMetadata>>;
 }
 
 // Check PNG header

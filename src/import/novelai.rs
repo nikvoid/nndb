@@ -1,12 +1,11 @@
 use std::{io::Cursor, borrow::Cow};
 
-use anyhow::{bail, Context};
-use async_trait::async_trait;
+use anyhow::Context;
 use serde::Deserialize;
 
-use crate::{model::{read::PendingImport, write::{ElementMetadata, Tag}, TagType, AIMetadata}, dao::STORAGE};
+use crate::{model::{write::{ElementMetadata, Tag}, TagType, AIMetadata}, dao::STORAGE};
 
-use super::{MetadataImporter, ElementPrefab, is_png};
+use super::{MetadataParser, ElementPrefab, is_png};
 
 pub struct NovelAI;
 
@@ -43,8 +42,7 @@ fn parse_prompt(prompt: &str) -> impl Iterator<Item = &str> + '_ {
         })
 }
 
-#[async_trait]
-impl MetadataImporter for NovelAI {
+impl MetadataParser for NovelAI {
     /// Check if png contains `Software = NovelAI`
     fn can_parse(&self, element: &ElementPrefab) -> bool {
         // PNG header
@@ -64,8 +62,6 @@ impl MetadataImporter for NovelAI {
         }
         false
     }
-
-    fn can_parse_in_place(&self) -> bool { true }
 
     /// Parse metadata on hash deriving stage, provided access to file data
     fn parse_metadata(
@@ -122,13 +118,5 @@ impl MetadataImporter for NovelAI {
             }),
             tags
         })
-    }
-
-    /// Fetch metadata for pending import (network access implied)
-    async fn fetch_metadata(
-        &self,
-        _: &PendingImport
-    ) -> anyhow::Result<ElementMetadata> {
-        bail!("unimplemented")
     }
 }

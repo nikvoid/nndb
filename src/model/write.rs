@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::import::Importer;
+use crate::import::{Parser, Fetcher};
 
 use super::*;
 
@@ -75,7 +75,7 @@ pub struct ElementToParse {
     /// Hash of whole file
     pub hash: Md5Hash,
     /// Importer that will be used for file
-    pub importer_id: Importer,
+    pub importer_id: Parser,
     /// Whether element is animation
     pub animated: bool,
     /// Image matching signature
@@ -119,7 +119,12 @@ impl AsRef<ElementMetadata> for ElementMetadata {
     }
 }
 
-pub struct ElementWithMetadata(pub ElementToParse, pub Option<ElementMetadata>); 
+pub struct ElementWithMetadata(
+    pub ElementToParse, 
+    pub ElementMetadata,
+    pub Parser
+); 
+
 impl AsRef<ElementWithMetadata> for ElementWithMetadata {
     fn as_ref(&self) -> &ElementWithMetadata {
         self

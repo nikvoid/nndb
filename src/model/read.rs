@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use crate::import::Importer;
+use crate::import::{Parser, Fetcher};
 use crate::dao::SliceShim;
 
 use super::*;
@@ -40,9 +40,6 @@ pub struct Element {
     pub animated: bool,
     /// Group of similar images (decided by comparing image signatures)
     pub group_id: Option<u32>,
-    /// Group info derived from external source
-    #[sqlx(rename = "ext_group")]
-    pub group: Option<i64>,
 }   
 
 /// Element waiting for metadata download/parse
@@ -51,7 +48,7 @@ pub struct PendingImport {
     /// Element id
     pub id: u32, 
     /// Importer assigned to element
-    pub importer_id: Importer,
+    pub importer_id: Fetcher,
     /// Name that file had before rename
     pub orig_filename: String,
     /// Hash of whole file
@@ -60,18 +57,17 @@ pub struct PendingImport {
 }
 
 /// Element metadatas and tags
-#[derive(Default, sqlx::FromRow)]
 pub struct ElementMetadata {
     /// Link to source (if was imported from other sources)
-    pub src_link: Option<String>,
+    pub src_links: Vec<(Fetcher, String)>,
     /// Time when element was added to other source (if present)
-    pub src_time: Option<UtcDateTime>,
+    pub src_times: Vec<(Fetcher, UtcDateTime)>,
     /// Time when element was added to db
     pub add_time: UtcDateTime,
     /// Stable Diffusion/etc metadata
-    #[sqlx(skip)]
     pub ai_meta: Option<AIMetadata>,
     /// Tags of the element
-    #[sqlx(skip)]
     pub tags: Vec<Tag>,
+    /// Group info derived from external source
+    pub ext_groups: Vec<(Fetcher, i64)>,
 }  

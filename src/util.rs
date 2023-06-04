@@ -2,7 +2,9 @@ use std::{path::Path, io::SeekFrom, sync::atomic::Ordering, time::Duration};
 use anyhow::Context;
 use atomic::Atomic;
 use futures::Future;
+use md5::{Md5, Digest};
 use once_cell::sync::OnceCell;
+use serde::Serialize;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tracing::error;
 use std::fmt::Write;
@@ -12,57 +14,101 @@ use crate::{
         write::{self, ElementToParse, ElementWithMetadata}, 
         SIGNATURE_LEN
     },
-    import::{TAG_TRIGGER, ElementPrefab, Importer, ANIMATION_EXTS},
+    import::{TAG_TRIGGER, ElementPrefab, Parser, ANIMATION_EXTS},
     CONFIG
 };
 
-/// AtomicBool that will be automatically set to `false` on guard drop.
-/// May carry additional value that will be set to default on guard drop.
-pub struct AutoAtom<T> {
-    def_state: T,
-    atom: Atomic<T>,
-    state: Atomic<bool>
+/// Procedure state, that will be set to default on drop
+pub struct Procedure {
+    running: Atomic<bool>,
+    state: Atomic<(u32, u32)>
 }
 
-impl<T> AutoAtom<T> where T: Copy {
-    /// Create new AutoBool in released state
-    pub const fn new(default: T) -> Self {
-        AutoAtom {
-            def_state: default,
-            atom: Atomic::new(default),
-            state: Atomic::new(false),
+impl Procedure {
+    /// Create new default state
+    pub const fn new() -> Self {
+        Self {
+            running: Atomic::new(false),
+            state: Atomic::new((0, 0))
         }
     }
-        
-    /// Acquire bool guard if bool is `false`
-    pub fn acquire(&self) -> Option<AutoAtomGuard<T>> {
-        match self.state.compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed) {
-            Ok(false) => Some(AutoAtomGuard(self)),
+
+    /// Indicate procedure beginning.
+    /// Will return `Some(ProcedureGuard)` if not running already.
+    pub fn begin(&self) -> Option<ProcedureGuard> {
+        match self.running.compare_exchange(
+            false,
+            true, 
+            Ordering::Acquire, 
+            Ordering::Relaxed
+        ) {
+            Ok(false) => Some(ProcedureGuard(self)),
             _ => None
         }
     }
 
-    /// Get atom state
-    pub fn inspect(&self) -> (bool, T) {
-        (self.state.load(Ordering::Relaxed), self.atom.load(Ordering::Relaxed))
+    /// Get procedure state
+    pub fn state(&self) -> ProcedureState {
+        let (processed, actions) = self.state.load(Ordering::Relaxed);
+        let running = self.running.load(Ordering::Relaxed);
+        ProcedureState { running, actions, processed }
     }
 }
 
-/// Guard that will set inner Atomic to default value and
-/// Atomic Bool to `false` on drop
-pub struct AutoAtomGuard<'a, T>(&'a AutoAtom<T>) where T: Copy;
-impl<T> AutoAtomGuard<'_, T> where T: Copy {
-    /// Update additional internal atomic value
-    pub fn update(&self, val: T) {
-        self.0.atom.store(val, Ordering::Relaxed);
+/// Procedure guard, that will set procedure state to default on drop
+pub struct ProcedureGuard<'a>(&'a Procedure);
+
+impl<'p> ProcedureGuard<'p> {
+    /// Get procedure state updater
+    pub fn updater(&self) -> ProcedureUpdater<'p> {
+        ProcedureUpdater(self.0)
     }
 }
-impl<T> Drop for AutoAtomGuard<'_, T> where T: Copy {
+
+impl Drop for ProcedureGuard<'_> {
     fn drop(&mut self) {
-        self.0.atom.store(self.0.def_state, Ordering::Relaxed);
-        self.0.state.store(false, Ordering::Relaxed);
+        self.0.running.store(false, Ordering::Relaxed);       
+        self.0.state.store((0, 0), Ordering::Relaxed);      
     }
 }
+
+/// Updater, that can increment procedure's done actions count 
+pub struct ProcedureUpdater<'a>(&'a Procedure);
+impl ProcedureUpdater<'_> {
+    /// Saturating increment count of processed actions
+    pub fn increment(&self) {
+        if self.0.running.load(Ordering::Relaxed) {
+            self.0.state.fetch_update(
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+                |mut state| 
+                if state.0 < state.1 {
+                    state.0 += 1;
+                    Some(state)
+                } else {
+                    None
+                }
+            ).ok();
+        }
+    }
+
+    /// Set action count and reset processed action count
+    pub fn set_action_count(&self, count: u32) {
+        if self.0.running.load(Ordering::Relaxed) {
+            self.0.state.store((0, count), Ordering::Relaxed);
+        }
+    }
+}
+
+
+/// Struct that represent state of some procedure, 
+/// where there are many similar operations that can be counted
+#[derive(Serialize)]
+pub struct ProcedureState {
+    running: bool,
+    actions: u32,
+    processed: u32,    
+}    
 
 /// Get distance between 2 signatures.
 /// Maximal(?) value is `100.00`
@@ -89,10 +135,10 @@ pub fn get_tags_from_path(path: &Path) -> Vec<write::Tag> {
 
 /// Derive file hash, signature, and, if possible, metadata
 pub fn hash_file(prefab: ElementPrefab) -> anyhow::Result<ElementWithMetadata> {
-    let importer_id = Importer::scan(&prefab);
-    let importer = importer_id.get_singleton();
+    let parser_id = Parser::scan(&prefab);
+    let parser = parser_id.get_singleton();
 
-    let hash = importer.derive_hash(&prefab);
+    let hash = Md5::digest(&prefab.data).into();
     
     let mut new_name = String::with_capacity(48);
 
@@ -131,23 +177,20 @@ pub fn hash_file(prefab: ElementPrefab) -> anyhow::Result<ElementWithMetadata> {
         true => (None, false),
     };
 
-    let metadata = match importer.can_parse_in_place() {
-        true => Some(importer.parse_metadata(&prefab)?),
-        false => None,
-    };
+    let metadata = parser.parse_metadata(&prefab)?;
      
     let element = ElementToParse {
         filename: new_name,
         orig_filename: filename.to_owned(),
         hash,
-        importer_id,
+        importer_id: parser_id,
         animated,
         signature,
         broken,
         path: prefab.path,
     };
     
-    Ok(ElementWithMetadata(element, metadata))
+    Ok(ElementWithMetadata(element, metadata, parser_id))
 }
 
 /// Make thumnbnail for image `src`.

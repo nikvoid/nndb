@@ -1,14 +1,13 @@
 use std::io::Cursor;
 
 use anyhow::bail;
-use async_trait::async_trait;
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::{model::{read::PendingImport, write::{ElementMetadata, Tag}, TagType, AIMetadata}, dao::STORAGE};
+use crate::{model::{write::{ElementMetadata, Tag}, TagType, AIMetadata}, dao::STORAGE};
 
-use super::{MetadataImporter, ElementPrefab, is_png};
+use super::{MetadataParser, ElementPrefab, is_png};
 
 /// Escaped with \ braces, etc
 static ESCAPE_REX: Lazy<Regex> = Lazy::new(|| {
@@ -59,8 +58,7 @@ fn parse_prompt(prompt: &str) -> impl Iterator<Item = String> + '_ {
 /// TODO: Support non-png/EXIF?
 pub struct Webui;
 
-#[async_trait]
-impl MetadataImporter for Webui {
+impl MetadataParser for Webui {
     /// Check if importer can get metadata for element
     fn can_parse(&self, element: &ElementPrefab) -> bool {
         if !is_png(element) {
@@ -80,9 +78,6 @@ impl MetadataImporter for Webui {
         
         false
     }
-
-    /// Check if importer can parse file on hash deriving stage
-    fn can_parse_in_place(&self) -> bool { true }
 
     /// Parse metadata on hash deriving stage, provided access to file data
     fn parse_metadata(
@@ -158,13 +153,5 @@ impl MetadataImporter for Webui {
             ai_meta: Some(ai_meta),
             tags
         })
-    }
-
-    /// Fetch metadata for pending import (network access implied)
-    async fn fetch_metadata(
-        &self,
-        _: &PendingImport
-    ) -> anyhow::Result<ElementMetadata> {
-        bail!("unimplemented")
     }
 }

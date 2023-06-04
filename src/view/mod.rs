@@ -125,7 +125,7 @@ impl Render for ElementListContainer<'_> {
             .image-container-list.image-container-list-video[self.0.animated] {
                 a href=(resolve!(/element/self.0.id)) {
                     (ScriptVar(&ident, &ElementLink(self.0)))
-                    img.def-img.image-list-element src=(ElementThumbnail(self.0))
+                    img.def-img.image-list-element loading="lazy" src=(ElementThumbnail(self.0))
                         alt={ @if self.0.broken { "broken" } @else { "no image" } }
                         onerror = { 
                             @if !self.0.animated {
@@ -343,13 +343,13 @@ impl Render for AsideMetadata<'_> {
             .tag-container-grid {
                 b.tag.tag-block { "Added at " (self.0.add_time) }
             }
-            @if let Some(time) = self.0.src_time {
+            @for (fetcher, time) in &self.0.src_times {
                 .tag-container-grid {
-                    b.tag.tag-block { "Source: " (time) }
+                    b.tag.tag-block { (fetcher.name()) ": " (time) }
                 }
             }
-            @if let Some(link) = &self.0.src_link {
-                .tag { "Source" }
+            @for (fetcher, link) in &self.0.src_links {
+                .tag { "Source link from " (fetcher.name()) }
                 .tag-container-grid {
                     a.tag.tag-block href=(link) { (link) }
                 }

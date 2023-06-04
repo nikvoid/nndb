@@ -12,7 +12,7 @@ where R: Render {
     fn render_to(&self, buffer: &mut String) {
         html_to! { buffer,
             .tag-container-grid {
-                .tag.tag-block { (self.1) span #(self.0.to_lowercase()) {(self.2)} }
+                .tag.tag-block { (self.1) br; span #(self.0.to_lowercase()) {(self.2)} }
             }
         }
 

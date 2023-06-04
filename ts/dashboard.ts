@@ -36,21 +36,31 @@ function updateDashboard() {
   ) {
     let requesta = new XMLHttpRequestExt();
 
+    type ProcState = {
+      running: boolean,
+      actions: number,
+      processed: number,
+    };
+    
     type Resp = {
-      scan_files: boolean,
-      update_metadata: boolean,
-      group_elements: boolean,
-      make_thumbnails: boolean,
-      wiki_fetch: [boolean, number]
+      scan_files: ProcState,
+      update_metadata: ProcState,
+      group_elements: ProcState,
+      make_thumbnails: ProcState,
+      wiki_fetch: ProcState
+    };
+
+    let fmt_status = (state: ProcState) => {
+      return `${state.running} : ${state.processed} / ${state.actions}`;
     };
     
     requesta.success_cb = () => {
       let data: Resp = JSON.parse(requesta.responseText);
-      scan.innerText = data.scan_files;
-      meta.innerText = data.update_metadata;
-      group.innerText = data.group_elements;
-      thumbs.innerText = data.make_thumbnails;
-      wikis.innerText = data.wiki_fetch;
+      scan.innerText = fmt_status(data.scan_files);
+      meta.innerText = fmt_status(data.update_metadata);
+      group.innerText = fmt_status(data.group_elements);
+      thumbs.innerText = fmt_status(data.make_thumbnails);
+      wikis.innerText = fmt_status(data.wiki_fetch);
     };
     requesta.error_cb = () => {};
 

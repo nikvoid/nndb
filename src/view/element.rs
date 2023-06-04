@@ -34,17 +34,6 @@ pub async fn element_page(id: web::Path<u32>) -> impl Responder {
         None => None,
     };
     
-    let associated_ext = match elem.group {
-        Some(group_id) => { 
-            let res = STORAGE
-                .search_elements(&format!("extgroup:{}", group_id), 0, None, 0)
-                .await
-                .map(|(res, ..)| res);
-            
-            Some(res)
-        }
-        None => None,
-    };
 
     let associated = match associated.transpose() {
         Ok(elems) => elems,
@@ -54,19 +43,31 @@ pub async fn element_page(id: web::Path<u32>) -> impl Responder {
         }
     };
     
-    let associated_ext = match associated_ext.transpose() {
-        Ok(elems) => elems,
-        Err(e) => {
-            error!(?e, "failed to fetch external element group");
-            None
+    let mut groups = vec![];
+
+    if let Some(assoc) = associated {
+        groups.push(("Signature", elem.group_id.unwrap() as i64, assoc));
+    }
+    
+    for (fetcher, group) in &meta.ext_groups {
+        match STORAGE
+            .search_elements(&format!("extgroup:{}", group), 0, None, 0)
+            .await {
+            // Select only groups with more than zero distinct elements
+            Ok((elems, ..)) if elems
+                .iter()
+                .filter(|e| e.id != elem.id)
+                .count() > 0 => groups.push((fetcher.name(), *group, elems)),
+            Err(e) => error!(?e, "failed to fetch external element group"), 
+            _ => ()
         }
-    };
+    }
 
-    let assoc = associated.iter()
-        .chain(associated_ext.iter())
-        .flatten()
-        .filter(|e| e.id != id);
-
+    let has_group = groups
+        .iter()
+        .map(|(.., g)| g.len())
+        .sum::<usize>() > 0;
+    
     let page = BaseContainer {
         content: Some(html! {
             .index-main {
@@ -82,11 +83,18 @@ pub async fn element_page(id: web::Path<u32>) -> impl Responder {
                     }
                 }
             } 
-            @if assoc.clone().count() > 0 {
+            @if has_group {
                 .index-side { 
-                    @for e in assoc {
-                        (ElementListContainer(e))
-                    } 
+                    @for (fetcher, grp_id, group) in groups {
+                        .tag.tag-block style="margin: 0 0 15px 5px" { 
+                            (fetcher) ": " (grp_id) 
+                        }
+                        .flex-block {
+                            @for e in group {
+                                (ElementListContainer(&e))
+                            } 
+                        }
+                    }
                 }
             }
         }),
