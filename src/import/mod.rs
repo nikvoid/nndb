@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use crate::model::{write::ElementMetadata, read::{PendingImport, self}};
 use async_trait::async_trait;
+use enum_iterator::Sequence;
 use num_enum::{FromPrimitive, IntoPrimitive};
 
 mod passthrough;
@@ -14,6 +15,12 @@ pub const ANIMATION_EXTS: &[&str] = &["mp4", "mov", "webm", "m4v"];
 /// Name directory as `TAG.<tag_type>.<tag_name>.<tag_type>.<tag_name>...`
 /// to add `<tag_name>...` to elements in this directory 
 pub const TAG_TRIGGER: &str = "TAG.";
+
+/// Holder with element original filename and data 
+pub struct ElementPrefab {
+    pub path: PathBuf,
+    pub data: Vec<u8>,
+}
 
 #[derive(FromPrimitive, IntoPrimitive, Clone, Copy, Debug, PartialEq, sqlx::Type)]
 #[repr(u8)]
@@ -47,10 +54,25 @@ impl Parser {
     }
 }
 
-/// Holder with element original filename and data 
-pub struct ElementPrefab {
-    pub path: PathBuf,
-    pub data: Vec<u8>,
+#[derive(FromPrimitive, IntoPrimitive, Clone, Copy, Debug, PartialEq, sqlx::Type, Sequence)]
+#[repr(u8)]
+pub enum Fetcher {
+    #[default]
+    Unknown = 100,
+}
+
+impl Fetcher {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Fetcher::Unknown => "Unknown",
+        }
+    }
+}
+
+pub enum FetchStatus {
+    Success(ElementMetadata),
+    Fail,
+    NotSupported,
 }
 
 pub trait MetadataParser: Sync {

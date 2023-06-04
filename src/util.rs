@@ -135,8 +135,8 @@ pub fn get_tags_from_path(path: &Path) -> Vec<write::Tag> {
 
 /// Derive file hash, signature, and, if possible, metadata
 pub fn hash_file(prefab: ElementPrefab) -> anyhow::Result<ElementWithMetadata> {
-    let importer_id = Parser::scan(&prefab);
-    let importer = importer_id.get_singleton();
+    let parser_id = Parser::scan(&prefab);
+    let parser = parser_id.get_singleton();
 
     let hash = Md5::digest(&prefab.data).into();
     
@@ -177,20 +177,20 @@ pub fn hash_file(prefab: ElementPrefab) -> anyhow::Result<ElementWithMetadata> {
         true => (None, false),
     };
 
-    let metadata = importer.parse_metadata(&prefab)?;
+    let metadata = parser.parse_metadata(&prefab)?;
      
     let element = ElementToParse {
         filename: new_name,
         orig_filename: filename.to_owned(),
         hash,
-        importer_id,
+        importer_id: parser_id,
         animated,
         signature,
         broken,
         path: prefab.path,
     };
     
-    Ok(ElementWithMetadata(element, Some(metadata)))
+    Ok(ElementWithMetadata(element, metadata, parser_id))
 }
 
 /// Make thumnbnail for image `src`.

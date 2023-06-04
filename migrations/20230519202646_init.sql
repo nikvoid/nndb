@@ -10,13 +10,16 @@ CREATE TABLE IF NOT EXISTS element (
     add_time      INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- table for pending element imports processing
-CREATE TABLE IF NOT EXISTS import (
-    element_id   INTEGER PRIMARY KEY NOT NULL,
+-- table for marking processed elements
+CREATE TABLE IF NOT EXISTS fetch_status (
+    element_id   INTEGER NOT NULL,
     importer_id  INTEGER NOT NULL,
     failed       INTEGER NOT NULL DEFAULT FALSE,
+    -- true if importer can import, but have failed
+    supported    INTEGER NOT NULL,
     
-    FOREIGN KEY (element_id) REFERENCES element (id) ON DELETE CASCADE ON UPDATE RESTRICT
+    FOREIGN KEY (element_id) REFERENCES element (id) ON DELETE CASCADE ON UPDATE RESTRICT,
+    PRIMARY KEY (element_id, importer_id)
 );
 
 CREATE TABLE IF NOT EXISTS group_ids (
@@ -37,9 +40,9 @@ CREATE TABLE IF NOT EXISTS group_metadata (
     FOREIGN KEY (group_id)   REFERENCES group_ids (id) ON DELETE SET NULL ON UPDATE RESTRICT
 );
 
--- Also a marker that element was processed
 CREATE TABLE IF NOT EXISTS metadata (
-    element_id   INTEGER PRIMARY KEY NOT NULL,
+    element_id   INTEGER NOT NULL,
+    importer_id  INTEGER NOT NULL,
     src_link     TEXT,
     src_time     INTEGER,
     -- this field intended to use with external group information source

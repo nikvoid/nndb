@@ -343,13 +343,13 @@ impl Render for AsideMetadata<'_> {
             .tag-container-grid {
                 b.tag.tag-block { "Added at " (self.0.add_time) }
             }
-            @if let Some(time) = self.0.src_time {
+            @for (fetcher, time) in &self.0.src_times {
                 .tag-container-grid {
-                    b.tag.tag-block { "Source: " (time) }
+                    b.tag.tag-block { (fetcher.name()) ": " (time) }
                 }
             }
-            @if let Some(link) = &self.0.src_link {
-                .tag { "Source" }
+            @for (fetcher, link) in &self.0.src_links {
+                .tag { "Source link from " (fetcher.name()) }
                 .tag-container-grid {
                     a.tag.tag-block href=(link) { (link) }
                 }

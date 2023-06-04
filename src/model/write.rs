@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::import::Parser;
+use crate::import::{Parser, Fetcher};
 
 use super::*;
 
@@ -119,7 +119,12 @@ impl AsRef<ElementMetadata> for ElementMetadata {
     }
 }
 
-pub struct ElementWithMetadata(pub ElementToParse, pub Option<ElementMetadata>); 
+pub struct ElementWithMetadata(
+    pub ElementToParse, 
+    pub ElementMetadata,
+    pub Parser
+); 
+
 impl AsRef<ElementWithMetadata> for ElementWithMetadata {
     fn as_ref(&self) -> &ElementWithMetadata {
         self

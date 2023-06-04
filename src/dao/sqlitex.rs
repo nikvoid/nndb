@@ -8,13 +8,14 @@ use sqlx::Executor;
 use sqlx::{SqlitePool, migrate::MigrateDatabase, SqliteConnection};
 use tokio::sync::RwLock;
 
+use crate::import::{Parser, Fetcher, FetchStatus};
 use crate::search::{self, Term};
 use crate::util;
 use crate::{
     model::{
         write::{self, ElementWithMetadata}, 
         read::{self, PendingImport}, 
-        Summary, Md5Hash, GroupMetadata, AIMetadata
+        Summary, Md5Hash, GroupMetadata, AIMetadata, UtcDateTime
     }, 
     CONFIG
 };
@@ -63,7 +64,7 @@ impl Sqlite {
         tx: &mut SqliteConnection, 
         element: &ElementWithMetadata
     ) -> Result<u32, StorageError> {
-        let ElementWithMetadata(e, m) = element; 
+        let ElementWithMetadata(e, meta, parser) = element; 
 
         let hash = e.hash.as_slice();
         let id = sqlx::query!(
@@ -79,23 +80,13 @@ impl Sqlite {
         .await?
         .last_insert_rowid();
         
-        match m {
-            // Add metadata right here
-            Some(meta) => {
-                Self::add_metadata_tx(tx, id as u32, meta).await?;
-            },
-            // Insert import row
-            None => {
-                let imp_id: u8 = e.importer_id.into();
-                sqlx::query!(
-                    "INSERT INTO import (element_id, importer_id) VALUES (?, ?)",
-                    id,
-                    imp_id
-                )
-                .execute(&mut *tx)
-                .await?;
-            },
-        }
+        // Add metadata right here
+        Self::add_metadata_tx(
+            tx, 
+            id as u32, 
+            (*parser).into(),
+            meta
+        ).await?;
 
         if let Some(sig) = e.signature {
             let sig = bytemuck::cast_slice(&sig);
@@ -114,24 +105,19 @@ impl Sqlite {
     async fn add_metadata_tx(
         tx: &mut SqliteConnection,
         element_id: u32, 
+        importer_id: u8,
         meta: &write::ElementMetadata
     ) -> Result<(), StorageError> {
 
         if !meta.tags.is_empty() {
             Self::add_tags_tx(tx, Some(element_id), &meta.tags).await?;
         }
-
+       
         sqlx::query!(
-            "DELETE FROM import WHERE element_id = ?",
-            element_id
-        )
-        .execute(&mut *tx)
-        .await?;
-        
-        sqlx::query!(
-            "INSERT INTO metadata (element_id, src_link, src_time, ext_group)
-            VALUES (?, ?, ?, ?)",
+            "INSERT INTO metadata (element_id, importer_id, src_link, src_time, ext_group)
+            VALUES (?, ?, ?, ?, ?)",
             element_id, 
+            importer_id,
             meta.src_link,
             meta.src_time,
             meta.group
@@ -143,6 +129,37 @@ impl Sqlite {
             Self::add_ai_metadata_tx(tx, element_id, ai).await?;
         }
 
+        Ok(())
+    }
+
+    async fn add_fetch_status_tx(
+        tx: &mut SqliteConnection,
+        element_id: u32, 
+        fetcher: Fetcher,
+        status: &FetchStatus
+    ) -> Result<(), StorageError> {
+        
+        let importer_id: u8 = fetcher.into();
+        
+        let query = match status {
+            FetchStatus::Success(_) =>
+                "INSERT INTO fetch_status (element_id, importer_id, failed, supported)
+                VALUES (?, ?, 0, 1)",
+            FetchStatus::Fail =>
+                "INSERT INTO fetch_status (element_id, importer_id, failed, supported)
+                VALUES (?, ?, 1, 1)
+                ON CONFLICT (element_id, importer_id) DO UPDATE SET failed = failed + 1",
+            FetchStatus::NotSupported =>
+                "INSERT INTO fetch_status (element_id, importer_id, failed, supported)
+                VALUES (?, ?, 0, 0)"
+        };
+
+        sqlx::query(query)
+            .bind(element_id)
+            .bind(importer_id)
+            .execute(&mut *tx)
+            .await?;
+        
         Ok(())
     }
 
@@ -453,7 +470,7 @@ impl Sqlite {
         let mut count = 0;
         
         for elem in elements {
-            let ElementWithMetadata(e, _) = elem.as_ref();
+            let ElementWithMetadata(e, ..) = elem.as_ref();
             
             // Deduplication
             match (hashes.contains(&e.hash), &CONFIG.testing_mode) {
@@ -538,26 +555,48 @@ impl Sqlite {
         Ok(())
     }
 
-    /// Get all elements waiting on metadata
+    /// Get all possible metadata fetch variants for elements.
     pub async fn get_pending_imports(&self) -> Result<Vec<PendingImport>, StorageError> {
-        let v = sqlx::query_as( // sql
-            "SELECT e.*
-            FROM element e, import i
-            WHERE e.id = i.element_id AND i.failed = 0
-            ORDER BY i.importer_id ASC"
-        )
-        .fetch_all(&self.pool)
+        let fetchers: Vec<u8> = enum_iterator::all::<Fetcher>()
+            .filter(|&f| f != Fetcher::Unknown)
+            .map(|f| f.into())
+            .collect();
+
+        let mut conn = self.pool.acquire().await?;
+
+        let imps = Self::with_temp_array_tx(&mut conn, "mem", &[("fetchers", &fetchers)], |conn| async {
+
+            let imps = sqlx::query_as( // sql
+                "SELECT e.*, f.value
+                FROM mem.fetchers as f, element e
+                LEFT JOIN fetch_status s ON s.importer_id = f.value  
+                WHERE s.element_id IS NULL
+                ORDER BY f.value ASC" 
+            )
+            .fetch_all(&mut *conn)
+            .await?;
+            
+            Ok(imps)  
+        }.boxed())
         .await?;
         
-        Ok(v)
+        Ok(imps)
     }
 
-    /// Add metadata for element -- and remove pending import
-    pub async fn add_metadata<M>(&self, element_id: u32, metadata: M) -> Result<(), StorageError>
-    where M: AsRef<write::ElementMetadata> + Send {
-        let m = metadata.as_ref();
-        let mut conn = self.pool.acquire().await?;
-        Self::add_metadata_tx(&mut conn, element_id, m).await?;
+    /// Add metadata for element
+    pub async fn add_metadata<M>(
+        &self, 
+        element_id: u32, 
+        fetcher: Fetcher, 
+        fetch_status: &FetchStatus
+    ) -> Result<(), StorageError> {
+        let mut tx = self.pool.begin().await?;
+
+        if let FetchStatus::Success(meta) = &fetch_status {
+            Self::add_metadata_tx(&mut tx, element_id, fetcher.into(), meta).await?;
+        }
+
+        Self::add_fetch_status_tx(&mut tx, element_id, fetcher, fetch_status).await?;
         
         // Invalidate element id cache
         self.id_cache.invalidate_all();
@@ -688,25 +727,52 @@ impl Sqlite {
             return Ok(None)
         };
 
-        // Nested part of metadata is fetched below 
-        let meta: Option<read::ElementMetadata> = sqlx::query_as( // sql
-            "SELECT
-                m.src_link,
-                m.src_time,
-                e.add_time
+        let src_links = sqlx::query!(
+            r#"SELECT 
+                m.importer_id as "importer_id: u8", 
+                m.src_link as "src_link!"
             FROM metadata m
-            INNER JOIN element e ON e.id = m.element_id
-            WHERE m.element_id = ?"
+            WHERE m.element_id = ? AND m.src_link IS NOT NULL"#,
+            id
         )
-        .bind(id)
-        .fetch_optional(&self.pool)
+        .map(|anon| (anon.importer_id.into(), anon.src_link))
+        .fetch_all(&self.pool)
         .await?;
         
-        let Some(mut meta) = meta else {
-            return Ok(None)
-        };
-
-        meta.ai_meta = sqlx::query_as( // sql
+        let src_times = sqlx::query!(
+            r#"SELECT 
+                m.importer_id as "importer_id: u8", 
+                m.src_time as "src_time!: UtcDateTime"
+            FROM metadata m
+            WHERE m.element_id = ? AND m.src_time IS NOT NULL"#,
+            id
+        )
+        .map(|anon| (anon.importer_id.into(), anon.src_time))
+        .fetch_all(&self.pool)
+        .await?;
+        
+        let ext_groups = sqlx::query!( // sql
+            r#"SELECT 
+                m.importer_id as "importer_id: u8", 
+                m.ext_group as "ext_group!"
+            FROM metadata m
+            WHERE m.element_id = ? AND m.ext_group IS NOT NULL"#,
+            id
+        )
+        .map(|anon| (anon.importer_id.into(), anon.ext_group))
+        .fetch_all(&self.pool)
+        .await?;
+        
+        let add_time = sqlx::query_scalar( // sql
+            "SELECT add_time
+            FROM element
+            WHERE id = ?"
+        )
+        .bind(id)
+        .fetch_one(&self.pool)
+        .await?;
+        
+        let ai_meta = sqlx::query_as( // sql
             "SELECT * FROM ai_metadata
             WHERE element_id = ?"    
         )
@@ -714,7 +780,7 @@ impl Sqlite {
         .fetch_optional(&self.pool)
         .await?;
 
-        meta.tags = sqlx::query_as( // sql
+        let tags = sqlx::query_as( // sql
             "SELECT t.*
             FROM tag t, element_tag et
             WHERE t.id = et.tag_id AND et.element_id = ?"
@@ -722,6 +788,15 @@ impl Sqlite {
         .bind(id)
         .fetch_all(&self.pool)
         .await?;
+
+        let meta = read::ElementMetadata {
+            src_links,
+            src_times,
+            add_time,
+            ai_meta,
+            tags,
+            ext_groups
+        };
         
         Ok(Some((elem, meta)))
     }
@@ -1006,19 +1081,6 @@ impl Sqlite {
         Ok(summary)
     }
 
-    /// Mark import as failed
-    pub async fn mark_failed_import(&self, element_id: u32) -> Result<(), StorageError> {
-        sqlx::query!(
-            "UPDATE import SET failed = 1
-            WHERE element_id = ?",
-            element_id
-        )
-        .execute(&self.pool)
-        .await?;
-        
-        Ok(())
-    }
-
     /// Mark that all elements don't have thumbnails
     pub async fn remove_thumbnails(&self) -> Result<(), StorageError> {
         sqlx::query!(
@@ -1033,7 +1095,7 @@ impl Sqlite {
     /// Remove failed mark from failed imports
     pub async fn unmark_failed_imports(&self) -> Result<(), StorageError> {
         sqlx::query!(
-            "UPDATE import SET failed = 0"
+            "DELETE FROM fetch_status WHERE failed > 0 AND supported = 1"
         )
         .execute(&self.pool)
         .await?;
