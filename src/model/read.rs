@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use crate::import::{Parser, Fetcher};
+use crate::import::{Fetcher};
 use crate::dao::SliceShim;
 
 use super::*;

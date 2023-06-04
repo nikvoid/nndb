@@ -8,7 +8,7 @@ use sqlx::Executor;
 use sqlx::{SqlitePool, migrate::MigrateDatabase, SqliteConnection};
 use tokio::sync::RwLock;
 
-use crate::import::{Parser, Fetcher, FetchStatus};
+use crate::import::{Fetcher, FetchStatus};
 use crate::search::{self, Term};
 use crate::util;
 use crate::{

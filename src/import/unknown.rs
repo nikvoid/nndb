@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use crate::model::{write::{ElementMetadata, Tag}, TagType, read::{PendingImport, self}};
+use crate::model::{write::{ElementMetadata, Tag}, TagType, read::{PendingImport}};
 use super::{MetadataParser, ElementPrefab, MetadataFetcher};
 
 /// Importer that does not parse metadata at all
@@ -28,7 +28,7 @@ pub struct Unknown;
 #[async_trait]
 impl MetadataFetcher for Unknown {
     /// Check if importer can get metadata for element
-    fn supported(&self, import: &PendingImport) -> bool { false }
+    fn supported(&self, _import: &PendingImport) -> bool { false }
     
     /// Check if importer can fetch metadata now
     fn available(&self) -> bool { false }
@@ -36,7 +36,7 @@ impl MetadataFetcher for Unknown {
     /// Fetch metadata for pending import (network access implied)
     async fn fetch_metadata(
         &self,
-        import: &PendingImport
+        _import: &PendingImport
     ) -> anyhow::Result<Option<ElementMetadata>> {
         Ok(None)
     }

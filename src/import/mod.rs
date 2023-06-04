@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::model::{write::ElementMetadata, read::{PendingImport, self}};
+use crate::model::{write::ElementMetadata, read::{PendingImport}};
 use async_trait::async_trait;
 use enum_iterator::Sequence;
 use num_enum::{FromPrimitive, IntoPrimitive};

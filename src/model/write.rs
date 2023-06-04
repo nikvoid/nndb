@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::import::{Parser, Fetcher};
+use crate::import::{Parser};
 
 use super::*;
 
