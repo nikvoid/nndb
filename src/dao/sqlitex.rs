@@ -674,10 +674,11 @@ impl Sqlite {
             let elems = sqlx::query_as( // sql
                 "SELECT 
                     e.*, g.group_id, m.ext_group
-                FROM element e
-                LEFT JOIN group_metadata g ON g.element_id = e.id
-                LEFT JOIN metadata m ON m.element_id = e.id
-                WHERE e.id in mem.ids
+                -- use mem.ids as base table to preserve ordering
+                FROM mem.ids i
+                LEFT JOIN element e ON i.value = e.id
+                LEFT JOIN group_metadata g ON i.value = g.element_id
+                LEFT JOIN metadata m ON i.value = m.element_id
                 LIMIT ? OFFSET ?",
             )
             .bind(limit)
