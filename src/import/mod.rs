@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use enum_iterator::Sequence;
 use num_enum::{FromPrimitive, IntoPrimitive};
 
-mod passthrough;
+mod unknown;
 mod novelai;
 mod webui;
 
@@ -47,7 +47,7 @@ impl Parser {
     /// Get singleton for chosen importer
     pub fn get_singleton(self) -> &'static dyn MetadataParser {
         match self {
-            Self::Passthrough => &passthrough::Passthrough,
+            Self::Passthrough => &unknown::Passthrough,
             Self::NovelAI => &novelai::NovelAI,
             Self::Webui => &webui::Webui,
         }
@@ -62,7 +62,14 @@ pub enum Fetcher {
 }
 
 impl Fetcher {
-    pub fn name(&self) -> &'static str {
+    /// Get singleton for chosen importer
+    pub fn get_singleton(self) -> &'static dyn MetadataFetcher {
+        match self {
+            Self::Unknown => &unknown::Unknown,
+        }
+    }
+    
+    pub fn name(self) -> &'static str {
         match self {
             Fetcher::Unknown => "Unknown",
         }
@@ -90,7 +97,7 @@ pub trait MetadataParser: Sync {
 #[async_trait]
 pub trait MetadataFetcher: Sync {
     /// Check if importer can get metadata for element
-    fn supported(&self, element: &read::Element) -> bool;
+    fn supported(&self, import: &PendingImport) -> bool;
     
     /// Check if importer can fetch metadata now
     fn available(&self) -> bool { true }
@@ -98,7 +105,7 @@ pub trait MetadataFetcher: Sync {
     /// Fetch metadata for pending import (network access implied)
     async fn fetch_metadata(
         &self,
-        element: &PendingImport
+        import: &PendingImport
     ) -> anyhow::Result<Option<ElementMetadata>>;
 }
 

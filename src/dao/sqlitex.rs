@@ -558,7 +558,7 @@ impl Sqlite {
     /// Get all possible metadata fetch variants for elements.
     pub async fn get_pending_imports(&self) -> Result<Vec<PendingImport>, StorageError> {
         let fetchers: Vec<u8> = enum_iterator::all::<Fetcher>()
-            .filter(|&f| f != Fetcher::Unknown)
+            .filter(|&f| f.get_singleton().available())
             .map(|f| f.into())
             .collect();
 
@@ -584,7 +584,7 @@ impl Sqlite {
     }
 
     /// Add metadata for element
-    pub async fn add_metadata<M>(
+    pub async fn add_metadata(
         &self, 
         element_id: u32, 
         fetcher: Fetcher, 
