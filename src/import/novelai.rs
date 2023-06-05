@@ -14,8 +14,8 @@ struct Metadata<'a> {
     steps: u32,
     sampler: &'a str,
     seed: i64,
-    strength: f32,
-    noise: f32,
+    strength: Option<f32>,
+    noise: Option<f32>,
     scale: f32,
     uc: Cow<'a, str>
 }
@@ -113,8 +113,8 @@ impl MetadataParser for NovelAI {
                 scale: meta.scale,
                 sampler: meta.sampler.to_owned(),
                 seed: meta.seed,
-                strength: meta.strength,
-                noise: meta.noise
+                strength: meta.strength.unwrap_or_default(),
+                noise: meta.noise.unwrap_or_default()
             }),
             tags
         })

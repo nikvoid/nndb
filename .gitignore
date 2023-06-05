@@ -12,3 +12,5 @@ thumbs
 log.txt
 __res
 schema.db
+res2
+config-prod.toml

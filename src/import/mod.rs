@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::model::{write::ElementMetadata, read::{PendingImport}};
+use crate::model::{write::ElementMetadata, read::PendingImport};
 use async_trait::async_trait;
 use enum_iterator::Sequence;
 use num_enum::{FromPrimitive, IntoPrimitive};
@@ -8,6 +8,7 @@ use num_enum::{FromPrimitive, IntoPrimitive};
 mod unknown;
 mod novelai;
 mod webui;
+mod pixiv;
 
 pub const IMAGE_EXTS: &[&str] = &["png", "jpeg", "jpg", "gif", "avif", "webp"];
 pub const ANIMATION_EXTS: &[&str] = &["mp4", "mov", "webm", "m4v"];
@@ -57,8 +58,11 @@ impl Parser {
 #[derive(FromPrimitive, IntoPrimitive, Clone, Copy, Debug, PartialEq, sqlx::Type, Sequence)]
 #[repr(u8)]
 pub enum Fetcher {
+    /// Just stub
     #[default]
     Unknown = 100,
+    /// Pixiv work metadata
+    Pixiv   = 101,
 }
 
 impl Fetcher {
@@ -66,12 +70,15 @@ impl Fetcher {
     pub fn get_singleton(self) -> &'static dyn MetadataFetcher {
         match self {
             Self::Unknown => &unknown::Unknown,
+            Self::Pixiv => &*pixiv::PIXIV,
         }
     }
     
+    /// Gett fetcher name
     pub fn name(self) -> &'static str {
         match self {
-            Fetcher::Unknown => "Unknown",
+            Self::Unknown => "Unknown",
+            Self::Pixiv => "Pixiv",
         }
     }
 }
