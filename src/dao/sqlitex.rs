@@ -567,7 +567,7 @@ impl Sqlite {
         let imps = Self::with_temp_array_tx(&mut conn, "mem", &[("fetchers", &fetchers)], |conn| async {
 
             let imps = sqlx::query_as( // sql
-                "SELECT e.*, f.value
+                "SELECT e.*, f.value as importer_id
                 FROM mem.fetchers as f, element e
                 LEFT JOIN fetch_status s ON s.importer_id = f.value  
                 WHERE s.element_id IS NULL
@@ -597,6 +597,8 @@ impl Sqlite {
         }
 
         Self::add_fetch_status_tx(&mut tx, element_id, fetcher, fetch_status).await?;
+
+        tx.commit().await?;
         
         // Invalidate element id cache
         self.id_cache.invalidate_all();
@@ -672,13 +674,12 @@ impl Sqlite {
         let (elems, tags) =
         Self::with_temp_array_tx(&mut conn, "mem", &[("ids", &ids)], |conn| async move {
             let elems = sqlx::query_as( // sql
-                "SELECT 
-                    e.*, g.group_id, m.ext_group
+                "SELECT
+                    e.*, g.group_id
                 -- use mem.ids as base table to preserve ordering
                 FROM mem.ids i
                 LEFT JOIN element e ON i.value = e.id
                 LEFT JOIN group_metadata g ON i.value = g.element_id
-                LEFT JOIN metadata m ON i.value = m.element_id
                 LIMIT ? OFFSET ?",
             )
             .bind(limit)
@@ -855,11 +856,11 @@ impl Sqlite {
     /// Tag autocompletion
     pub async fn get_tag_completions(&self, input: &str, limit: u32) -> Result<Vec<read::Tag>, StorageError> {
         let fmt = format!("%{}%", input);
-        let tags = sqlx::query_as(
+        let tags = sqlx::query_as( // sql
             "SELECT * FROM tag
-            WHERE tag_name LIKE ? AND hidden = 0
+            WHERE (tag_name LIKE ?1 OR alt_name IS NOT NULL AND alt_name LIKE ?1) AND hidden = 0
             ORDER BY count DESC
-            LIMIT ?"
+            LIMIT ?2"
         )
         .bind(fmt)
         .bind(limit)
@@ -1165,9 +1166,15 @@ impl Sqlite {
         Ok(())
     }
 
-    /// Look for tag that corresponds to alias
+    /// Look for tag that corresponds to alias.
+    /// Can't be called from async code
     pub fn lookup_alias(&self, alias: &str) -> Option<String> {
         self.alias_cache.blocking_read().get(alias).cloned() 
+    }
+    
+    /// Look for tag that corresponds to alias (async).
+    pub async fn lookup_alias_async(&self, alias: &str) -> Option<String> {
+        self.alias_cache.read().await.get(alias).cloned() 
     }
 }
 

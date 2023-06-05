@@ -10,6 +10,16 @@ pub struct StaticFolder {
     pub serve: bool,
 }
 
+#[derive(Deserialize, Clone)]
+pub struct PixivCreds {
+    /// Pixiv refresh token
+    pub refresh_token: String,
+    /// Pixiv client id
+    pub client_id: String,
+    /// Pixiv client secret
+    pub client_secret: String
+}
+
 #[derive(Deserialize, Clone, Copy)]
 #[serde(rename_all = "lowercase")] 
 pub enum LogLevel {
@@ -59,4 +69,6 @@ pub struct Config {
     pub static_folder: StaticFolder,
     /// File to write logs
     pub log_file: String,
+    /// Pixiv fetcher credentials
+    pub pixiv_credentials: Option<PixivCreds>
 }

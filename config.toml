@@ -31,6 +31,14 @@ log_file = "log.txt"
 # Directory that will be scanned to find new element files
 input_folder = "res"
 
+# If specified, pixiv metadata fetcher will work for appropriate images
+# [pixiv_credentials]
+# # Pixiv refresh token
+# refresh_token = "PUT YOUR REFRESH TOKEN"
+# # Pixiv client id
+# client_id = "PUT YOUR CLIENT ID"
+# # Pixiv client secret
+# client_secret = "PUT YOUR CLIENT SECRET"
 
 # Directory where renamed element files will be placed
 [element_pool]
