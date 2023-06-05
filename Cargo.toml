@@ -48,21 +48,6 @@ tracing-actix-web = "0.7.3"
 tracing-subscriber = { version = "0.3.16", default-features = false, features = ["alloc", "fmt", "registry", "sharded-slab", "smallvec", "std", "thread_local", "tracing-log"] }
 walkdir = "2.3.3"
 
-# Needed for kanji to romaji conversion
-# lindera-core = { version = "0.25.0", optional = true }
-# lindera-unidic = { version = "0.25.0", features = ["unidic", "compress"], optional = true }
-# lindera-tokenizer = { version = "0.25.0", optional = true }
-# wana_kana = { version = "3.0.0", optional = true }
-
-# [features]
-# # Convert pixiv tags without translation to romaji
-# pixiv-romaji = [
-#     "dep:lindera-core",
-#     "dep:lindera-unidic",
-#     "dep:lindera-tokenizer",
-#     "dep:wana_kana"
-# ]
-
 [profile.dev]
 opt-level = 3
 
