@@ -1581,6 +1581,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "kakasi"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f9303d1b656a06c4cea50948f5b519a748ced7b216a10e800f3640df57337ee9"
+dependencies = [
+ "byteorder",
+ "phf 0.11.1",
+ "phf_shared 0.11.1",
+ "unicode-normalization",
+]
+
+[[package]]
 name = "language-tags"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1920,12 +1932,12 @@ dependencies = [
  "atomic",
  "bytemuck",
  "chrono",
- "crc32fast",
  "enum-iterator",
  "futures",
  "image",
  "image-match",
  "itertools",
+ "kakasi",
  "maud",
  "md-5",
  "moka",
@@ -2206,9 +2218,19 @@ version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fabbf1ead8a5bcbc20f5f8b939ee3f5b0f6f281b6ad3468b84656b658b455259"
 dependencies = [
- "phf_macros",
- "phf_shared",
+ "phf_macros 0.10.0",
+ "phf_shared 0.10.0",
  "proc-macro-hack",
+]
+
+[[package]]
+name = "phf"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "928c6535de93548188ef63bb7c4036bd415cd8f36ad25af44b9789b2ee72a48c"
+dependencies = [
+ "phf_macros 0.11.1",
+ "phf_shared 0.11.1",
 ]
 
 [[package]]
@@ -2217,7 +2239,17 @@ version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d5285893bb5eb82e6aaf5d59ee909a06a16737a8970984dd7746ba9283498d6"
 dependencies = [
- "phf_shared",
+ "phf_shared 0.10.0",
+ "rand",
+]
+
+[[package]]
+name = "phf_generator"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1181c94580fa345f50f19d738aaa39c0ed30a600d95cb2d3e23f94266f14fbf"
+dependencies = [
+ "phf_shared 0.11.1",
  "rand",
 ]
 
@@ -2227,9 +2259,22 @@ version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "58fdf3184dd560f160dd73922bea2d5cd6e8f064bf4b13110abd81b03697b4e0"
 dependencies = [
- "phf_generator",
- "phf_shared",
+ "phf_generator 0.10.0",
+ "phf_shared 0.10.0",
  "proc-macro-hack",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
+name = "phf_macros"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92aacdc5f16768709a569e913f7451034034178b05bdc8acda226659a3dccc66"
+dependencies = [
+ "phf_generator 0.11.1",
+ "phf_shared 0.11.1",
  "proc-macro2",
  "quote",
  "syn 1.0.109",
@@ -2240,6 +2285,15 @@ name = "phf_shared"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6796ad771acdc0123d2a88dc428b5e38ef24456743ddb1744ed628f9815c096"
+dependencies = [
+ "siphasher",
+]
+
+[[package]]
+name = "phf_shared"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1fb5f6f826b772a8d4c0394209441e7d37cbbb967ae9c7e0e8134365c9ee676"
 dependencies = [
  "siphasher",
 ]
@@ -2604,21 +2658,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ring"
-version = "0.16.20"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3053cf52e236a3ed746dfc745aa9cacf1b791d846bdaf412f60a8d7d6e17c8fc"
-dependencies = [
- "cc",
- "libc",
- "once_cell",
- "spin 0.5.2",
- "untrusted",
- "web-sys",
- "winapi",
-]
-
-[[package]]
 name = "rsa"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2683,36 +2722,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rustls"
-version = "0.21.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c911ba11bc8433e811ce56fde130ccf32f5127cab0e0194e9c68c5a5b671791e"
-dependencies = [
- "ring",
- "rustls-webpki",
- "sct",
-]
-
-[[package]]
-name = "rustls-pemfile"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d194b56d58803a43635bdc398cd17e383d6f71f9182b9a192c127ca42494a59b"
-dependencies = [
- "base64 0.21.0",
-]
-
-[[package]]
-name = "rustls-webpki"
-version = "0.100.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6207cd5ed3d8dca7816f8f3725513a34609c0c765bf652b8c3cb4cfd87db46b"
-dependencies = [
- "ring",
- "untrusted",
-]
-
-[[package]]
 name = "ryu"
 version = "1.0.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2756,16 +2765,6 @@ name = "scopeguard"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d29ab0c6d3fc0ee92fe66e2d99f700eab17a8d57d1c1d3b748380fb20baa78cd"
-
-[[package]]
-name = "sct"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d53dcdb7c9f8158937a7981b48accfd39a43af418591a5d008c7b22b5e1b7ca4"
-dependencies = [
- "ring",
- "untrusted",
-]
 
 [[package]]
 name = "security-framework"
@@ -3147,8 +3146,6 @@ dependencies = [
  "once_cell",
  "paste",
  "percent-encoding",
- "rustls",
- "rustls-pemfile",
  "serde",
  "serde_json",
  "sha2",
@@ -3159,7 +3156,6 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "url",
- "webpki-roots",
 ]
 
 [[package]]
@@ -3342,7 +3338,7 @@ dependencies = [
  "new_debug_unreachable",
  "once_cell",
  "parking_lot",
- "phf_shared",
+ "phf_shared 0.10.0",
  "precomputed-hash",
  "serde",
 ]
@@ -3353,8 +3349,8 @@ version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6bb30289b722be4ff74a408c3cc27edeaad656e06cb1fe8fa9231fa59c728988"
 dependencies = [
- "phf_generator",
- "phf_shared",
+ "phf_generator 0.10.0",
+ "phf_shared 0.10.0",
  "proc-macro2",
  "quote",
 ]
@@ -3540,7 +3536,7 @@ dependencies = [
  "bitflags 2.3.1",
  "indexmap",
  "once_cell",
- "phf",
+ "phf 0.10.1",
  "rustc-hash",
  "serde",
  "smallvec",
@@ -4089,12 +4085,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39ec24b3121d976906ece63c9daad25b85969647682eee313cb5779fdd69e14e"
 
 [[package]]
-name = "untrusted"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a156c684c91ea7d62626509bce3cb4e1d9ed5c4d978f7b4352658f96a4c26b4a"
-
-[[package]]
 name = "url"
 version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4244,15 +4234,6 @@ checksum = "3bdd9ef4e984da1187bf8110c5cf5b845fbc87a23602cdf912386a76fcd3a7c2"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "webpki-roots"
-version = "0.23.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa54963694b65584e170cf5dc46aeb4dcaa5584e652ff5f3952e56d66aff0125"
-dependencies = [
- "rustls-webpki",
 ]
 
 [[package]]

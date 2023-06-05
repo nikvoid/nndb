@@ -18,6 +18,10 @@ pub struct Pixiv {
     illust_cache: Cache<u64, Illust>
 }
 
+
+/// Base pixiv api url
+const PIXIV_API_URL: &str = "https://app-api.pixiv.net";
+
 /// Images saved from pixiv web version
 ///
 ///     104550403_p0_master1200.jpg
@@ -35,8 +39,6 @@ pub static PIXIV: Lazy<Pixiv> = Lazy::new(|| {
     Pixiv::new(CONFIG.pixiv_credentials.clone())
 });
 
-/// Base pixiv api url
-const PIXIV_API_URL: &str = "https://app-api.pixiv.net";
 
 impl Pixiv {
     fn new(creds: Option<PixivCreds>) -> Self {
@@ -73,8 +75,8 @@ impl Pixiv {
                 // Use name, if it is ascii
                 il_tag.name.clone()
             } else {
-                // TODO: Romaji
-                String::new()
+                // Convert to romaji using dictionary
+                kakasi::convert(&il_tag.name).romaji
             };
             
             if let Some(tag) = Tag::new(&name, Some(il_tag.name), TagType::Tag) {
