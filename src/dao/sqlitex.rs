@@ -856,11 +856,11 @@ impl Sqlite {
     /// Tag autocompletion
     pub async fn get_tag_completions(&self, input: &str, limit: u32) -> Result<Vec<read::Tag>, StorageError> {
         let fmt = format!("%{}%", input);
-        let tags = sqlx::query_as(
+        let tags = sqlx::query_as( // sql
             "SELECT * FROM tag
-            WHERE tag_name LIKE ? AND hidden = 0
+            WHERE (tag_name LIKE ?1 OR alt_name IS NOT NULL AND alt_name LIKE ?1) AND hidden = 0
             ORDER BY count DESC
-            LIMIT ?"
+            LIMIT ?2"
         )
         .bind(fmt)
         .bind(limit)
