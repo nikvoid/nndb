@@ -1,5 +1,6 @@
 use anyhow::bail;
 use async_trait::async_trait;
+use moka::future::Cache;
 use once_cell::sync::Lazy;
 use pixivcrab::{AppApi, AppApiConfig, AuthMethod, models::illust::Illust};
 use regex::Regex;
@@ -11,10 +12,10 @@ use crate::{model::{read::PendingImport, write::{ElementMetadata, Tag}, TagType}
 use super::MetadataFetcher;
 
 // Pixiv metadata fetcher
-// TODO: We can extensively use cache here, as several images can be in one work
 pub struct Pixiv {
     api: Option<AppApi>,
     client: Client,
+    illust_cache: Cache<u64, Illust>
 }
 
 /// Images saved from pixiv web version
@@ -52,7 +53,43 @@ impl Pixiv {
                     cfg
                 ).unwrap()
             }),
-            client: Client::new()
+            client: Client::new(),
+            illust_cache: Cache::new(2048),
+        }
+    }
+
+    /// Convert pixiv illust metadata to our metadata
+    async fn extract_data(illust: Illust) -> ElementMetadata {
+        let mut tags = vec![Tag::new("pixiv_source", None, TagType::Metadata).unwrap()];
+        
+        for il_tag in illust.tags {
+            let name = if let Some(alias) = STORAGE.lookup_alias_async(&il_tag.name).await {
+                // Try to look for alias 
+                alias
+            } else if let Some(translation) = il_tag.translated_name {
+                // Use translated name, if it exists
+                translation
+            } else if il_tag.name.is_ascii() {
+                // Use name, if it is ascii
+                il_tag.name.clone()
+            } else {
+                // TODO: Romaji
+                String::new()
+            };
+            
+            if let Some(tag) = Tag::new(&name, Some(il_tag.name), TagType::Tag) {
+                tags.push(tag);
+            }
+        }
+        
+        ElementMetadata {
+            src_link: Some(
+                format!("https://www.pixiv.net/artworks/{}", illust.id)
+            ),
+            src_time: Some(illust.create_date),
+            ai_meta: None,
+            group: Some(illust.id),
+            tags
         }
     }
 }
@@ -91,6 +128,11 @@ impl MetadataFetcher for Pixiv {
         } else {
             bail!("Failed to get illust id");
         };
+
+        // Look in cache first
+        if let Some(illust) = self.illust_cache.get(&illust_id) {
+            return Ok(Some(Self::extract_data(illust).await));
+        }
     
         let request = self.client
             .get(format!("{PIXIV_API_URL}/v1/illust/detail?illust_id={illust_id}"));
@@ -101,39 +143,9 @@ impl MetadataFetcher for Pixiv {
             StatusCode::OK => {
                 let IllustResponse { illust } = resp.json().await?;
 
-                let tags = tokio::task::spawn_blocking(move || {
-                    illust.tags
-                        .into_iter()
-                        .flat_map(|tag| {
-                            let name = if let Some(alias) = STORAGE.lookup_alias(&tag.name) {
-                                // Try to look for alias 
-                                alias
-                            } else if let Some(translation) = tag.translated_name {
-                                // Use translated name, if it exists
-                                translation
-                            } else if tag.name.is_ascii() {
-                                // Use name, if it is ascii
-                                tag.name.clone()
-                            } else {
-                                // TODO: Romaji
-                                String::new()
-                            };
-
-                            Tag::new(&name, Some(tag.name), TagType::Tag)
-                        })
-                        .chain(Tag::new("pixiv_source", None, TagType::Metadata).into_iter())
-                        .collect()
-                }).await?;
+                self.illust_cache.insert(illust.id as u64, illust.clone()).await;
                 
-                let meta = ElementMetadata {
-                    src_link: Some(
-                        format!("https://www.pixiv.net/artworks/{}", illust.id)
-                    ),
-                    src_time: Some(illust.create_date),
-                    ai_meta: None,
-                    group: Some(illust_id as i64),
-                    tags
-                };
+                let meta = Self::extract_data(illust).await;
                 
                 Ok(Some(meta))
             }

@@ -1171,5 +1171,10 @@ impl Sqlite {
     pub fn lookup_alias(&self, alias: &str) -> Option<String> {
         self.alias_cache.blocking_read().get(alias).cloned() 
     }
+    
+    /// Look for tag that corresponds to alias (async).
+    pub async fn lookup_alias_async(&self, alias: &str) -> Option<String> {
+        self.alias_cache.read().await.get(alias).cloned() 
+    }
 }
 
