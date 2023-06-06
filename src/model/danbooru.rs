@@ -17,6 +17,7 @@ pub struct PaginatedRequest {
 pub enum Order {
     /// Order by post count DESC
     Count,
+    PostCount,
 }
 
 /// Tags search
@@ -56,17 +57,30 @@ pub struct TagEntry {
     pub wiki_page: Option<WikiEntry>
 }
 
-impl TryFrom<TagEntry> for super::write::Wiki {
-    type Error = ();
+/// Artist entry (record subset)
+#[derive(Deserialize)] 
+pub struct ArtistEntry {
+    pub name: String,
+    pub other_names: Option<Vec<String>>
+}
 
-    /// Fail if `tag` is `None`
-    fn try_from(value: TagEntry) -> Result<Self, Self::Error> {
+impl From<ArtistEntry> for super::write::Wiki {
+    fn from(value: ArtistEntry) -> Self {
+        Self {
+            title: value.name,
+            aliases: value.other_names.unwrap_or_default(),
+            category: TagType::Artist
+        }
+    }
+}
+
+impl From<TagEntry> for super::write::Wiki {
+    fn from(value: TagEntry) -> Self {
         let aliases = match value.wiki_page {
             Some(w) => w.other_names,
             None => vec![]
         };
-        
-        Ok(Self {
+        Self {
             title: value.name,
             aliases,
             category: match value.category {
@@ -76,6 +90,6 @@ impl TryFrom<TagEntry> for super::write::Wiki {
                 5 => TagType::Metadata,
                 _ => TagType::Tag
             }
-        })
+        }
     }
 }

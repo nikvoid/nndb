@@ -3,7 +3,8 @@ use anyhow::{Context, anyhow};
 use atomic::{Atomic, Ordering};
 use futures::{stream::FuturesUnordered, StreamExt};
 use rayon::prelude::*;
-use reqwest::StatusCode;
+use reqwest::{StatusCode, Client};
+use serde::{Serialize, Deserialize};
 use tokio::sync::mpsc::channel;
 use tracing::{error, info};
 use walkdir::WalkDir;
@@ -398,6 +399,51 @@ pub async fn update_danbooru_wikis() -> anyhow::Result<()> {
         None => return Ok(())
     };
 
+    let updater = _guard.updater();
+    
+    async fn fetch<T>(
+        client: &Client,
+        base: &str,
+        query: &impl Serialize, 
+    ) -> anyhow::Result<Vec<Wiki>> where for<'a> T: Into<Wiki> + Deserialize<'a> {
+        // Use format! because reqwest use serde_urlencoded which is subset(?)
+        // of serde_qs
+        let url = format!(
+            "{}?{}",
+            base,
+            serde_qs::to_string(&query)?
+        );
+        
+        let data: Vec<T> = { 
+            let resp = client.get(url)
+            // Custom useragent is mandatory
+            .header(
+                "user-agent", 
+                "i-just-need-to-fetch-tags"
+            )
+            .send()
+            .await?;
+
+            match resp.status() {
+                // Pagination end
+                StatusCode::GONE => return Ok(vec![]),
+                StatusCode::OK => resp.json().await?,
+                _ => { 
+                    resp.error_for_status()?;
+                    return Ok(vec![])
+                }
+            }
+        };
+
+        // Convert to internal model
+        let data: Vec<Wiki> = data
+            .into_iter()
+            .flat_map(|w| w.try_into().ok())
+            .collect();
+
+        Ok(data)
+    } 
+    
     let client = reqwest::Client::new();
 
     // Construct query
@@ -413,52 +459,48 @@ pub async fn update_danbooru_wikis() -> anyhow::Result<()> {
         },
     };
 
-    let updater = _guard.updater();
-    
     // Max page for unauthorized/non-premium user is 1000th page
     // 1M tags sorted by post count should be sufficient anyway
     updater.set_action_count(1000);
     
+    // Fetch tags
     loop {
         updater.increment();
         
-        // Use format! because reqwest use serde_urlencoded which is subset(?)
-        // of serde_qs
-        let url = format!(
-            "https://danbooru.donmai.us/tags.json?{}",
-            serde_qs::to_string(&query)?
-        );
-        
-        let data: Vec<TagEntry> = { 
-            let resp = client.get(url)
-            // Custom useragent is mandatory
-            .header(
-                "user-agent", 
-                "i-just-need-to-fetch-tags"
-            )
-            .send()
-            .await?;
-
-            match resp.status() {
-                // Pagination end
-                StatusCode::GONE => vec![],
-                StatusCode::OK => resp.json().await?,
-                _ => { 
-                    resp.error_for_status()?;
-                    vec![]
-                }
-            }
-        };
+        let data = fetch::<TagEntry>(
+            &client, 
+            "https://danbooru.donmai.us/tags.json",
+            &query,
+        ).await?;
 
         if data.is_empty() {
             break;
         }
 
-        // Convert to internal model
-        let data: Vec<Wiki> = data
-            .into_iter()
-            .flat_map(|w| w.try_into().ok())
-            .collect();
+        STORAGE.add_wikis(&data).await?;
+
+        query.pagination.page += 1;
+    }
+
+    query.search.order = Order::PostCount;
+    query.pagination.only = "name,other_names".into();
+
+    info!("fetched wikis, starting to fetch artists");
+
+    // Fetch artists
+    updater.set_action_count(1000);
+    loop {
+        updater.increment();
+        
+        let data = fetch::<ArtistEntry>(
+            &client, 
+            "https://danbooru.donmai.us/artists.json",
+            &query,
+        ).await?;
+
+        if data.is_empty() {
+            break;
+        }
 
         STORAGE.add_wikis(&data).await?;
 

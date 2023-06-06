@@ -62,8 +62,23 @@ impl Pixiv {
 
     /// Convert pixiv illust metadata to our metadata
     async fn extract_data(illust: Illust) -> ElementMetadata {
-        let mut tags = vec![Tag::new("pixiv_source", None, TagType::Metadata).unwrap()];
+
+        // Aliases can also contain artists
+        let artist_name = if let Some(alias) = STORAGE.lookup_alias_async(&illust.user.name).await {
+            alias
+        } else {
+            illust.user.account
+        };
         
+        let artist = Tag::new(&artist_name, Some(illust.user.name), TagType::Artist);
+        
+        let mut tags = vec![
+            Tag::new("pixiv_source", None, TagType::Metadata).unwrap(),
+            artist.unwrap_or_else(|| 
+                Tag::new("stub_artist", None, TagType::Artist).unwrap()
+            )
+        ];
+                
         for il_tag in illust.tags {
             let name = if let Some(alias) = STORAGE.lookup_alias_async(&il_tag.name).await {
                 // Try to look for alias 
