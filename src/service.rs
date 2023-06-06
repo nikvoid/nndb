@@ -438,7 +438,7 @@ pub async fn update_danbooru_wikis() -> anyhow::Result<()> {
         // Convert to internal model
         let data: Vec<Wiki> = data
             .into_iter()
-            .flat_map(|w| w.try_into().ok())
+            .map(|w| w.into())
             .collect();
 
         Ok(data)
@@ -482,8 +482,10 @@ pub async fn update_danbooru_wikis() -> anyhow::Result<()> {
         query.pagination.page += 1;
     }
 
+    // Change query
     query.search.order = Order::PostCount;
     query.pagination.only = "name,other_names".into();
+    query.pagination.page = 0;
 
     info!("fetched wikis, starting to fetch artists");
 
