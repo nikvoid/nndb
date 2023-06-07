@@ -1,4 +1,4 @@
-use std::{path::Path, io::SeekFrom, sync::atomic::Ordering, time::Duration};
+use std::{path::Path, io::SeekFrom, sync::atomic::Ordering, time::Duration, fmt::Display};
 use anyhow::Context;
 use atomic::Atomic;
 use futures::Future;
@@ -12,7 +12,7 @@ use itertools::Itertools;
 use crate::{
     model::{Signature, 
         write::{self, ElementToParse, ElementWithMetadata}, 
-        SIGNATURE_LEN
+        SIGNATURE_LEN, MD5_LEN
     },
     import::{TAG_TRIGGER, ElementPrefab, Parser, ANIMATION_EXTS},
     CONFIG
@@ -110,6 +110,18 @@ pub struct ProcedureState {
     processed: u32,    
 }    
 
+/// Wrapper for writing [u8] slice as continious hex string
+pub struct AsHex<'a>(pub &'a [u8]);
+
+impl Display for AsHex<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for byte in self.0 {
+            write!(f, "{byte:02x}")?;
+        }
+        Ok(())
+    }
+}
+
 /// Get distance between 2 signatures.
 /// Maximal(?) value is `100.00`
 pub fn get_sig_distance(sig1: &Signature, sig2: &Signature) -> f32 {
@@ -138,9 +150,7 @@ pub fn hash_file(prefab: ElementPrefab) -> anyhow::Result<ElementWithMetadata> {
     let parser_id = Parser::scan(&prefab);
     let parser = parser_id.get_singleton();
 
-    let hash = Md5::digest(&prefab.data).into();
-    
-    let mut new_name = String::with_capacity(48);
+    let hash: [u8; MD5_LEN] = Md5::digest(&prefab.data).into();    
 
     let filename = prefab.path.file_name()
         .context("Expected filename")?
@@ -152,13 +162,8 @@ pub fn hash_file(prefab: ElementPrefab) -> anyhow::Result<ElementWithMetadata> {
         .next()
         .context("Expected extension")?;
 
-    for byte in hash {
-        write!(new_name, "{byte:x}")?
-    }
-
-    new_name.push('.');
-    new_name.push_str(ext);
-
+    let new_name = format!("{}.{ext}", AsHex(&hash));
+    
     let animated = ANIMATION_EXTS.contains(&ext);   
     let (signature, broken) = match animated {
         false => 'blk: {
