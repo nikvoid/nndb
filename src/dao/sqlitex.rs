@@ -569,8 +569,8 @@ impl Sqlite {
             let imps = sqlx::query_as( // sql
                 "SELECT e.*, f.value as importer_id
                 FROM mem.fetchers as f, element e
-                LEFT JOIN fetch_status s ON s.importer_id = f.value  
-                WHERE s.element_id IS NULL
+                LEFT JOIN fetch_status s ON s.importer_id = f.value AND s.element_i = e.id  
+                WHERE s.importer_id IS NULL
                 ORDER BY f.value ASC" 
             )
             .fetch_all(&mut *conn)
