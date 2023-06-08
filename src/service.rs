@@ -1,4 +1,4 @@
-use std::{io::Read, path::PathBuf};
+use std::path::PathBuf;
 use anyhow::{Context, anyhow};
 use atomic::{Atomic, Ordering};
 use futures::{stream::FuturesUnordered, StreamExt};
@@ -14,7 +14,7 @@ use crate::{
     dao::{STORAGE, FutureBlock}, 
     import::{ElementPrefab, ANIMATION_EXTS, IMAGE_EXTS, FetchStatus}, 
     model::write::{ElementWithMetadata, Wiki}, 
-    CONFIG, util::{self, Procedure}
+    CONFIG, util::{self, Procedure}, config::ReadFiles
 };
 
 /// Experimentaly decided optimal image signature distance 
@@ -80,38 +80,73 @@ pub async fn scan_files() -> anyhow::Result<u32> {
 
         updater.set_action_count(files.len() as u32);
 
-        files.into_par_iter()
-            .map(|(path, _)| -> anyhow::Result<ElementWithMetadata> {
-                // TODO: Will write option return error if file is busy now?..
-                let mut file = std::fs::File::options()
-                    .write(true)
-                    .read(true)
-                    .open(&path)?;
+        // Closure for hashing file
+        let process_file = |path: PathBuf, data| -> anyhow::Result<ElementWithMetadata> {
+            let prefab = ElementPrefab {
+                path: path.clone(),
+                data: data?
+            };
+            let element = util::hash_file(prefab)
+                .context(path.display().to_string())?;
 
-                let element = {
-                    let mut data = vec![];
-                    file.read_to_end(&mut data)?;
+            // Report that file was processed
+            updater.increment();
 
-                    let prefab = ElementPrefab {
-                        path: path.clone(),
-                        data,
-                    };
+            Ok(element)
+        };
+        
+        // Choose multithreaded or singlethreaded read
+        match CONFIG.read_files {
+            ReadFiles::Parallel => {
+                files.into_par_iter()
+                    .map(|(path, _)| -> anyhow::Result<ElementWithMetadata> {
+                        let data = std::fs::read(&path);
+                        process_file(path, data)
+                    })
+                    // Add files to db in chunks of 1000
+                    .chunks(1000)
+                    .for_each(|chunk| {
+                        // Send data, cause we cant access tokio context on this thread
+                        tx.blocking_send(chunk).ok();
+                    });
+            },
+            ReadFiles::Sequential => {
+                rayon::scope(|scope| {
+                    let (btx, brx) = std::sync::mpsc::channel();
+                    
+                    // This task will collect up to 1000 elements
+                    // and send them to inserter
+                    scope.spawn(move |_| {
+                        let mut tmp = Vec::with_capacity(1000);
+                        while let Ok(meta) = brx.recv() {
+                            tmp.push(meta);
+                            
+                            if tmp.len() == 1000 {
+                                let chunk = std::mem::replace(
+                                    &mut tmp,
+                                    Vec::with_capacity(1000)
+                                );
 
-                    util::hash_file(prefab)
-                        .context(path.display().to_string())?
-                };
+                                tx.blocking_send(chunk).ok();
+                            }
+                        }
+                    });
 
-                // Report that file was processed
-                updater.increment();
-
-                Ok(element)
-            })
-            // Add files to db in chunks of 1000
-            .chunks(1000)
-            .for_each(|chunk| {
-                // Send data, cause we cant access tokio context on this thread
-                tx.blocking_send(chunk).ok();
-            });
+                    // Read each file in this thread
+                    // Offload hashing to multiple threads
+                    for (path, _) in files {
+                        let data = std::fs::read(&path);
+                        
+                        // Clone sender and spawn new task
+                        let btx = btx.clone();
+                        scope.spawn(move |_| { 
+                            btx.send(process_file(path, data)).ok();
+                        });
+                    }                       
+                });
+            },
+        };
+        
 
         // tx should be dropped here
     });

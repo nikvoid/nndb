@@ -20,6 +20,13 @@ pub struct PixivCreds {
     pub client_secret: String
 }
 
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "lowercase")] 
+pub enum ReadFiles {
+    Parallel,
+    Sequential,
+}
+
 #[derive(Deserialize, Clone, Copy)]
 #[serde(rename_all = "lowercase")] 
 pub enum LogLevel {
@@ -73,5 +80,9 @@ pub struct Config {
     pub pixiv_credentials: Option<PixivCreds>,
     /// Path to ffmpeg.
     /// Required to generate thumbnails for animation
-    pub ffmpeg_path: Option<String>
+    pub ffmpeg_path: Option<String>,
+    /// How to read files:
+    /// - sequential: use one thread,
+    /// - parallel: use multiple threads.
+    pub read_files: ReadFiles,
 }

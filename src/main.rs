@@ -88,6 +88,8 @@ async fn main() -> anyhow::Result<()> {
         import_spawner().await;
     }
 
+    info!("File reads are done {:?}ly", CONFIG.read_files);
+
     STORAGE.reload_tag_aliases_index().await?;
 
     info!(addr=CONFIG.bind_address, port=CONFIG.port, "Starting server");

@@ -31,6 +31,12 @@ log_file = "log.txt"
 # Directory that will be scanned to find new element files
 input_folder = "res"
 
+# How to read files:
+# - sequential: use one thread,
+# - parallel: use multiple threads.
+# With `parallel` performance may suffer when reading from HDD 
+read_files = "sequential"
+
 # Path to ffmpeg.
 # Required to generate thumbnails for animation
 # ffmpeg_path = "ffmpeg"
