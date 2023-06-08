@@ -297,8 +297,10 @@ pub fn make_thumbnails() -> anyhow::Result<()> {
         .search_elements("", 0, None, 0)
         .blocking_run()?.0
         .into_iter()
-        // TODO: Thumbs for animated
-        .filter(|e| !e.has_thumb && !e.animated)
+        .filter(|e| 
+            // Filter out animated if ffmpeg path is not set
+            !(e.has_thumb || e.animated && CONFIG.ffmpeg_path.is_none()) 
+        )
         .collect_vec();
 
     updater.set_action_count(no_thumbnail.len() as u32);
@@ -312,7 +314,11 @@ pub fn make_thumbnails() -> anyhow::Result<()> {
                 thumb.push(&e.filename);
                 thumb.set_extension("jpeg");
             
-                let err = util::make_thumbnail(pool, thumb, THUMBNAIL_SIZE);
+                let err = if e.animated {
+                    util::make_thumbnail_anim(pool, thumb, THUMBNAIL_SIZE)
+                } else {
+                    util::make_thumbnail_image(pool, thumb, THUMBNAIL_SIZE)
+                };
                 
                 pool.pop();
                 thumb.pop();

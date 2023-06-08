@@ -1,5 +1,5 @@
-use std::{path::Path, io::SeekFrom, sync::atomic::Ordering, time::Duration, fmt::Display};
-use anyhow::Context;
+use std::{path::Path, io::SeekFrom, sync::atomic::Ordering, time::Duration, fmt::Display, process::Command};
+use anyhow::{Context, bail};
 use atomic::Atomic;
 use futures::Future;
 use md5::{Md5, Digest};
@@ -7,7 +7,6 @@ use once_cell::sync::OnceCell;
 use serde::Serialize;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tracing::error;
-use std::fmt::Write;
 use itertools::Itertools;
 use crate::{
     model::{Signature, 
@@ -200,7 +199,7 @@ pub fn hash_file(prefab: ElementPrefab) -> anyhow::Result<ElementWithMetadata> {
 
 /// Make thumnbnail for image `src`.
 /// Preserve aspect ratio
-pub fn make_thumbnail(
+pub fn make_thumbnail_image(
     src: &Path, 
     thumb_out: &Path, 
     (max_width, max_height): (u32, u32) 
@@ -223,6 +222,43 @@ pub fn make_thumbnail(
     );
     
     thumb.save(thumb_out)?;
+    Ok(())
+}
+
+/// Make thumnbnail for animation `src`.
+/// Preserve aspect ratio.
+/// FFMpeg required
+pub fn make_thumbnail_anim(
+    src: &Path, 
+    thumb_out: &Path, 
+    (max_width, max_height): (u32, u32) 
+) -> anyhow::Result<()> {
+    let Some(ffpath) = &CONFIG.ffmpeg_path else {
+        bail!("ffmpeg needed to generate animation thumbnail");
+    };
+    
+    let mut ffmpeg = Command::new(ffpath)
+        .arg("-i")
+        .arg(src)
+        .args([
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-vf",
+            // Thumbnail filter is slow, but the result is nice
+            &format!("thumbnail,scale={max_width}:{max_height}:force_original_aspect_ratio=decrease"),
+            "-frames:v",
+            "1"
+        ])
+        .arg(thumb_out)
+        .spawn()?;
+    
+    let status = ffmpeg.wait()?;
+    if !status.success() {
+        bail!("ffmpeg exited with {status}");
+    }
+    
     Ok(())
 }
 
