@@ -85,4 +85,8 @@ pub struct Config {
     /// - sequential: use one thread,
     /// - parallel: use multiple threads.
     pub read_files: ReadFiles,
+    /// Max number of files stored in memory at the same time.
+    /// Files data are read first to memory, then hashed and freed.
+    /// Bigger values can speed up file scanning, but may use more memory.
+    pub max_files_in_memory: u32,
 }

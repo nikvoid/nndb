@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 use anyhow::{Context, anyhow};
 use atomic::{Atomic, Ordering};
 use futures::{stream::FuturesUnordered, StreamExt};
@@ -12,8 +12,8 @@ use itertools::Itertools;
 
 use crate::{
     dao::{STORAGE, FutureBlock}, 
-    import::{ElementPrefab, ANIMATION_EXTS, IMAGE_EXTS, FetchStatus}, 
-    model::write::{ElementWithMetadata, Wiki}, 
+    import::{ElementPrefab, ANIMATION_EXTS, IMAGE_EXTS, FetchStatus},
+    model::write::{ElementWithMetadata, Wiki},
     CONFIG, util::{self, Procedure}, config::ReadFiles
 };
 
@@ -42,7 +42,7 @@ pub async fn scan_files() -> anyhow::Result<u32> {
         None => return Ok(0) 
     };
     
-    let (tx, mut rx) = channel(8);
+    let (tx, mut rx) = channel(1000);
 
     let updater = _guard.updater();
     
@@ -89,83 +89,104 @@ pub async fn scan_files() -> anyhow::Result<u32> {
             let element = util::hash_file(prefab)
                 .context(path.display().to_string())?;
 
-            // Report that file was processed
-            updater.increment();
-
             Ok(element)
         };
-        
+
+        // Report and wrap into Option
+        let process_file = |path, data| {
+            // Report that file was processed
+            updater.increment();
+            match process_file(path, data) {
+                Ok(r) => Some(r),
+                Err(e) => {
+                    error!(?e, "failed to hash element");
+                    None
+                },
+            }
+        };
+
         // Choose multithreaded or singlethreaded read
         match CONFIG.read_files {
+            // When doing scan this way, there are a meaningful number of files in memory
+            // (Usually equal to count of threads in pool)
             ReadFiles::Parallel => {
                 files.into_par_iter()
-                    .map(|(path, _)| -> anyhow::Result<ElementWithMetadata> {
+                    .filter_map(|(path, _)| {
                         let data = std::fs::read(&path);
                         process_file(path, data)
                     })
-                    // Add files to db in chunks of 1000
-                    .chunks(1000)
-                    .for_each(|chunk| {
+                    .for_each(|meta| {
                         // Send data, cause we cant access tokio context on this thread
-                        tx.blocking_send(chunk).ok();
+                        tx.blocking_send(meta).ok();
                     });
             },
+            // Here number of files in memory is constrained only by relation between
+            // speed of CPU and Disk I/O, so we need a constraint to prevent OOM
             ReadFiles::Sequential => {
                 rayon::scope(|scope| {
-                    let (btx, brx) = std::sync::mpsc::channel();
-                    
-                    // This task will collect up to 1000 elements
-                    // and send them to inserter
-                    scope.spawn(move |_| {
-                        let mut tmp = Vec::with_capacity(1000);
-                        while let Ok(meta) = brx.recv() {
-                            tmp.push(meta);
-                            
-                            if tmp.len() == 1000 {
-                                let chunk = std::mem::replace(
-                                    &mut tmp,
-                                    Vec::with_capacity(1000)
-                                );
-
-                                tx.blocking_send(chunk).ok();
-                            }
-                        }
-                    });
+                    // Prevent OOM error
+                    let max_files = CONFIG.max_files_in_memory as usize;
+                    let files_var = Arc::new((
+                        parking_lot::Mutex::new(0usize),
+                        parking_lot::Condvar::new()
+                    ));
 
                     // Read each file in this thread
                     // Offload hashing to multiple threads
                     for (path, _) in files {
+                        let (mtx, var) = &*files_var;
                         let data = std::fs::read(&path);
-                        
-                        // Clone sender and spawn new task
-                        let btx = btx.clone();
-                        scope.spawn(move |_| { 
-                            btx.send(process_file(path, data)).ok();
+
+                        // Increment file count
+                        {
+                            let mut files = mtx.lock();
+                            *files += 1;
+                        }
+
+                        // Spawn new task for each file
+                        let memory_var2 = files_var.clone();
+                        let sender = tx.clone();
+                        scope.spawn(move |_| {
+                            if let Some(meta) = process_file(path, data) {
+                                sender.blocking_send(meta).ok();
+                            }
+                            // Decrement file count
+                            let (mtx, var) = &*memory_var2;
+                            let mut files = mtx.lock();
+                            *files -= 1;
+                            var.notify_all();
                         });
-                    }                       
+
+                        // Wait for files to be released
+                        let mut files = mtx.lock();
+                        if *files >= max_files {
+                            var.wait_while(&mut files, |files| *files >= max_files);
+                        }
+                    }
                 });
             },
         };
-        
+
 
         // tx should be dropped here
     });
 
     let mut count = 0;
-    // This won't run if there are no elements in input folder
-    while let Some(chunk) = rx.recv().await {
-        let elements: Vec<_> = chunk
-            .iter()
-            .filter_map(|res| match res {
-                Ok(r) => Some(r),
-                Err(e) => {
-                    error!(?e, "failed to hash element");
-                    None   
-                }
-            })
-            .collect();
-        count += STORAGE.add_elements(&elements).await?;
+    let updater = _guard.updater();
+
+    // Add elements in chunks of 1000
+    let mut buffer = Vec::with_capacity(1000);
+    while let Some(meta) = rx.recv().await {
+        buffer.push(meta);
+
+        if buffer.len() == 1000 {
+            count += STORAGE.add_elements(&buffer).await?;
+            buffer.clear();
+        }
     }
+
+    // Add remaining
+    count += STORAGE.add_elements(&buffer).await?;
 
     Ok(count)
 }
