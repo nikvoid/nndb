@@ -31,6 +31,10 @@ log_file = "log.txt"
 # Directory that will be scanned to find new element files
 input_folder = "res"
 
+# Path to ffmpeg.
+# Required to generate thumbnails for animation
+# ffmpeg_path = "ffmpeg"
+
 # If specified, pixiv metadata fetcher will work for appropriate images
 # [pixiv_credentials]
 # # Pixiv refresh token

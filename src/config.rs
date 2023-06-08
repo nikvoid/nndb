@@ -70,5 +70,8 @@ pub struct Config {
     /// File to write logs
     pub log_file: String,
     /// Pixiv fetcher credentials
-    pub pixiv_credentials: Option<PixivCreds>
+    pub pixiv_credentials: Option<PixivCreds>,
+    /// Path to ffmpeg.
+    /// Required to generate thumbnails for animation
+    pub ffmpeg_path: Option<String>
 }
