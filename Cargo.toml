@@ -5,12 +5,12 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [build-dependencies]
-swc_common = { version = "0.31.1", features = ["tty-emitter"] }
-swc_ecma_codegen = "0.138.5"
-swc_ecma_parser = "0.133.4"
-swc_ecma_transforms_base = "0.126.5"
-swc_ecma_transforms_typescript = "0.176.6"
-swc_ecma_visit = "0.89.1"
+swc_common = { version = "0.31.18", features = ["tty-emitter"] }
+swc_ecma_codegen = "0.142.10"
+swc_ecma_parser = "0.137.9"
+swc_ecma_transforms_base = "0.130.17"
+swc_ecma_transforms_typescript = "0.180.29"
+swc_ecma_visit = "0.93.4"
 
 [dependencies]
 actix-files = "0.6.2"
@@ -23,7 +23,7 @@ chrono = { version = "0.4.24", features = ["serde"] }
 enum-iterator = "1.4.0"
 futures = "0.3.28"
 image = { version = "0.24.6" }
-image-match = { git = "https://github.com/alt-text-org/image-match-rs", version = "0.1.0", features = ["img", "image", "num"] }
+image-match = { git = "https://github.com/alt-text-org/image-match-rs", rev = "2788c49387ac95d25b0d9b7d6123f185eb917e19", features = ["img", "image", "num"] }
 itertools = "0.10.5"
 kakasi = "0.1.0"
 maud = { git = "https://github.com/nikvoid/maud", features = ["actix-web", "actix-web-dep"] }
