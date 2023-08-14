@@ -1,35 +1,171 @@
-html,
-body {
-  height: 100%;
-  margin: 0;
+// Colors 
+$background: #1b1b1b;
+$on-background: #ffffff;
+
+$primary: #593191;
+$primary-highlight: #6213d1;
+$on-primary: #fafafa;
+
+$secondary: #404040;
+$on-secondary: #cccccc;
+
+$aux-lighter: #757575;
+$aux-darker: #262626;
+
+// Sizes
+$font-size-def: 22px;
+$font-size-big: 1.2rem;
+$font-size-large: 1.75rem;
+$font-size-small: 0.75rem;
+
+$padding-def: 0.1em 0.5em 0.1em 0.5em;
+
+$border-small: 0.1em;
+$border-def: 0.18em;
+$border-rdef: 0.2em;
+
+$margin-def: 0.3em;
+$margin-big: 1em;
+
+$gap-def: 0.6em;
+$gap-big: 2em;
+
+
+// Mixins 
+/// Flex container with enabled wrapping and gaps
+@mixin flex-wrap($row-gap: $gap-def, $col-gap: $gap-def) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $row-gap $col-gap;
 }
 
+/// Grid container with enabled gaps
+@mixin grid-gap($row-gap: $gap-def, $col-gap: $gap-def) {
+  display: grid;
+  gap: $row-gap $col-gap;
+}
+
+/// Mixin used to layout single row of a grid.
+/// Each passed selector takes 1 column
+/// Syntax to pass row span may be tricky:
+///     layout-row(#{start} / #{end}, ...)
+@mixin layout-row($row, $selectors...) {
+  @for $i from 0 to length($selectors) {
+    $idx: $i + 1;
+    #{nth($selectors, $idx)} {
+      grid-row: $row;
+      grid-column: $i + 1;
+    }
+  }
+} 
+
+/// Mixin used to layout single column of a grid.
+/// Each passed selector takes 1 row 
+/// Syntax to pass column span may be tricky:
+///     layout-col(#{start} / #{end}, ...)
+@mixin layout-col($col, $selectors...) {
+  @for $i from 0 to length($selectors) {
+    $idx: $i + 1;
+    #{nth($selectors, $idx)} {
+      grid-column: $col;
+      grid-row: $i + 1;
+    }
+  }
+} 
+
+
+// Shared
+%label-shared {
+  color: $on-secondary;
+  background-color: $secondary;
+  padding: $padding-def;
+  border-radius: $border-rdef;
+}
+
+
+// Basic blocks
+.button {
+  color: $on-primary;
+  background-color: $primary;
+  font-weight: bold;
+  font-size: $font-size-big;
+  border: none;
+  border-radius: $border-rdef;
+  padding: $padding-def;
+  text-decoration: none;
+  cursor: pointer;
+
+  &:hover, &.active {
+    background-color: $primary-highlight;
+  }
+}
+
+.outlined {
+  color: inherit;
+  background-color: inherit;
+  padding: $padding-def;
+  border-radius: 1em;
+  border: $border-def solid $aux-lighter; 
+}
+
+.dotted {
+  color: inherit;
+  background-color: inherit;
+  border: $border-small dotted $aux-lighter;
+  padding: 0.1em;
+}
+
+.label {
+  @extend %label-shared;
+  text-align: center;
+}
+
+.text-block {
+  @extend %label-shared;
+  display: block;
+}
+
+// Unique and global
 body {
   align-items: center;
   display: flex;
   justify-content: center;
 
-  background: linear-gradient(to bottom right, #444444, #009a5b);
-  font-size: 1.5rem;
+  background: $background;
+  color: $on-background;
 }
 
+html, 
+body {
+  margin: 0;
+  font-size: $font-size-def;
+  @media (min-resolution: 192dpi) {
+    font-size: $font-size-def * 2;
+  }
+}
+
+input, 
+button {
+  cursor: pointer;
+  font-family: unset;
+  font-size: inherit;
+}
+
+// Exceptions
+a.label {
+  text-decoration: none;
+}
+
+
+// Components
+
+// Pages
 main {
-  color: #fff6d5;
-  font-family: sans-serif;
-  text-align: center;
-}
+  // Little gap at top and bigger at bottom
+  padding: 1em 0.5em 5em 0.5em;
 
-.logo {
-  height: 20em;
-}
-
-.heart:after {
-  content: "❤️";
-
-  font-size: 1.75em;
-}
-
-h1 + .subtitle {
-  display: block;
-  margin-top: -1em;
+  &.index-page {
+    @include grid-gap;
+    width: 100%;
+  }
 }
