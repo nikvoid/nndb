@@ -65,7 +65,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     if !Path::new(&cfg_path).exists() {
-        std::fs::write(&cfg_path, include_bytes!("../config.toml"))?;
+        std::fs::write(&cfg_path, include_bytes!("../../config.toml"))?;
     }
 
     let cfg_str = std::fs::read_to_string(cfg_path)?;

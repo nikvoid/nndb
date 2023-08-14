@@ -1,5 +1,5 @@
 [package]
-name = "nndb"
+name = "nndb-backend"
 version = "0.1.0"
 edition = "2021"
 
@@ -48,15 +48,3 @@ tracing-actix-web = "0.7.3"
 tracing-subscriber = { version = "0.3.16", default-features = false, features = ["alloc", "fmt", "registry", "sharded-slab", "smallvec", "std", "thread_local", "tracing-log"] }
 walkdir = "2.3.3"
 
-[profile.dev]
-opt-level = 3
-
-# Compile all build scripts and macros in release
-[profile.dev.build-override]
-opt-level = 3
-
-[profile.release]
-debug = true        # Retain debug info
-opt-level = 3
-lto = "fat"         # Enable link-time optimization
-codegen-units = 1   # Reduce number of codegen units to increase optimizations

@@ -1,0 +1,21 @@
+[workspace]
+resolver = "2"
+
+members = [
+    "frontend",
+    "backend"
+]
+
+# Compile all build scripts and macros in release
+[profile.dev.build-override]
+opt-level = 3
+
+# Speed up files processing in debug mode
+[profile.dev.package.nndb-frontend]
+opt-level = 2
+
+[profile.release]
+debug = true        # Retain debug info
+opt-level = 3
+lto = "fat"         # Enable link-time optimization
+codegen-units = 1   # Reduce number of codegen units to increase optimizations
