@@ -1,7 +1,7 @@
 # Default application config
 
 # Url to database
-db_url = "test.db"
+db_url = "dev.db"
 
 # Testing mode: copy files from input to element pool instead of deleting
 testing_mode = true
@@ -75,6 +75,6 @@ serve = true
 # Folder with miscellaneous static files  
 [static_folder]
 url = "/static/"
-path = "static"
+path = "target/dist"
 serve = true
 

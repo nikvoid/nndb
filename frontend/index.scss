@@ -158,6 +158,31 @@ a.label {
 
 
 // Components
+.element-list {
+  @include flex-wrap($margin-big);
+  
+  .element-container {
+    background: $aux-darker;  
+
+    width: 195px;
+    height: 185px;
+    
+    border-radius: $border-rdef;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    &.animated {
+      background: $aux-lighter;
+    }
+  }
+
+  img {
+    border-radius: $border-rdef;
+    max-width: 175px;
+    max-height: 175px;
+  }
+}
 
 // Pages
 main {

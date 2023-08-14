@@ -15,6 +15,7 @@ mod element;
 mod tag;
 mod api;
 mod dashboard;
+mod convert;
 
 pub use index::index_page;
 pub use element::element_page;

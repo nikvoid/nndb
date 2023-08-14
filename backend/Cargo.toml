@@ -21,6 +21,7 @@ kakasi = "0.1.0"
 maud = { git = "https://github.com/nikvoid/maud", features = ["actix-web", "actix-web-dep"] }
 md-5 = "0.10.5"
 moka = { version = "0.11.1", default-features = false, features = ["future"] }
+nndb-common = { workspace = true }
 num_enum = "0.6.0"
 once_cell = "1.17.1"
 parking_lot = "0.12.1"

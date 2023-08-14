@@ -114,6 +114,7 @@ async fn main() -> anyhow::Result<()> {
             .service(view::retry_imports)
             .service(view::alias_tag)
             .service(view::fetch_wikis)
+            .service(view::search_elements)
         ;
 
         // Serve static folders if needed

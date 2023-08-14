@@ -1,4 +1,7 @@
 mod app;
+mod api;
+mod page;
+mod component;
 
 use app::App;
 

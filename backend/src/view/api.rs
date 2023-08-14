@@ -1,9 +1,10 @@
-use actix_web::{Responder, get, web, post};
+use actix_web::{Responder, get, web::{self, Json}, post};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
+use nndb_common::*;
 use tracing::{info, error};
 
-use crate::{dao::STORAGE, log_n_bail, model::{write, TagType}, util::{self, ProcedureState}, service::{SCAN_FILES_LOCK, UPDATE_METADATA_LOCK, GROUP_ELEMENTS_LOCK, MAKE_THUMBNAILS_LOCK, self, FETCH_WIKI_LOCK}, log_n_ok, search::{self, Term}};
+use crate::{dao::STORAGE, log_n_bail, model::{write, TagType}, util::{self, ProcedureState}, service::{SCAN_FILES_LOCK, UPDATE_METADATA_LOCK, GROUP_ELEMENTS_LOCK, MAKE_THUMBNAILS_LOCK, self, FETCH_WIKI_LOCK}, log_n_ok, search::{self, Term}, view::convert::IntoVec};
 
 /// Tag autocompletion max tags
 const TAG_LIMIT: u32 = 15;
@@ -52,12 +53,30 @@ pub struct ImportTasksStatus {
     wiki_fetch: ProcedureState
 }
 
+#[post("/v1/search")]
+pub async fn search_elements(Json(req): Json<SearchRequest>) -> impl Responder {
+    match STORAGE
+        .search_elements(&req.query, req.offset, Some(req.limit), req.tag_limit)
+        .await {
+        Ok((elems, tags, count)) => {
+            Ok(Json(SearchResponse {
+                elements: elems.into_vec(),
+                tags: tags.into_vec(),
+                count
+            }))
+        },
+        Err(e) => {
+            log_n_bail!("failed to perform search", ?e);
+        }
+    }
+}
+
 /// Tag autocompletion
 #[get("/api/read/autocomplete")]
 pub async fn tag_autocomplete(query: web::Query<AutocompleteRequest>) -> impl Responder {
     match STORAGE.get_tag_completions(&query.0.input, TAG_LIMIT).await {
         Ok(res) => {
-            Ok(web::Json(res))
+            Ok(Json(res))
         },
         Err(e) => {
             log_n_bail!("failed to complete tag", ?e);
@@ -90,12 +109,12 @@ pub async fn import_status() -> impl Responder {
         wiki_fetch: FETCH_WIKI_LOCK.state(),
     };
 
-    web::Json(status)
+    Json(status)
 }
 
 /// Add tag(s) to element
 #[post("/api/write/add_tags")]
-pub async fn add_tags(query: web::Json<AddTagsRequest>) -> impl Responder {    
+pub async fn add_tags(query: Json<AddTagsRequest>) -> impl Responder {    
     let tags = query.tags
         .split_whitespace()
         // New tags will be created with Tag type, existing won't be changed
@@ -110,7 +129,7 @@ pub async fn add_tags(query: web::Json<AddTagsRequest>) -> impl Responder {
 
 /// Delete tag from element
 #[post("/api/write/delete_tag")]
-pub async fn delete_tag(req: web::Json<DeleteTagRequest>) -> impl Responder {
+pub async fn delete_tag(req: Json<DeleteTagRequest>) -> impl Responder {
     match STORAGE
         .remove_tag_from_element(req.element_id, &req.tag_name)
         .await {
@@ -121,7 +140,7 @@ pub async fn delete_tag(req: web::Json<DeleteTagRequest>) -> impl Responder {
 
 /// Edit tag
 #[post("/api/write/edit_tag")]
-pub async fn edit_tag(req: web::Json<EditTagRequest>) -> impl Responder {
+pub async fn edit_tag(req: Json<EditTagRequest>) -> impl Responder {
     let tag = match write::Tag::new(&req.new_name, req.alt_name.clone(), req.tag_type) {
         Some(tag) => tag,
         None => log_n_bail!("failed to create tag struct")
@@ -135,7 +154,7 @@ pub async fn edit_tag(req: web::Json<EditTagRequest>) -> impl Responder {
 
 /// Alias tag
 #[post("/api/write/alias_tag")]
-pub async fn alias_tag(req: web::Json<AliasTagRequest>) -> impl Responder {
+pub async fn alias_tag(req: Json<AliasTagRequest>) -> impl Responder {
     match search::parse_query(&req.query)
         .filter_map(|t| if let Term::Tag(true, tag) = t { Some(tag) } else { None })
         .next() {

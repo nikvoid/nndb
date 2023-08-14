@@ -1,10 +1,11 @@
 use yew::prelude::*;
+use crate::page::index::Index;
 
-#[function_component(App)]
-pub fn app() -> Html {
+#[function_component]
+pub fn App() -> Html {
     html! {
-        <main class="index-page">
-            <a class="label">{ "Index" }</a>
-        </main>
+        <Index />
     }
 }
+
+

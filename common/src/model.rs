@@ -3,7 +3,7 @@ use serde::{Serialize, Deserialize};
 
 pub type UtcDateTime = DateTime<Utc>;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq, Clone)]
 pub struct Tag {
     /// Tag id
     pub id: u32,
@@ -19,7 +19,7 @@ pub struct Tag {
     pub hidden: bool,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq, Clone)]
 pub struct Element {
     /// Element id
     pub id: u32,
@@ -33,7 +33,7 @@ pub struct Element {
     pub animated: bool,
 }   
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq, Clone)]
 pub struct ElementMetadata {
     /// Link to source (if was imported from other sources)
     pub src_links: Vec<(String, String)>,
@@ -47,7 +47,7 @@ pub struct ElementMetadata {
     pub tags: Vec<Tag>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq, Clone)]
 pub struct Associated {
     /// Associated by this key
     pub key: String,
@@ -57,7 +57,7 @@ pub struct Associated {
     pub elements: Vec<Element>
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq, Clone)]
 pub struct AIMetadata {
     /// Positive prompt
     pub positive_prompt: String,
@@ -77,7 +77,7 @@ pub struct AIMetadata {
     pub noise: f32,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum TagType {
     Service,

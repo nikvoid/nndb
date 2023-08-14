@@ -2022,6 +2022,7 @@ dependencies = [
  "maud",
  "md-5",
  "moka",
+ "nndb-common",
  "num_enum",
  "once_cell",
  "parking_lot",
@@ -2062,6 +2063,7 @@ dependencies = [
  "serde",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "web-sys",
  "yew",
  "yew-router",
 ]
