@@ -11,7 +11,7 @@ anyhow = { workspace = true, features = ["backtrace"] }
 async-trait = "0.1.68"
 atomic = "0.5.3"
 bytemuck = "1.13.1"
-chrono = { version = "0.4.24", features = ["serde"] }
+chrono = { workspace = true, features = ["serde"] }
 enum-iterator = "1.4.0"
 futures = "0.3.28"
 image = { version = "0.24.6" }
