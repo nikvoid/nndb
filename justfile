@@ -6,7 +6,7 @@ run-back:
 	cargo run --bin nndb-backend
 
 serve-front:
-	trunk serve frontend/index.html
+	trunk serve -d target/dist frontend/index.html
 
 hx:
 	hx

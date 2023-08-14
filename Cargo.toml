@@ -6,6 +6,11 @@ members = [
     "backend"
 ]
 
+[workspace.dependencies]
+serde = "1"
+serde_json = "1"
+anyhow = "1"
+
 # Compile all build scripts and macros in release
 [profile.dev.build-override]
 opt-level = 3
