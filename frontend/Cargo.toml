@@ -6,4 +6,12 @@ description = "nndb frontend"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
+anyhow = "1.0.72"
+console_error_panic_hook = "0.1.7"
+futures = "0.3.28"
+gloo = { version = "0.9.0", default-features = false, features = ["timers", "net"] }
+serde = { version = "1.0.181", features = ["derive"] }
+wasm-bindgen = "0.2.87"
+wasm-bindgen-futures = { version = "0.4.37", features = ["futures-core"] }
 yew = { version="0.20", features=["csr"] }
+yew-router = "0.17.0"
