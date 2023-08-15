@@ -1,4 +1,5 @@
 use web_sys::HtmlImageElement;
+use super::link::AppLink;
 
 pub use super::prelude::*;
 
@@ -38,10 +39,9 @@ pub fn ElementList(props: &ListProps) -> Html {
                 img.set_onerror(None);
             });
             html! {
-                <div {class}>
-                    // TODO: Link
+                <AppLink<()> {class} route={Route::Element { id: e.id }}>
                     <img {src} {alt} {onerror} />
-                </div> 
+                </AppLink<()> > 
             }
         });
 
