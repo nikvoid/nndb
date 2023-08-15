@@ -4,7 +4,22 @@ use serde::{Deserialize, Serialize};
 use nndb_common::*;
 use tracing::{info, error};
 
-use crate::{dao::STORAGE, log_n_bail, model::{write, TagType}, util::{self, ProcedureState}, service::{SCAN_FILES_LOCK, UPDATE_METADATA_LOCK, GROUP_ELEMENTS_LOCK, MAKE_THUMBNAILS_LOCK, self, FETCH_WIKI_LOCK}, log_n_ok, search::{self, Term}, view::convert::IntoVec};
+use crate::{
+    dao::STORAGE, 
+    model::{write, TagType}, 
+    util::{self, ProcedureState}, 
+    service::{
+        SCAN_FILES_LOCK, UPDATE_METADATA_LOCK, GROUP_ELEMENTS_LOCK, 
+        MAKE_THUMBNAILS_LOCK, self, FETCH_WIKI_LOCK
+    }, 
+    search::{self, Term}, 
+    log_n_ok, 
+    log_n_bail, 
+};
+
+mod convert;
+mod macros;
+use convert::IntoVec;
 
 /// Tag autocompletion max tags
 const TAG_LIMIT: u32 = 15;

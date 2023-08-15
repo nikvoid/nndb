@@ -1,7 +1,7 @@
 use std::{time::Duration, path::Path};
 
 use actix_files::Files;
-use actix_web::{HttpServer, App, web::redirect};
+use actix_web::{HttpServer, App};
 use config::Config;
 use tracing::{info, error};
 use tracing_actix_web::TracingLogger;
@@ -16,7 +16,7 @@ mod import;
 mod service;
 mod config; 
 mod util;
-mod view;
+mod api;
 mod search;
 
 /// Spawn periodic import tasks
@@ -96,25 +96,20 @@ async fn main() -> anyhow::Result<()> {
     HttpServer::new(|| {
         let mut app = App::new()
             .wrap(TracingLogger::default())
-            .service(redirect("/", "/index"))
-            .service(view::index_page)
-            .service(view::element_page)
-            .service(view::tag_autocomplete)
-            .service(view::dashboard_page)
-            .service(view::tag_page)
-            .service(view::add_tags)
-            .service(view::delete_tag)
-            .service(view::edit_tag)
-            .service(view::read_log)
-            .service(view::import_status)
-            .service(view::start_import)
-            .service(view::update_tag_count)
-            .service(view::clear_group_data)
-            .service(view::fix_thumbnails)
-            .service(view::retry_imports)
-            .service(view::alias_tag)
-            .service(view::fetch_wikis)
-            .service(view::search_elements)
+            .service(api::search_elements)
+            .service(api::tag_autocomplete)
+            // .service(api::add_tags)
+            // .service(api::delete_tag)
+            // .service(api::edit_tag)
+            // .service(api::read_log)
+            // .service(api::import_status)
+            // .service(api::start_import)
+            // .service(api::update_tag_count)
+            // .service(api::clear_group_data)
+            // .service(api::fix_thumbnails)
+            // .service(api::retry_imports)
+            // .service(api::alias_tag)
+            // .service(api::fetch_wikis)
         ;
 
         // Serve static folders if needed
