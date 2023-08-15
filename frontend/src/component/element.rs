@@ -27,11 +27,14 @@ pub fn ElementList(props: &ListProps) -> Html {
 
             // On error, try to load full image and remove this handler to avoid spam
             let url = e.url.clone();
+            let animated = e.animated;
             let onerror = Callback::from(move |ev: Event| {
                 let img = ev
                     .target_dyn_into::<HtmlImageElement>()
                     .expect("wrong element");
-                img.set_src(&url);
+                if !animated {
+                    img.set_src(&url);
+                }
                 img.set_onerror(None);
             });
             html! {

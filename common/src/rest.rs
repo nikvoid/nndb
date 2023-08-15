@@ -15,3 +15,13 @@ pub struct SearchResponse {
     pub tags: Vec<Tag>,
     pub count: u32
 }
+
+#[derive(Serialize, Deserialize, Default, PartialEq)]
+pub struct AutocompleteRequest {
+    pub input: String
+}
+
+#[derive(Serialize, Deserialize, Default, PartialEq)]
+pub struct AutocompleteResponse {
+    pub completions: Vec<Tag>
+}

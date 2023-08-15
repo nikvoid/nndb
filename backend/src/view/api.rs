@@ -12,10 +12,6 @@ const TAG_LIMIT: u32 = 15;
 /// Max size of log tail to send
 const LOG_TAIL_SIZE: usize = 20_000;
 
-#[derive(Deserialize)]
-pub struct AutocompleteRequest {
-    input: String
-}
 
 #[derive(Deserialize)]
 pub struct AddTagsRequest {
@@ -72,11 +68,13 @@ pub async fn search_elements(Json(req): Json<SearchRequest>) -> impl Responder {
 }
 
 /// Tag autocompletion
-#[get("/api/read/autocomplete")]
-pub async fn tag_autocomplete(query: web::Query<AutocompleteRequest>) -> impl Responder {
+#[post("/v1/autocomplete")]
+pub async fn tag_autocomplete(query: web::Json<AutocompleteRequest>) -> impl Responder {
     match STORAGE.get_tag_completions(&query.0.input, TAG_LIMIT).await {
         Ok(res) => {
-            Ok(Json(res))
+            Ok(Json(AutocompleteResponse {
+                completions: res.into_vec()
+            }))
         },
         Err(e) => {
             log_n_bail!("failed to complete tag", ?e);

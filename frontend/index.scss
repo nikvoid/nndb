@@ -184,13 +184,80 @@ a.label {
   }
 }
 
+.input-autocomplete {
+  @include grid-gap;
+  grid-template-columns: auto min-content;
+  
+  input,
+  button {
+    @extend .outlined;
+  }
+  
+  .completions {
+    @extend .dotted;
+    background-color: $background;
+    position: absolute;
+    top: 3em;
+    z-index: 100;
+  }
+  
+  .completion {
+    cursor: pointer;
+  }
+  
+  .completion:hover {
+    background-color: $aux-darker;
+  }
+  
+  @media (min-resolution: 192dpi) {
+    font-size: $font-size-small;
+  }
+}
+
+.paginator {
+  @include flex-wrap;
+  justify-content: center;
+}
+
+.tag-completion {
+  @include grid-gap(0, $gap-big);
+  @include layout-row(
+    1, 
+    ".name",
+    ".count",
+  );
+
+  padding: 0 0.1em 0 0.1em;
+
+  .name {
+    text-align: left;
+  }
+
+  .count {
+    text-align: right;
+  }
+}
+
 // Pages
 main {
   // Little gap at top and bigger at bottom
   padding: 1em 0.5em 5em 0.5em;
 
   &.index-page {
-    @include grid-gap;
+    @include grid-gap($gap-big);
     width: 100%;
+
+    @include layout-col(
+      1, 
+      ".input-autocomplete",
+      ".paginator-top",
+      ".element-list",
+      ".paginator-bottom",
+    );
+
+    .input-autocomplete, .paginator-top, .paginator-bottom {
+      width: 1000px;
+      justify-self: center;
+    }
   }
 }

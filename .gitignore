@@ -7,3 +7,6 @@ schema.db
 test.db
 thumbs
 target
+dev.db
+dev.db-shm
+dev.db-wal

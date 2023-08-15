@@ -5,3 +5,5 @@ mod prelude {
 }
 
 pub mod element;
+pub mod paginator;
+pub mod input;
