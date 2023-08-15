@@ -1,6 +1,6 @@
 use futures::FutureExt;
 
-use crate::{backend_post, component::{element::ElementList, input::{InputAutocomplete, Completion}, paginator::Paginator}};
+use crate::{backend_post, component::{element::ElementList, input::{InputAutocomplete, Completion}, paginator::Paginator, metadata::TagList}};
 
 use super::prelude::*;
 
@@ -8,7 +8,7 @@ use super::prelude::*;
 const ELEMENTS_ON_PAGE: u32 = 50;
 
 /// Count of displayed selection tags
-const TAGS_ON_PAGE: u32 = 15;
+const TAGS_ON_PAGE: u32 = 50;
 
 #[function_component]
 pub fn Index() -> Html {
@@ -87,20 +87,28 @@ pub fn Index() -> Html {
     html! {
         <main class="index-page">
             <InputAutocomplete {onsubmit} {onselect}/>
-            <div class="paginator-top">
-                <Paginator 
-                    current={*page}
-                    {max_page}
-                    onclick={onpage.clone()}
-                />
+            <div class="metadata">
+                <div class="element-count">
+                    { "Elements found: " } { resp.count }
+                </div>
+                <TagList content={resp.tags.clone()}/>
             </div>
-            <ElementList content={resp.elements.clone()} />
-            <div class="paginator-bottom">
-                <Paginator 
-                    current={*page}
-                    {max_page}
-                    onclick={onpage}
-                />
+            <div class="elements">
+                <div class="paginator-top">
+                    <Paginator 
+                        current={*page}
+                        {max_page}
+                        onclick={onpage.clone()}
+                    />
+                </div>
+                <ElementList content={resp.elements.clone()} />
+                <div class="paginator-bottom">
+                    <Paginator 
+                        current={*page}
+                        {max_page}
+                        onclick={onpage}
+                    />
+                </div>
             </div>
         </main>
     }

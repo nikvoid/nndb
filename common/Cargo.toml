@@ -6,5 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-serde = { workspace = true, features = ["derive"] } 
+enum-iterator = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
+serde = { workspace = true, features = ["derive"] } 

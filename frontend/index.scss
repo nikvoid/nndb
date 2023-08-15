@@ -13,20 +13,21 @@ $aux-lighter: #757575;
 $aux-darker: #262626;
 
 // Sizes
-$font-size-def: 22px;
-$font-size-big: 1.2rem;
-$font-size-large: 1.75rem;
+$font-size-def: 20px;
+$font-size-big: 1.5rem;
+$font-size-large: 2rem;
 $font-size-small: 0.75rem;
 
-$padding-def: 0.1em 0.5em 0.1em 0.5em;
+$padding-def: 0.05em 0.3em 0.05em 0.3em;
 
 $border-small: 0.1em;
 $border-def: 0.18em;
-$border-rdef: 0.2em;
+$border-rdef: 0.3em;
 
 $margin-def: 0.3em;
 $margin-big: 1em;
 
+$gap-small: 0.3em;
 $gap-def: 0.6em;
 $gap-big: 2em;
 
@@ -49,12 +50,12 @@ $gap-big: 2em;
 /// Each passed selector takes 1 column
 /// Syntax to pass row span may be tricky:
 ///     layout-row(#{start} / #{end}, ...)
-@mixin layout-row($row, $selectors...) {
+@mixin layout-row($row, $start-col, $selectors...) {
   @for $i from 0 to length($selectors) {
     $idx: $i + 1;
     #{nth($selectors, $idx)} {
       grid-row: $row;
-      grid-column: $i + 1;
+      grid-column: $i + $start-col;
     }
   }
 } 
@@ -63,12 +64,12 @@ $gap-big: 2em;
 /// Each passed selector takes 1 row 
 /// Syntax to pass column span may be tricky:
 ///     layout-col(#{start} / #{end}, ...)
-@mixin layout-col($col, $selectors...) {
+@mixin layout-col($col, $start-row, $selectors...) {
   @for $i from 0 to length($selectors) {
     $idx: $i + 1;
     #{nth($selectors, $idx)} {
       grid-column: $col;
-      grid-row: $i + 1;
+      grid-row: $i + $start-row;
     }
   }
 } 
@@ -215,14 +216,16 @@ a.label {
 }
 
 .paginator {
-  @include flex-wrap;
+  @include flex-wrap($gap-small, $gap-small);
   justify-content: center;
+  font-size: $font-size-big;
 }
 
 .tag-completion {
   @include grid-gap(0, $gap-big);
   @include layout-row(
     1, 
+    1,
     ".name",
     ".count",
   );
@@ -238,6 +241,41 @@ a.label {
   }
 }
 
+.tag-list {
+  @include grid-gap($gap-small, $gap-small);
+  grid-template-columns: min-content auto;
+  align-content: start;
+  justify-items: start;
+  font-weight: bold;
+
+  * {
+    height: min-content;
+  }
+
+  .tag-type-name {
+    @extend .label;
+    grid-column: 1/3;
+    justify-self: stretch;
+  }
+
+  .tag-page-link {
+    @extend %label-shared;
+    grid-column: 1;
+  }
+
+  .tag-info {
+    @extend %label-shared;
+    grid-column: 2; 
+    
+    @include grid-gap;
+    @include layout-row(1, 1, ".tag-name", ".tag-count"); 
+  }
+
+  .tag-count {
+    text-align: right
+  }
+}
+
 // Pages
 main {
   // Little gap at top and bigger at bottom
@@ -246,18 +284,39 @@ main {
   &.index-page {
     @include grid-gap($gap-big);
     width: 100%;
+    grid-template-columns: 300px auto;
 
-    @include layout-col(
-      1, 
-      ".input-autocomplete",
-      ".paginator-top",
-      ".element-list",
-      ".paginator-bottom",
-    );
+    .elements {
+      grid-row: 2;
+      grid-column: 2;
 
-    .input-autocomplete, .paginator-top, .paginator-bottom {
+      @include grid-gap($gap-big);
+      @include layout-col(
+        1, 
+        1,
+        ".paginator-top",
+        ".element-list",
+        ".paginator-bottom",
+      );
+      align-content: start;
+    }
+
+    .input-autocomplete {
+      grid-row: 1;
+      grid-column: 1/3;
       width: 1000px;
       justify-self: center;
+    }
+
+    .metadata {
+      @include grid-gap;
+
+      @include layout-col(1, 1, ".element-count", ".tag-list");
+      
+      .element-count {
+        @extend .label;
+        font-weight: bold;
+      }
     }
   }
 }

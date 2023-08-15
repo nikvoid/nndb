@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use enum_iterator::Sequence;
 use serde::{Serialize, Deserialize};
 
 pub type UtcDateTime = DateTime<Utc>;
@@ -77,7 +78,7 @@ pub struct AIMetadata {
     pub noise: f32,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Sequence)]
 #[serde(rename_all = "lowercase")]
 pub enum TagType {
     Service,
@@ -86,4 +87,25 @@ pub enum TagType {
     Title,
     Metadata,
     Tag,
+}
+
+impl Tag {
+    /// Name with spaces as word separators
+    pub fn pretty_name(&self) -> String {
+        self.name.replace('_', " ")
+    }
+}
+
+impl TagType {
+    /// Get type name
+    pub fn name(&self) -> &'static str {
+        match self {
+            TagType::Service => "service",
+            TagType::Artist => "artist",
+            TagType::Character => "character",
+            TagType::Title => "title",
+            TagType::Metadata => "metadata",
+            TagType::Tag => "tag",
+        }
+    }
 }

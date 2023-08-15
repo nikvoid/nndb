@@ -2048,6 +2048,7 @@ name = "nndb-common"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "enum-iterator",
  "serde",
 ]
 
@@ -2057,6 +2058,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "console_error_panic_hook",
+ "enum-iterator",
  "futures",
  "gloo 0.9.0",
  "nndb-common",

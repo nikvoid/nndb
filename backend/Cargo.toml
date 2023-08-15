@@ -12,7 +12,7 @@ async-trait = "0.1.68"
 atomic = "0.5.3"
 bytemuck = "1.13.1"
 chrono = { workspace = true, features = ["serde"] }
-enum-iterator = "1.4.0"
+enum-iterator = { workspace = true }
 futures = "0.3.28"
 image = { version = "0.24.6" }
 image-match = { git = "https://github.com/alt-text-org/image-match-rs", rev = "2788c49387ac95d25b0d9b7d6123f185eb917e19", features = ["img", "image", "num"] }
