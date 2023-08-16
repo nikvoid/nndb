@@ -52,7 +52,7 @@ pub struct InputProps {
     #[prop_or("Search".into())]
     pub button_name: AttrValue,
     #[prop_or_default]
-    pub initial_value: String,
+    pub value: String,
 }
 
 
@@ -67,7 +67,7 @@ pub struct InputAutocomplete {
 }
 
 pub enum Msg {
-    Init,
+    Set(String),
     Parse,
     Term(String),
     Completions(Vec<Completion>),
@@ -80,12 +80,8 @@ impl Component for InputAutocomplete {
 
     type Properties = InputProps;
 
-    fn create(ctx: &yew::Context<Self>) -> Self {
-        ctx.link().send_message(Msg::Init);
-        Self {
-            text: ctx.props().initial_value.clone(),
-            ..Default::default()
-        }
+    fn create(_: &yew::Context<Self>) -> Self {
+        Self::default()
     }
 
     fn view(&self, ctx: &yew::Context<Self>) -> Html {
@@ -127,12 +123,18 @@ impl Component for InputAutocomplete {
         }
     }
 
+    fn changed(&mut self, ctx: &yew::Context<Self>, _old_props: &Self::Properties) -> bool {
+        // Synchronize value with props
+        ctx.link().send_message(Msg::Set(ctx.props().value.clone()));
+        true
+    }
+
     fn update(&mut self, ctx: &yew::Context<Self>, msg: Self::Message) -> bool {
         let input = self.input.cast::<HtmlInputElement>().unwrap();
         
         match msg {
-            Msg::Init => {
-                input.set_value(&self.text);
+            Msg::Set(value) => {
+                input.set_value(&value);
                 true
             }
             Msg::Parse => {
@@ -175,10 +177,9 @@ impl Component for InputAutocomplete {
             },
             Msg::Term(term) => {
                 let onselect = ctx.props().onselect.clone();
-                let cb = ctx.link().callback(Msg::Completions);
-                wasm_bindgen_futures::spawn_local(async move {
+                ctx.link().send_future(async move {
                     let cont = onselect.emit(term).await;
-                    cb.emit(cont);
+                    Msg::Completions(cont)
                 });
                 false
             },

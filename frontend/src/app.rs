@@ -75,7 +75,7 @@ fn Root() -> Html {
                 <InputAutocomplete 
                     {onsubmit} 
                     {onselect} 
-                    initial_value={query.clone()}/>
+                    value={query.clone()}/>
             </div>
             <div class="page-content">
                 <Switch<Route> render={switch} />
