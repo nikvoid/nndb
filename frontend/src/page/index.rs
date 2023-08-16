@@ -80,6 +80,7 @@ pub fn Index() -> Html {
                         {current}
                         {max_page}
                         onclick={onpage}
+                        scroll_to_x={0.}
                     />
                 </div>
             </div>

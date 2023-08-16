@@ -284,7 +284,8 @@ main {
   padding: 1em 0.5em 5em 0.5em; 
 
   .search-box {
-    width: 1000px;
+    width: 100%;
+    max-width: 1000px;
     justify-self: center;
   }
 }
@@ -311,8 +312,8 @@ main {
 
   .metadata {
     @include grid-gap;
-
     @include layout-col(1, 1, ".element-count", ".tag-list");
+    align-content: start;
   
     .element-count {
       @extend .label;
