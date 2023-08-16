@@ -1,4 +1,4 @@
-mod prelude {
+pub mod prelude {
     pub use yew::prelude::*;
     pub use yew_router::prelude::*;
     pub use nndb_common::*;

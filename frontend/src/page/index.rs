@@ -1,6 +1,4 @@
-use futures::FutureExt;
-
-use crate::{backend_post, component::{element::ElementList, input::{InputAutocomplete, Completion}, paginator::Paginator, metadata::TagList}};
+use crate::{backend_post, component::{element::ElementList, paginator::Paginator, metadata::TagList}, app::QueryContext};
 
 use super::prelude::*;
 
@@ -12,7 +10,9 @@ const TAGS_ON_PAGE: u32 = 50;
 
 #[function_component]
 pub fn Index() -> Html {
-    let query = use_state(String::new);
+    let query = use_context::<QueryContext>()
+        .expect("query context")
+        .query;
 
     // Pages start from 1
     let page = use_state(|| 1);
@@ -24,57 +24,21 @@ pub fn Index() -> Html {
         let query = query.clone();
         use_effect_with_deps(|(query, page)| {
             let req = SearchRequest {
-                query: (**query).clone(),
+                query: query.clone(),
                 offset: (**page - 1) * ELEMENTS_ON_PAGE,
                 limit: ELEMENTS_ON_PAGE,
                 tag_limit: TAGS_ON_PAGE
             };
+
             wasm_bindgen_futures::spawn_local(async move {
                 let data = backend_post!(&req, "/v1/search")
                     .await
                     .unwrap();
-                resp.set(data)
+                resp.set(data);
             });
-        }, (query, page))
+        }, (query, page));
     }
-
-    let onsubmit = Callback::from(move |input| {
-        query.set(input)
-    });
-
-    let onselect = Callback::from(|term| async move { 
-        let req = AutocompleteRequest {
-            input: term
-        };
-        let resp: AutocompleteResponse = backend_post!(&req, "/v1/autocomplete")
-            .await
-            .unwrap();
-        resp.completions
-            .into_iter()
-            .map(|tag| {
-                Completion {
-                    inner: html! {
-                        <div class="tag-completion">
-                            <div class="name">
-                                { &tag.name }
-                                if let Some(alt_name) = &tag.alt_name {
-                                    <i>
-                                        { " " }
-                                        { alt_name }
-                                    </i>
-                                }
-                            </div>
-                            <div class="count">
-                                { tag.count }
-                            </div>
-                        </div>
-                    },
-                    name: tag.name
-                }
-            })
-            .collect()
-    }.boxed_local());
-
+    
     let onpage = {
         let page = page.clone();
         Callback::from(move |new_page| {
@@ -82,11 +46,9 @@ pub fn Index() -> Html {
         })
     };
 
-    let max_page = resp.count / ELEMENTS_ON_PAGE + 1;
-    
+    let max_page = resp.count / ELEMENTS_ON_PAGE + 1;   
     html! {
-        <main class="index-page">
-            <InputAutocomplete {onsubmit} {onselect}/>
+        <div class="index-page">
             <div class="metadata">
                 <div class="element-count">
                     { "Elements found: " } { resp.count }
@@ -110,6 +72,6 @@ pub fn Index() -> Html {
                     />
                 </div>
             </div>
-        </main>
+        </div>
     }
 }

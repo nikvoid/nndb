@@ -50,7 +50,9 @@ pub struct InputProps {
     pub onselect: Callback<String, CompletionsFut>,
     /// Text on submit button
     #[prop_or("Search".into())]
-    pub button_name: AttrValue
+    pub button_name: AttrValue,
+    #[prop_or_default]
+    pub initial_value: String,
 }
 
 
@@ -65,6 +67,7 @@ pub struct InputAutocomplete {
 }
 
 pub enum Msg {
+    Init,
     Parse,
     Term(String),
     Completions(Vec<Completion>),
@@ -77,8 +80,12 @@ impl Component for InputAutocomplete {
 
     type Properties = InputProps;
 
-    fn create(_: &yew::Context<Self>) -> Self {
-        Self::default()
+    fn create(ctx: &yew::Context<Self>) -> Self {
+        ctx.link().send_message(Msg::Init);
+        Self {
+            text: ctx.props().initial_value.clone(),
+            ..Default::default()
+        }
     }
 
     fn view(&self, ctx: &yew::Context<Self>) -> Html {
@@ -124,6 +131,10 @@ impl Component for InputAutocomplete {
         let input = self.input.cast::<HtmlInputElement>().unwrap();
         
         match msg {
+            Msg::Init => {
+                input.set_value(&self.text);
+                true
+            }
             Msg::Parse => {
                 self.content = vec![];
                 
