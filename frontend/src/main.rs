@@ -2,6 +2,7 @@ mod app;
 mod api;
 mod page;
 mod component;
+mod route;
 
 use app::App;
 

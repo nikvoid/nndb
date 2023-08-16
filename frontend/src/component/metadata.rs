@@ -1,4 +1,4 @@
-use crate::{component::link::AppLink, app::QueryContext};
+use crate::component::link::AppLink;
 
 use super::prelude::*;
 
@@ -34,10 +34,10 @@ pub fn TagList(props: &TagListProps) -> Html {
                             { "#" }
                         </AppLink<()>>
                         // Show elements with this tag
-                        <AppLink<QueryContext> 
+                        <AppLink<SearchQuery> 
                             class="tag-info"
                             route={Route::Index}
-                            query={QueryContext { query: t.name.clone() }}>
+                            query={SearchQuery { query: t.name.clone() }}>
                             // Strikethrough if hidden
                             <@{if t.hidden { "s" } else { "div" }}>
                                 { t.pretty_name() }
@@ -45,7 +45,7 @@ pub fn TagList(props: &TagListProps) -> Html {
                             <div class="tag-count">
                                 { t.count }
                             </div>
-                        </AppLink<QueryContext>>
+                        </AppLink<SearchQuery>>
                     </>                
                 });
 

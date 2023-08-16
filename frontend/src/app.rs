@@ -1,35 +1,7 @@
-use futures::FutureExt;
-use serde::{Serialize, Deserialize};
-use crate::backend_post;
+use crate::component::prelude::*;
 use crate::component::input::{Completion, InputAutocomplete};
 use crate::component::link::AppLink;
 use crate::page::index::Index;
-use crate::component::prelude::*;
-
-#[derive(Clone, Routable, PartialEq)]
-pub enum Route {
-    #[at("/")]
-    Index,
-    #[at("/dashboard")]
-    Dashboard,
-    #[at("/element/:id")]
-    Element {
-        id: u32
-    },
-    #[at("/tag/:id")]
-    Tag {
-        id: u32
-    },
-    #[not_found]
-    #[at("/not_found")]
-    NotFound,
-}
-
-/// A context struct for passing search query around
-#[derive(Clone, PartialEq, Serialize, Deserialize, Default)]
-pub struct QueryContext {
-    pub query: String
-}
 
 pub fn switch(route: Route) -> Html {   
     match route {
@@ -43,25 +15,18 @@ pub fn switch(route: Route) -> Html {
     }
 }
 
-/// A shim to access location inside BrowserRouter
+/// A shim to access location inside BrowserRouter -- and page root
 #[function_component]
-fn Shim() -> Html {
-    let location = use_location().unwrap();
+fn Root() -> Html {
     let nav = use_navigator().unwrap();
-    
-    // Try to seed context from current url -- if opened in new tab
-    let init_context: QueryContext = location
-        .query()
-        .unwrap_or_default();
-    let context = use_state(move || init_context);
+    let query = use_search_query().query;
+    web_sys::console::log_1(&query.as_str().into());
 
     // On submit change context and push index page
     let onsubmit = {
-        let context = context.clone();
         Callback::from(move |query: String| {
-            let ctx = QueryContext { query };
+            let ctx = SearchQuery { query };
             nav.push_with_query(&Route::Index, &ctx).unwrap();
-            context.set(ctx);
         })
     };
 
@@ -100,24 +65,22 @@ fn Shim() -> Html {
     }.boxed_local());
   
     html! {
-        <ContextProvider<QueryContext> context={(*context).clone()} >
-            <main>
-                <div class="search-box">
-                    <AppLink<()> 
-                        class="button" 
-                        route={Route::Index} >
-                        { "To Index" }
-                    </AppLink<()>>
-                    <InputAutocomplete 
-                        {onsubmit} 
-                        {onselect} 
-                        initial_value={context.query.clone()}/>
-                </div>
-                <div class="page-content">
-                    <Switch<Route> render={switch} />
-                </div>
-            </main>
-        </ContextProvider<QueryContext>>
+        <main>
+            <div class="search-box">
+                <AppLink<()> 
+                    class="button" 
+                    route={Route::Index} >
+                    { "To Index" }
+                </AppLink<()>>
+                <InputAutocomplete 
+                    {onsubmit} 
+                    {onselect} 
+                    initial_value={query.clone()}/>
+            </div>
+            <div class="page-content">
+                <Switch<Route> render={switch} />
+            </div>
+        </main>
     }
 }
 
@@ -125,7 +88,7 @@ fn Shim() -> Html {
 pub fn App() -> Html {
     html! {
         <BrowserRouter>
-            <Shim />
+            <Root />
         </BrowserRouter>
     }
 }

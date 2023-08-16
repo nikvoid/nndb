@@ -1,5 +1,4 @@
 use web_sys::HtmlImageElement;
-use crate::app::QueryContext;
 
 use super::link::AppLink;
 
@@ -12,7 +11,7 @@ pub struct ListProps {
 
 #[function_component]
 pub fn ElementList(props: &ListProps) -> Html {
-    let ctx: QueryContext = use_context().expect("query context");
+    let query = use_search_query();
     let elements = props.content
         .iter()
         .map(|e| {
@@ -43,12 +42,12 @@ pub fn ElementList(props: &ListProps) -> Html {
             });
             
             html! {
-                <AppLink<QueryContext> 
+                <AppLink<SearchQuery> 
                     {class} 
                     route={Route::Element { id: e.id }}
-                    query={ctx.clone()}>
+                    query={query.clone()}>
                     <img {src} {alt} {onerror} />
-                </AppLink<QueryContext> > 
+                </AppLink<SearchQuery> > 
             }
         });
 
