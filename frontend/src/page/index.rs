@@ -1,4 +1,6 @@
-use crate::{backend_post, component::{element::ElementList, paginator::Paginator, metadata::TagList}, app::QueryContext};
+use serde::{Serialize, Deserialize};
+
+use crate::{backend_post, component::{element::{ElementList, Route}, paginator::Paginator, metadata::TagList}};
 
 use super::prelude::*;
 
@@ -8,24 +10,29 @@ const ELEMENTS_ON_PAGE: u32 = 50;
 /// Count of displayed selection tags
 const TAGS_ON_PAGE: u32 = 50;
 
+#[derive(Serialize, Deserialize, PartialEq, Clone)]
+pub struct IndexQuery {
+    pub query: Option<String>,
+    pub page: Option<u32>
+}
+
 #[function_component]
 pub fn Index() -> Html {
-    let query = use_context::<QueryContext>()
-        .expect("query context")
-        .query;
+    let query: IndexQuery = use_location()
+        .unwrap()
+        .query()
+        .unwrap();
 
-    // Pages start from 1
-    let page = use_state(|| 1);
     let resp = use_state(SearchResponse::default);
     
     {
         let resp = resp.clone();
-        let page = page.clone();
-        let query = query.clone();
-        use_effect_with_deps(|(query, page)| {
+        use_effect_with_deps(|query| {
+            // Pages start from 1
+            let page = query.page.unwrap_or(1);
             let req = SearchRequest {
-                query: query.clone(),
-                offset: (**page - 1) * ELEMENTS_ON_PAGE,
+                query: query.query.clone().unwrap_or_default(),
+                offset: (page - 1) * ELEMENTS_ON_PAGE,
                 limit: ELEMENTS_ON_PAGE,
                 tag_limit: TAGS_ON_PAGE
             };
@@ -36,13 +43,17 @@ pub fn Index() -> Html {
                     .unwrap();
                 resp.set(data);
             });
-        }, (query, page));
+        }, query.clone());
     }
     
+    let current = query.page.unwrap_or(1);
     let onpage = {
-        let page = page.clone();
+        let nav = use_navigator().unwrap();
         Callback::from(move |new_page| {
-            page.set(new_page);
+            nav.push_with_query(&Route::Index, &IndexQuery {
+                page: Some(new_page),
+                ..query.clone()
+            }).unwrap();
         })
     };
 
@@ -58,7 +69,7 @@ pub fn Index() -> Html {
             <div class="elements">
                 <div class="paginator-top">
                     <Paginator 
-                        current={*page}
+                        {current}
                         {max_page}
                         onclick={onpage.clone()}
                     />
@@ -66,7 +77,7 @@ pub fn Index() -> Html {
                 <ElementList content={resp.elements.clone()} />
                 <div class="paginator-bottom">
                     <Paginator 
-                        current={*page}
+                        {current}
                         {max_page}
                         onclick={onpage}
                     />

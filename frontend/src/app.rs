@@ -2,7 +2,7 @@ use futures::FutureExt;
 use serde::{Serialize, Deserialize};
 use crate::backend_post;
 use crate::component::input::{Completion, InputAutocomplete};
-use crate::page::index::Index;
+use crate::page::index::{Index, IndexQuery};
 use crate::component::prelude::*;
 
 #[derive(Clone, Routable, PartialEq)]
@@ -57,9 +57,12 @@ fn Shim() -> Html {
     // On submit change context and push index page
     let onsubmit = {
         let context = context.clone();
-        Callback::from(move |query| {
+        Callback::from(move |query: String| {
+            nav.push_with_query(&Route::Index, &IndexQuery {
+                query: Some(query.clone()),
+                page: Some(1)
+            }).unwrap();
             context.set(QueryContext { query });
-            nav.push(&Route::Index);
         })
     };
 

@@ -1,7 +1,6 @@
 
 pub mod prelude {
-    pub use yew::prelude::*;
-    pub use nndb_common::*;
+    pub use crate::component::prelude::*;
 }
 
 pub mod index;
