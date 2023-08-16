@@ -1,14 +1,15 @@
 use crate::component::prelude::*;
 use crate::component::input::{Completion, InputAutocomplete};
 use crate::component::link::AppLink;
+use crate::page::element::ElementPage;
 use crate::page::index::Index;
 
 pub fn switch(route: Route) -> Html {   
     match route {
         Route::Index => html! { <Index /> },
-        // Route::Dashboard => todo!(),
-        // Route::Element { id } => todo!(),
+        Route::Element { id } => html! { <ElementPage {id} /> },
         // Route::Tag { id } => todo!(),
+        // Route::Dashboard => todo!(),
         _ => html! {
             <div class="label">{ "Not Found" }</div>
         }

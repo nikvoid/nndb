@@ -108,4 +108,15 @@ impl TagType {
             TagType::Tag => "tag",
         }
     }
+    /// Get capitalized type name
+    pub fn name_cap(&self) -> &'static str {
+        match self {
+            TagType::Service => "Service",
+            TagType::Artist => "Artist",
+            TagType::Character => "Character",
+            TagType::Title => "Title",
+            TagType::Metadata => "Metadata",
+            TagType::Tag => "Tag",
+        }
+    }
 }

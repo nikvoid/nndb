@@ -1,4 +1,4 @@
-use crate::{model, CONFIG, config::StaticFolder};
+use crate::{model, CONFIG, config::StaticFolder, import};
 use nndb_common::model as api;
 
 impl StaticFolder {
@@ -58,6 +58,33 @@ impl From<model::read::Element> for api::Element {
     }
 }
 
+impl From<model::AIMetadata> for api::AIMetadata {
+    fn from(value: model::AIMetadata) -> Self {
+        Self {
+            positive_prompt: value.positive_prompt,
+            negative_prompt: value.negative_prompt,
+            steps: value.steps,
+            scale: value.scale,
+            sampler: value.sampler,
+            seed: value.seed,
+            strength: value.strength,
+            noise: value.noise,
+        }
+    }
+}
+
+impl From<model::read::ElementMetadata> for api::ElementMetadata {
+    fn from(value: model::read::ElementMetadata) -> Self {
+        Self {
+            src_links: (&value.src_links).into_vec(),
+            src_times: (&value.src_times).into_vec(),
+            add_time: value.add_time,
+            ai_meta: value.ai_meta.map(|m| m.into()),
+            tags: value.tags.into_vec(),
+        }
+    }
+}
+
 /// Helper for converting `Vec<T> -> Vec<U> where U: From<T>`
 pub trait IntoVec<T> {
     fn into_vec(self) -> Vec<T>;
@@ -66,5 +93,11 @@ pub trait IntoVec<T> {
 impl<T, U> IntoVec<T> for Vec<U> where T: From<U> {
     fn into_vec(self) -> Vec<T> {
         self.into_iter().map(|x| x.into()).collect()
+    }
+}
+
+impl<T> IntoVec<(String, T)> for &Vec<(import::Fetcher, T)> where T: Clone {
+    fn into_vec(self) -> Vec<(String, T)> {
+        self.iter().map(|x| (x.0.name().into(), x.1.clone())).collect()
     }
 }

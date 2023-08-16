@@ -97,6 +97,67 @@ pub async fn tag_autocomplete(query: web::Json<AutocompleteRequest>) -> impl Res
     }
 }
 
+#[get("/v1/element/{id}")]
+pub async fn element(id: web::Path<u32>) -> impl Responder {
+    match STORAGE.get_element_data(*id).await {
+        Ok(Some((element, meta))) => {
+            let mut associated = vec![];
+            // Get associated by signature
+            if let Some(group) = element.group_id {
+                match STORAGE.search_elements(
+                    &format!("group:{group}"), 
+                    0, 
+                    None, 
+                    0
+                ).await {
+                    Ok((by_sig, ..)) => {
+                        associated.push(Associated {
+                            key: "Signature".into(),
+                            value: group as i64,
+                            elements: by_sig.into_vec()
+                        })
+                    },
+                    Err(e) => {
+                        log_n_bail!("failed to fetch associted by signature: {e}")
+                    }
+                }
+            }
+
+            // Get associated by external source
+            for (fetcher, group) in &meta.ext_groups {
+                match STORAGE.search_elements(
+                    &format!("extgroup:{group}"), 
+                    0, 
+                    None, 
+                    0
+                ).await {
+                    Ok((by_ext, ..)) => {
+                        associated.push(Associated {
+                            key: fetcher.name().into(),
+                            value: *group,
+                            elements: by_ext.into_vec()
+                        })
+                    },
+                    Err(e) => {
+                        log_n_bail!("failed to fetch associted by external source: {e}")
+                    }
+                }
+                
+            }
+            
+            Ok(Some(Json(MetadataResponse {
+                element: element.into(),
+                metadata: meta.into(),
+                associated
+            })))
+        },
+        Ok(None) => Ok(None),
+        Err(e) => {
+            log_n_bail!("failed to fetch element data: {e}");
+        }
+    }
+}
+
 /// Get recent log
 #[get("/api/read/log")]
 pub async fn read_log() -> impl Responder {    

@@ -25,3 +25,10 @@ pub struct AutocompleteRequest {
 pub struct AutocompleteResponse {
     pub completions: Vec<Tag>
 }
+
+#[derive(Serialize, Deserialize, PartialEq)]
+pub struct MetadataResponse {
+    pub element: Element,
+    pub metadata: ElementMetadata,
+    pub associated: Vec<Associated>,
+}

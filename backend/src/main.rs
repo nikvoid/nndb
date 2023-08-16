@@ -98,6 +98,7 @@ async fn main() -> anyhow::Result<()> {
             .wrap(TracingLogger::default())
             .service(api::search_elements)
             .service(api::tag_autocomplete)
+            .service(api::element)
             // .service(api::add_tags)
             // .service(api::delete_tag)
             // .service(api::edit_tag)
