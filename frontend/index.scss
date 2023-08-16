@@ -246,7 +246,7 @@ a.label {
   align-content: start;
   justify-items: start;
   font-weight: bold;
-
+  
   * {
     height: min-content;
   }
@@ -260,11 +260,15 @@ a.label {
   .tag-page-link {
     @extend %label-shared;
     grid-column: 1;
+    text-decoration: none;
+
   }
 
   .tag-info {
     @extend %label-shared;
     grid-column: 2; 
+    text-decoration: none;
+
     
     @include grid-gap;
     @include layout-row(1, 1, ".tag-name", ".tag-count"); 

@@ -1,3 +1,5 @@
+use crate::{component::link::AppLink, app::QueryContext};
+
 use super::prelude::*;
 
 #[derive(Properties, PartialEq)]
@@ -25,18 +27,25 @@ pub fn TagList(props: &TagListProps) -> Html {
             let tags = tags.iter()
                 .map(|t| html! {
                     <>
-                        <a class="tag-page-link">
-                            // TODO: Link
+                        // Link to tag edit page
+                        <AppLink<()> 
+                            class="tag-page-link"
+                            route={Route::Tag { id: t.id }}>
                             { "#" }
-                        </a >
-                        <a class="tag-info">
-                            <div class="tag-name">
+                        </AppLink<()>>
+                        // Show elements with this tag
+                        <AppLink<QueryContext> 
+                            class="tag-info"
+                            route={Route::Index}
+                            query={QueryContext { query: t.name.clone() }}>
+                            // Strikethrough if hidden
+                            <@{if t.hidden { "s" } else { "div" }}>
                                 { t.pretty_name() }
-                            </div>
+                            </@>
                             <div class="tag-count">
                                 { t.count }
                             </div>
-                        </a>
+                        </AppLink<QueryContext>>
                     </>                
                 });
 
