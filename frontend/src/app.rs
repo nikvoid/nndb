@@ -2,7 +2,8 @@ use futures::FutureExt;
 use serde::{Serialize, Deserialize};
 use crate::backend_post;
 use crate::component::input::{Completion, InputAutocomplete};
-use crate::page::index::{Index, IndexQuery};
+use crate::component::link::AppLink;
+use crate::page::index::Index;
 use crate::component::prelude::*;
 
 #[derive(Clone, Routable, PartialEq)]
@@ -58,11 +59,9 @@ fn Shim() -> Html {
     let onsubmit = {
         let context = context.clone();
         Callback::from(move |query: String| {
-            nav.push_with_query(&Route::Index, &IndexQuery {
-                query: Some(query.clone()),
-                page: Some(1)
-            }).unwrap();
-            context.set(QueryContext { query });
+            let ctx = QueryContext { query };
+            nav.push_with_query(&Route::Index, &ctx).unwrap();
+            context.set(ctx);
         })
     };
 
@@ -104,6 +103,11 @@ fn Shim() -> Html {
         <ContextProvider<QueryContext> context={(*context).clone()} >
             <main>
                 <div class="search-box">
+                    <AppLink<()> 
+                        class="button" 
+                        route={Route::Index} >
+                        { "To Index" }
+                    </AppLink<()>>
                     <InputAutocomplete 
                         {onsubmit} 
                         {onselect} 
