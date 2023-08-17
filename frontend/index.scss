@@ -361,7 +361,10 @@ main {
   
   @include grid-gap($gap-big);
   width: 100%;
-  grid-template-columns: 300px auto minmax(0, $associated-width);
+
+  // Clamp associated to from 1 to 4 elements
+  grid-template-columns: 
+    300px auto minmax($element-container-width, $associated-width);
 
   @include layout-row(
     1, 
