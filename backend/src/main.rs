@@ -101,6 +101,7 @@ async fn main() -> anyhow::Result<()> {
             .service(api::tag_autocomplete)
             .service(api::tag_data)
             .service(api::tag_edit)
+            .service(api::tag_alias)
             // .service(api::add_tags)
             // .service(api::delete_tag)
             // .service(api::read_log)
@@ -110,7 +111,6 @@ async fn main() -> anyhow::Result<()> {
             // .service(api::clear_group_data)
             // .service(api::fix_thumbnails)
             // .service(api::retry_imports)
-            // .service(api::alias_tag)
             // .service(api::fetch_wikis)
         ;
 

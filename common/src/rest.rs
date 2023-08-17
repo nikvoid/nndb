@@ -47,3 +47,9 @@ pub struct TagEditRequest {
     pub tag_type: TagType,
     pub hidden: bool,
 }
+
+#[derive(Serialize, Deserialize, PartialEq)]
+pub struct TagAliasRequest {
+    pub tag_name: String,
+    pub query: String,   
+}

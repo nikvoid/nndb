@@ -1,6 +1,6 @@
 use web_sys::{HtmlInputElement, HtmlSelectElement};
 
-use crate::component::metadata::TagList;
+use crate::component::{metadata::TagList, input::InputAutocomplete};
 
 use super::prelude::*;
 
@@ -32,6 +32,7 @@ pub struct TagPage {
 pub enum Msg {
     Reload,
     Update(TagState),
+    Alias(String),
     Send
 }
 
@@ -67,6 +68,8 @@ impl Component for TagPage {
                     ev.prevent_default();
                     Msg::Send
                 });
+
+                let onsubmit_alias = ctx.link().callback(Msg::Alias);
 
                 let form = html! {
                     <form id="tag-edit" {onsubmit}>
@@ -104,7 +107,10 @@ impl Component for TagPage {
                             type="submit" 
                             id="change-tag" 
                             value="Change tag" />
-                        // TODO: Input alias
+                        <InputAutocomplete
+                            onsubmit={onsubmit_alias}
+                            button_name={"Add aliases"}
+                            />
                     </form>
                 };
         
@@ -192,6 +198,21 @@ impl Component for TagPage {
             Msg::Update(state) => {
                 self.tag_data = state;
                 true
+            },
+            Msg::Alias(aliases) => {
+                let TagState::Found(resp) = &self.tag_data else { unreachable!() }; 
+                let tag_name = resp.tag.name.clone();
+                ctx.link().send_future(async move {
+                    let req = TagAliasRequest {
+                        tag_name,
+                        query: aliases,
+                    };
+                    let _: () = backend_post!(&req, "/v1/tag_alias")
+                        .await
+                        .unwrap();
+                    Msg::Reload
+                });
+                false
             },
             Msg::Send => {
                 // Retrieve fields

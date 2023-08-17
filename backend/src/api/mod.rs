@@ -40,13 +40,6 @@ pub struct DeleteTagRequest {
     tag_name: String 
 }
 
-
-#[derive(Deserialize)]
-pub struct AliasTagRequest {
-    tag_name: String,
-    query: String,   
-}
-
 #[derive(Serialize)]
 pub struct ImportTasksStatus {
     scan_files: ProcedureState,
@@ -186,6 +179,22 @@ pub async fn tag_edit(req: Json<TagEditRequest>) -> impl Responder {
     }
 }
 
+/// Alias tag
+#[post("/v1/tag_alias")]
+pub async fn tag_alias(req: Json<TagAliasRequest>) -> impl Responder {
+    match search::parse_query(&req.query)
+        .filter_map(|t| if let Term::Tag(true, tag) = t { Some(tag) } else { None })
+        .next() {
+        Some(to) => match STORAGE
+            .alias_tag(&req.tag_name, to)
+            .await {
+            Ok(_) => log_n_ok!("aliased tag", tag=req.tag_name, to),
+            Err(e) => log_n_bail!("failed to make alias", ?e)
+        }
+        None => log_n_bail!("tag definition not found"),
+    }
+}
+
 /// Get recent log
 #[get("/api/read/log")]
 pub async fn read_log() -> impl Responder {    
@@ -237,23 +246,6 @@ pub async fn delete_tag(req: Json<DeleteTagRequest>) -> impl Responder {
         .await {
         Ok(_) => log_n_ok!("removed tag from element"),
         Err(e) => log_n_bail!("failed to remove tag", ?e)
-    }
-}
-
-
-/// Alias tag
-#[post("/api/write/alias_tag")]
-pub async fn alias_tag(req: Json<AliasTagRequest>) -> impl Responder {
-    match search::parse_query(&req.query)
-        .filter_map(|t| if let Term::Tag(true, tag) = t { Some(tag) } else { None })
-        .next() {
-        Some(to) => match STORAGE
-            .alias_tag(&req.tag_name, to)
-            .await {
-            Ok(_) => log_n_ok!("aliased tag", tag=req.tag_name, to),
-            Err(e) => log_n_bail!("failed to make alias", ?e)
-        }
-        None => log_n_bail!("tag definition not found"),
     }
 }
 
