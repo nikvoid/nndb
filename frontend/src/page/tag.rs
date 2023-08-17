@@ -107,10 +107,14 @@ impl Component for TagPage {
                             type="submit" 
                             id="change-tag" 
                             value="Change tag" />
-                        <InputAutocomplete
-                            onsubmit={onsubmit_alias}
-                            button_name={"Add aliases"}
-                            />
+                        <div 
+                            id="tag-alias" 
+                            title="Alias to self removes element from any group">
+                            <InputAutocomplete
+                                onsubmit={onsubmit_alias}
+                                button_name={"Add aliases"}
+                                />
+                        </div>
                     </form>
                 };
         
