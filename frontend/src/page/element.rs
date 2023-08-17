@@ -63,7 +63,7 @@ pub fn ElementPage(props: &Props) -> Html {
                 // Do not display empty groups or groups that have only this element
                 .filter(|assoc| 
                     !assoc.elements.is_empty()
-                    && assoc.elements[0] != *element
+                    && (assoc.elements.len() != 1 || assoc.elements[0] != *element)
                 )
                 .map(|Associated { key, value, elements }| {
                     html! {
