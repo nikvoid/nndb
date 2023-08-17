@@ -43,6 +43,9 @@ pub fn TagList(props: &TagListProps) -> Html {
                             // Strikethrough if hidden
                             <@{if t.hidden { "s" } else { "div" }}>
                                 { t.pretty_name() }
+                                if let Some(alt_name) = &t.alt_name {
+                                    <i>{ " " }{ alt_name }</i>
+                                }
                             </@>
                             <div class="tag-count">
                                 { t.count }
