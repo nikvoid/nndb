@@ -1,3 +1,5 @@
+use std::{str::FromStr, convert::Infallible};
+
 use chrono::{DateTime, Utc};
 use enum_iterator::Sequence;
 use serde::{Serialize, Deserialize};
@@ -78,7 +80,7 @@ pub struct AIMetadata {
     pub noise: f32,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Clone, Sequence)]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Copy, Sequence, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum TagType {
     Service,
@@ -86,6 +88,7 @@ pub enum TagType {
     Character,
     Title,
     Metadata,
+    #[default]
     Tag,
 }
 
@@ -93,6 +96,24 @@ impl Tag {
     /// Name with spaces as word separators
     pub fn pretty_name(&self) -> String {
         self.name.replace('_', " ")
+    }
+}
+
+impl FromStr for TagType {
+    type Err = Infallible;
+
+    /// Parse lowercase str to get tag type.
+    /// In case of unknown type returns [TagType::Tag].
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let ty = match s {
+            "service" => Self::Service,
+            "artist" => Self::Artist,
+            "character" => Self::Character,
+            "title" => Self::Title,
+            "metadata" => Self::Metadata,
+            _ => Self::Tag,
+        };
+        Ok(ty)
     }
 }
 

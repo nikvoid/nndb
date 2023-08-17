@@ -279,11 +279,15 @@ a.label {
   }
 }
 
-.element-metadata {  
+.element-metadata, .tag-infos {  
   @include grid-gap($gap-small, $gap-small);
   grid-template-columns: min-content auto;
   font-weight: bold;
 
+  .section-data {
+    grid-column: 1/3;
+  }
+  
   .section-label {
     @extend .label;
     grid-column: 1/3;
@@ -334,7 +338,7 @@ main {
   width: 100%;
   grid-template-columns: 300px auto;
 
-  .elements {
+  > .elements {
     grid-row: 1;
     grid-column: 2;
 
@@ -349,7 +353,7 @@ main {
     align-content: start;
   }
 
-  .metadata {
+  > .metadata {
     @include grid-gap;
     @include layout-col(1, 1, ".element-count", ".tag-list");
     align-content: start;
@@ -373,12 +377,12 @@ main {
   @include layout-row(
     1, 
     1, 
-    ".metadata", 
-    ".element-container", 
-    ".associated"
+    "> .metadata", 
+    "> #element-container", 
+    "> .associated"
   );
   
-  .metadata {
+  > .metadata {
     @include grid-gap;
     @include layout-col(1, 1, ".tag-list");
     align-content: start;
@@ -389,7 +393,7 @@ main {
     }
   }
 
-  #element-container {
+  > #element-container {
   
   }
 
@@ -401,7 +405,7 @@ main {
     max-height: 90vh;
   }
 
-  .associated {
+  > .associated {
     justify-self: end;
     
     @include grid-gap;
@@ -411,6 +415,66 @@ main {
 
     .group-label {
       @extend %label-shared
+    }
+  }
+}
+
+.tag-page {
+  @include grid-gap($gap-big);
+  width: 100%;
+  grid-template-columns: 300px minmax(200px, 1000px);
+  
+  @include layout-row(
+    1, 
+    1, 
+    "> .tag-info", 
+    "> #tag-edit", 
+  );
+
+  #tag-edit {
+    @include grid-gap;
+    grid-template-columns: max-content min-content max-content auto;
+    align-content: start;
+
+    @include layout-row(1, 1, "#tag-name-label", "#tag-name");
+    @include layout-row(2, 1, "#tag-alt-name-label", "#tag-alt-name");
+
+    // Override
+    #tag-name, #tag-alt-name {
+      grid-column: 2/5
+    }
+
+    #change-tag {
+      grid-row: 4;
+      grid-column: 1/5;
+    }
+    
+    @include layout-row(
+      3, 
+      1, 
+      "#tag-hidden-label", 
+      "#tag-hidden",
+      "#tag-type-label",
+      "#tag-type",
+    );
+
+    // For labels inside #tag-edit
+    .label {
+      text-align: left;
+    }
+
+    input, 
+    button {
+      @extend .outlined;
+    }
+
+    select {
+      @extend .outlined;
+      font-size: inherit;
+
+      option {
+        background-color: $aux-darker;
+      }
     }
   }
 }

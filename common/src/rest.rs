@@ -32,3 +32,18 @@ pub struct MetadataResponse {
     pub metadata: ElementMetadata,
     pub associated: Vec<Associated>,
 }
+
+#[derive(Serialize, Deserialize, PartialEq)]
+pub struct TagResponse {
+    pub tag: Tag,
+    pub aliases: Vec<Tag>
+}
+
+#[derive(Serialize, Deserialize, PartialEq)]
+pub struct TagEditRequest {
+    pub tag_name: String,
+    pub new_name: String,
+    pub alt_name: Option<String>,
+    pub tag_type: TagType,
+    pub hidden: bool,
+}

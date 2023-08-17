@@ -25,6 +25,19 @@ impl From<model::TagType> for api::TagType {
     }
 }
 
+impl From<api::TagType> for model::TagType {
+    fn from(value: api::TagType) -> Self {
+        match value {
+            api::TagType::Service => Self::Service,
+            api::TagType::Artist => Self::Artist,
+            api::TagType::Character => Self::Character,
+            api::TagType::Title => Self::Title,
+            api::TagType::Metadata => Self::Metadata,
+            api::TagType::Tag => Self::Tag,
+        }
+    }
+}
+
 impl From<model::read::Tag> for api::Tag {
     fn from(value: model::read::Tag) -> Self {
         Self {

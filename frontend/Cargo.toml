@@ -29,6 +29,7 @@ features = [
 [dependencies.web-sys]
 version = "0.3.64"
 features = [ 
+  "HtmlSelectElement",
   "HtmlImageElement", 
   "Window", 
   "DomRect", 

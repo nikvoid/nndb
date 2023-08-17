@@ -40,14 +40,6 @@ pub struct DeleteTagRequest {
     tag_name: String 
 }
 
-#[derive(Deserialize)]
-pub struct EditTagRequest {
-    tag_name: String,
-    new_name: String,
-    alt_name: Option<String>,
-    tag_type: TagType,
-    hidden: bool,
-}
 
 #[derive(Deserialize)]
 pub struct AliasTagRequest {
@@ -64,6 +56,7 @@ pub struct ImportTasksStatus {
     wiki_fetch: ProcedureState
 }
 
+/// Element search
 #[post("/v1/search")]
 pub async fn search_elements(Json(req): Json<SearchRequest>) -> impl Responder {
     match STORAGE
@@ -97,6 +90,7 @@ pub async fn tag_autocomplete(query: web::Json<AutocompleteRequest>) -> impl Res
     }
 }
 
+/// Element data, metadata and associated
 #[get("/v1/element/{id}")]
 pub async fn element(id: web::Path<u32>) -> impl Responder {
     match STORAGE.get_element_data(*id).await {
@@ -158,6 +152,40 @@ pub async fn element(id: web::Path<u32>) -> impl Responder {
     }
 }
 
+/// Tag data and aliases
+#[get("/v1/tag/{id}")]
+pub async fn tag_data(id: web::Path<u32>) -> impl Responder {
+    let tag = match STORAGE.get_tag_data_by_id(*id).await {
+        Ok(Some(t)) => t,
+        Ok(None) => return Ok(Json(None)),
+        Err(e) => log_n_bail!("failed to get tag data: {e}")
+    };
+
+    let aliases = match STORAGE.get_tag_aliases(&tag.name).await {
+        Ok(v) => v,
+        Err(e) => log_n_bail!("failed to get tag aliases: {e}")  
+    };
+    
+    Ok(Json(Some(TagResponse {
+        tag: tag.into(),
+        aliases: aliases.into_vec()
+    })))
+}
+
+/// Edit tag
+#[post("/v1/tag_edit")]
+pub async fn tag_edit(req: Json<TagEditRequest>) -> impl Responder {
+    let tag = match write::Tag::new(&req.new_name, req.alt_name.clone(), req.tag_type.into()) {
+        Some(tag) => tag,
+        None => log_n_bail!("failed to create tag struct")
+    };
+
+    match STORAGE.update_tag(&req.tag_name, &tag, req.hidden).await {
+        Ok(_) => log_n_ok!("edited tag"),
+        Err(e) => log_n_bail!("failed to update tag", ?e)
+    }
+}
+
 /// Get recent log
 #[get("/api/read/log")]
 pub async fn read_log() -> impl Responder {    
@@ -212,19 +240,6 @@ pub async fn delete_tag(req: Json<DeleteTagRequest>) -> impl Responder {
     }
 }
 
-/// Edit tag
-#[post("/api/write/edit_tag")]
-pub async fn edit_tag(req: Json<EditTagRequest>) -> impl Responder {
-    let tag = match write::Tag::new(&req.new_name, req.alt_name.clone(), req.tag_type) {
-        Some(tag) => tag,
-        None => log_n_bail!("failed to create tag struct")
-    };
-
-    match STORAGE.update_tag(&req.tag_name, &tag, req.hidden).await {
-        Ok(_) => log_n_ok!("edited tag"),
-        Err(e) => log_n_bail!("failed to update tag", ?e)
-    }
-}
 
 /// Alias tag
 #[post("/api/write/alias_tag")]

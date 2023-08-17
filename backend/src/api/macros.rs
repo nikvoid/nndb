@@ -7,11 +7,11 @@ macro_rules! log_n_bail {
         return Err(actix_web::error::ErrorInternalServerError($lit));
     }};
 }
-/// Log info and return 200 status to client
+/// Log info and return 200 status with json unit - null to client
 #[macro_export]
 macro_rules! log_n_ok {
     ($lit:literal $(, $($tt:tt)* )?) => {{
         tracing::info!($($($tt)*,)? $lit);
-        return Ok($lit);
+        return Ok("null");
     }};
 }

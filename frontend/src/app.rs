@@ -3,12 +3,13 @@ use crate::component::input::{Completion, InputAutocomplete};
 use crate::component::link::AppLink;
 use crate::page::element::ElementPage;
 use crate::page::index::Index;
+use crate::page::tag::TagPage;
 
 pub fn switch(route: Route) -> Html {   
     match route {
         Route::Index => html! { <Index /> },
         Route::Element { id } => html! { <ElementPage {id} /> },
-        // Route::Tag { id } => todo!(),
+        Route::Tag { id } => html! { <TagPage {id} /> },
         // Route::Dashboard => todo!(),
         _ => html! {
             <div class="label">{ "Not Found" }</div>
