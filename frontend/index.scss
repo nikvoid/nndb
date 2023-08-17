@@ -390,11 +390,11 @@ main {
   }
 
   // Constrain element size by default
-  // TODO: Constrain width
   .element-constrained {
     width: inherit;
     height: inherit;
     max-height: 90vh;
+    max-width: 100%;
   }
 
   > .associated {
