@@ -57,7 +57,7 @@ pub fn TagList(props: &TagListProps) -> Html {
            
             html! {
                 <>
-                    <div class="tag-type-name">
+                    <div class="section-label">
                         { ty.name_cap() }
                     </div>
                     { for tags }
