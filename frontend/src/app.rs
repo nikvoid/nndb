@@ -1,5 +1,5 @@
 use crate::component::prelude::*;
-use crate::component::input::{Completion, InputAutocomplete};
+use crate::component::input::InputAutocomplete;
 use crate::component::link::AppLink;
 use crate::page::element::ElementPage;
 use crate::page::index::Index;
@@ -31,40 +31,6 @@ fn Root() -> Html {
             nav.push_with_query(&Route::Index, &ctx).unwrap();
         })
     };
-
-    // On select request autocompletions from backend
-    let onselect = Callback::from(|term| async move { 
-        let req = AutocompleteRequest {
-            input: term
-        };
-        let resp: AutocompleteResponse = backend_post!(&req, "/v1/autocomplete")
-            .await
-            .unwrap();
-        resp.completions
-            .into_iter()
-            .map(|tag| {
-                Completion {
-                    inner: html! {
-                        <div class="tag-completion">
-                            <div class="name">
-                                { &tag.name }
-                                if let Some(alt_name) = &tag.alt_name {
-                                    <i>
-                                        { " " }
-                                        { alt_name }
-                                    </i>
-                                }
-                            </div>
-                            <div class="count">
-                                { tag.count }
-                            </div>
-                        </div>
-                    },
-                    name: tag.name
-                }
-            })
-            .collect()
-    }.boxed_local());
   
     html! {
         <main>
@@ -76,7 +42,6 @@ fn Root() -> Html {
                 </AppLink<()>>
                 <InputAutocomplete 
                     {onsubmit} 
-                    {onselect} 
                     value={query.clone()}/>
             </div>
             <div class="page-content">

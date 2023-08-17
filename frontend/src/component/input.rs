@@ -1,23 +1,7 @@
 use super::prelude::*;
 use std::ops::Range;
 
-use futures::future::LocalBoxFuture;
 use web_sys::{HtmlInputElement, KeyboardEvent};
-
-/// Completion row content
-pub struct Completion {
-    /// Actual completion text
-    pub name: String,
-    /// Inner html of completion result row
-    pub inner: Html
-}
-
-pub type CompletionsFut = LocalBoxFuture<'static, Vec<Completion>>;
-
-#[derive(Clone, PartialEq)]
-struct Context {
-    pub cb: Callback<String>
-}
 
 #[derive(Properties, PartialEq)]
 struct CompletionProps {
@@ -25,29 +9,10 @@ struct CompletionProps {
     pub children: Children
 }
 
-/// Possible completion result, that will be spliced into input on click
-#[function_component]
-fn CompletionResult(props: &CompletionProps) -> Html {
-    let ctx = use_context::<Context>().unwrap();
-
-    let result = props.result.clone();
-    let onclick = Callback::from(move |_| {
-        ctx.cb.emit(result.clone());
-    });
-    html! {
-        <div class="completion" {onclick}>
-            { for props.children.iter() }
-        </div>
-    }
-}
-
 #[derive(Properties, PartialEq)]
 pub struct InputProps {
     /// Callback that will be called on button press
     pub onsubmit: Callback<String>,
-    /// Callback that will be called on input text change
-    /// `|selected_term| -> CompletionsFut` 
-    pub onselect: Callback<String, CompletionsFut>,
     /// Text on submit button
     #[prop_or("Search".into())]
     pub button_name: AttrValue,
@@ -56,10 +21,10 @@ pub struct InputProps {
 }
 
 
-/// Input field with autocompletion
+/// Input field with tag autocompletion
 #[derive(Default)]
 pub struct InputAutocomplete {
-    content: Vec<Completion>,
+    content: Vec<Tag>,
     input_locked: bool,
     text: String,
     selected: Range<usize>,
@@ -70,7 +35,7 @@ pub enum Msg {
     Set(String),
     Parse,
     Term(String),
-    Completions(Vec<Completion>),
+    Completions(Vec<Tag>),
     Selected(String),
     Submit,
 }
@@ -85,14 +50,6 @@ impl Component for InputAutocomplete {
     }
 
     fn view(&self, ctx: &yew::Context<Self>) -> Html {
-        let completions = self.content
-            .iter()
-            .map(|comp| html! {
-                <CompletionResult result={comp.name.clone()}>
-                    { comp.inner.clone() }
-                </CompletionResult>
-            });
-    
         let onclick = ctx.link().callback(|_| Msg::Submit);
         let onclick_form = ctx.link().callback(|_| Msg::Parse);
         let onkeyup = ctx.link().callback(|e: KeyboardEvent| match e.key_code() {
@@ -101,11 +58,33 @@ impl Component for InputAutocomplete {
             _  => Msg::Parse
         });
         
-        let context = Context {
-            cb: ctx.link().callback(Msg::Selected)
-        };
-        
         let input_ref = self.input.clone();
+
+        let completions = self.content
+            .iter()
+            .map(|tag| {
+                let name = tag.name.clone();
+                // Possible completion result, that will be spliced into input on click
+                let onclick = ctx.link()
+                    .callback(move |_| Msg::Selected(name.clone()));
+                html! {
+                    <div class="tag-completion" {onclick}>
+                        <div class="name">
+                            { &tag.name }
+                            if let Some(alt_name) = &tag.alt_name {
+                                <i>
+                                    { " " }
+                                    { alt_name }
+                                </i>
+                            }
+                        </div>
+                        <div class="count">
+                            { tag.count }
+                        </div>
+                    </div>
+                }
+            });
+        
         html! {
             <div class="input-autocomplete">        
                 <input 
@@ -115,9 +94,7 @@ impl Component for InputAutocomplete {
                     ref={input_ref} />
                 <button {onclick}>{ &ctx.props().button_name }</button>
                 <div class="completions" hidden={self.content.is_empty()}>
-                    <ContextProvider<Context> {context}>
-                        { for completions }
-                    </ContextProvider<Context>>
+                    { for completions }
                 </div>
             </div>
         }
@@ -176,10 +153,16 @@ impl Component for InputAutocomplete {
                 false
             },
             Msg::Term(term) => {
-                let onselect = ctx.props().onselect.clone();
+                // On select request completions from backend
                 ctx.link().send_future(async move {
-                    let cont = onselect.emit(term).await;
-                    Msg::Completions(cont)
+                    let req = AutocompleteRequest {
+                        input: term
+                    };
+                    let resp: AutocompleteResponse = 
+                        backend_post!(&req, "/v1/autocomplete")
+                        .await
+                        .unwrap();
+                    Msg::Completions(resp.completions)
                 });
                 false
             },
