@@ -60,6 +60,11 @@ pub fn ElementPage(props: &Props) -> Html {
         State::Found(MetadataResponse { element, metadata, associated }) => {
             let associated = associated
                 .iter()
+                // Do not display empty groups or groups that have only this element
+                .filter(|assoc| 
+                    !assoc.elements.is_empty()
+                    && assoc.elements[0] != *element
+                )
                 .map(|Associated { key, value, elements }| {
                     html! {
                         <>
