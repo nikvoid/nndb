@@ -34,6 +34,11 @@ $gap-big: 2em;
 $element-container-width: 195px;
 $element-container-height: 185px;
 
+// Fonts
+@font-face {
+  font-family: 'JetMonoMedium';
+  src:  url('/jetmono.woff2') format('woff2');
+}
 
 // Mixins 
 /// Flex container with enabled wrapping and gaps
@@ -524,11 +529,14 @@ main {
   }
 
   > .log-window {
+    color: $on-secondary;
     background-color: $aux-darker;
     border-radius: $border-rdef;
     padding: 0.2em 1em 0.2em 1em;
     
     pre {
+      font-family: "JetMonoMedium";
+      font-size: $font-size-small;
       height: 80vh;
       word-wrap: anywhere;
       white-space: pre-wrap;

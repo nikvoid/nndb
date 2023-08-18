@@ -1,5 +1,6 @@
 use futures::future::join;
 use gloo::timers::callback::Timeout;
+use web_sys::HtmlElement;
 use crate::component::ProgressBar;
 
 use super::prelude::*;
@@ -16,9 +17,11 @@ pub enum LinkStatus {
 /// Dashboard page that displays backend tasks status and can send control commands
 #[derive(Default)]
 pub struct Dashboard {
-    log_data: String,
     status: StatusResponse,
     link_status: LinkStatus,
+    log_ref: NodeRef,
+    /// False if log wasn't scrolled to the end
+    init_scroll: bool,
 }
 
 pub enum Msg {
@@ -114,8 +117,7 @@ impl Component for Dashboard {
                     { for controls }
                 </div>
                 <div class="log-window">
-                    <pre>
-                        { &self.log_data }
+                    <pre ref={self.log_ref.clone()}>
                     </pre>
                 </div>
             </div>
@@ -145,9 +147,17 @@ impl Component for Dashboard {
                 });
                 false
             },
-            Msg::Update(stat, log) => {
+            Msg::Update(stat, log_text) => {
                 self.status = stat;
-                self.log_data = log;
+                let log: HtmlElement = self.log_ref.cast().unwrap();
+                log.set_inner_text(&log_text);
+
+                // On first update scroll log to the end
+                if !self.init_scroll {
+                    log.set_scroll_top(i32::MAX);
+                    self.init_scroll = true;
+                }
+                
                 ctx.link().send_message(Msg::LinkStatus(LinkStatus::Ok));
                 true
             },
