@@ -14,3 +14,19 @@ pub mod paginator;
 pub mod input;
 pub mod metadata;
 pub mod link;
+
+use prelude::*;
+
+#[derive(Properties, PartialEq)]
+pub struct BarProps {
+    pub progress: f32
+}
+
+#[function_component]
+pub fn ProgressBar(props: &BarProps) -> Html {
+    html! {
+        <div class="progress-bar">
+            <div class="bar" style={ format!("width: {}%;", props.progress * 100.) }/> 
+        </div>
+    }
+}

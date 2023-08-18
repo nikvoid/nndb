@@ -298,6 +298,18 @@ a.label {
   }
 }
 
+.progress-bar {
+  background-color: $aux-darker;
+  border-radius: $border-rdef;
+  height: 2em;
+  
+  > .bar {
+    border-radius: $border-rdef;
+    background-color: $primary;
+    height: 100%;
+  }
+}
+
 // Pages
 main {
   @include grid-gap($gap-big); 
@@ -505,6 +517,10 @@ main {
   > .control-panel {
     @extend %info-section;
     grid-template-columns: max-content auto;
+
+    .progress-bar {
+      height: 0.4em;
+    }
   }
 
   > .log-window {
@@ -513,7 +529,7 @@ main {
     padding: 0.2em 1em 0.2em 1em;
     
     pre {
-      height: 85vh;
+      height: 80vh;
       word-wrap: anywhere;
       white-space: pre-wrap;
       overflow-y: scroll;

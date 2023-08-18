@@ -1,4 +1,6 @@
+use futures::future::join;
 use gloo::timers::callback::Timeout;
+use crate::component::ProgressBar;
 
 use super::prelude::*;
 
@@ -21,9 +23,9 @@ pub struct Dashboard {
 
 pub enum Msg {
     Reload,
-    UpdateStatus(StatusResponse),
-    UpdateLog(String),
+    Update(StatusResponse, String),
     LinkStatus(LinkStatus),
+    Control(ControlRequest)
 }
 
 #[derive(PartialEq, Properties)]
@@ -56,11 +58,16 @@ impl Component for Dashboard {
                 <div class="param-value">
                     if let TaskStatus::Running { done, actions } = stat {
                         { "running: " }{ done }{ "/" }{ actions }
-                        // TODO: Progress-bar
                     } else {
                         { "sleeping" }
                     }
                 </div>
+                // If running, show progress bar
+                if let TaskStatus::Running { done, actions } = stat {
+                    <div class="section-data">
+                        <ProgressBar progress={*done as f32 / *actions as f32} />
+                    </div>
+                }
             </>
         });
 
@@ -69,6 +76,24 @@ impl Component for Dashboard {
             LinkStatus::Ok => "ok",
             LinkStatus::Error(_) => "error",
         };
+
+        let controls = [
+            (ControlRequest::StartImport, "Start import"),
+            (ControlRequest::UpdateTagCount, "Update tag counts"),
+            (ControlRequest::ClearGroupData, "Clear group data"),
+            (ControlRequest::FixThumbnails, "Fix thumbnails"),
+            (ControlRequest::RetryImports, "Retry imports"),
+            (ControlRequest::FetchWikis, "Fetch wikis"),
+        ]
+        .into_iter()
+        .map(|(req, label)| {
+            let onclick = ctx.link().callback(move |_| Msg::Control(req));
+            html! {
+                <div class="button section-data" {onclick}>
+                    { label }
+                </div>
+            }
+        });
         
         html! {
             <div class="dashboard-page">
@@ -86,7 +111,7 @@ impl Component for Dashboard {
                     <div class="section-label">
                         { "Control" }
                     </div>
-                    // TODO: Control buttons
+                    { for controls }
                 </div>
                 <div class="log-window">
                     <pre>
@@ -101,35 +126,29 @@ impl Component for Dashboard {
         match msg {
             Msg::Reload => {
                 ctx.link().send_future(async move {
-                    match backend_get!("/v1/status").await {
-                        Ok(s) => Msg::UpdateStatus(s),
-                        Err(e) => Msg::LinkStatus(LinkStatus::Error(e.to_string())) 
-                    }
-                });
-                ctx.link().send_future(async move {
                     let req = LogRequest {
                         // TODO: Adjustable log size
                         read_size: 50000
                     };
-                    match backend_post!(&req, "/v1/log").await {
-                        Ok(resp) => {
-                            // Type can't be written in pattern
-                            let r: LogResponse = resp;
-                            Msg::UpdateLog(r.data)
-                        }
-                        Err(e) => Msg::LinkStatus(LinkStatus::Error(e.to_string()))
+
+                    match join(
+                        backend_get!("/v1/status"), 
+                        backend_post!(&req, "/v1/log")
+                    ).await {
+                        // If both requests suceeded, send update
+                        (Ok(stat), Ok(LogResponse { data })) => Msg::Update(stat, data),
+                        // Otherwise send error
+                        (_, Err(e))
+                        | (Err(e), _) => 
+                            Msg::LinkStatus(LinkStatus::Error(e.to_string())),
                     }
                 });
                 false
             },
-            Msg::UpdateStatus(stat) => {
+            Msg::Update(stat, log) => {
                 self.status = stat;
-                self.link_status = LinkStatus::Ok;
-                true
-            },
-            Msg::UpdateLog(log) => {
                 self.log_data = log;
-                self.link_status = LinkStatus::Ok;
+                ctx.link().send_message(Msg::LinkStatus(LinkStatus::Ok));
                 true
             },
             Msg::LinkStatus(stat) => {
@@ -138,14 +157,23 @@ impl Component for Dashboard {
                     | LinkStatus::Ok =>  {
                         // If previous connect suceeded, update
                         let link = ctx.link().clone();
-                        Timeout::new(5000, move || link.send_message(Msg::Reload))
+                        Timeout::new(1000, move || link.send_message(Msg::Reload))
                             .forget();
                     },
-                    LinkStatus::Error(_) => todo!("Make global error slot"),
+                    LinkStatus::Error(e) => todo!("Make global error slot: {e}"),
                 }
                 self.link_status = stat;
                 true
             },
+            Msg::Control(req) => {
+                ctx.link().send_future(async move {
+                    match backend_post!(&req, "/v1/control").await {
+                        Ok(()) => Msg::Reload,
+                        Err(e) => Msg::LinkStatus(LinkStatus::Error(e.to_string()))
+                    }
+                });
+                false
+            }
         }
     }
 }

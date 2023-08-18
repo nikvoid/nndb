@@ -1,4 +1,5 @@
 use actix_web::{Responder, get, web::{self, Json}, post};
+use anyhow::Context;
 use itertools::Itertools;
 use serde::Deserialize;
 use nndb_common::*;
@@ -235,61 +236,36 @@ pub async fn delete_tag(req: Json<DeleteTagRequest>) -> impl Responder {
     }
 }
 
-/// Manually start import task in strict sequence
-#[get("/api/write/start_import")]
-pub async fn start_import() -> impl Responder {
-    info!("Starting manual import");
-    tokio::spawn(async {
-        match service::manual_import().await {
-            Ok(_) => info!("Manual import finished"),
-            Err(e) => error!(?e, "Manual import failed")
+/// Joined backend control endpoint
+#[post("/v1/control")]
+pub async fn control(Json(req): Json<ControlRequest>) -> impl Responder {
+    tokio::spawn(async move {
+        info!("Processing control request {req:?}");
+        let res = match req {
+            ControlRequest::StartImport =>
+                service::manual_import().await,
+            ControlRequest::UpdateTagCount => 
+                STORAGE.update_tag_count().await,
+            ControlRequest::ClearGroupData => 
+                STORAGE.clear_groups().await,
+            ControlRequest::FixThumbnails => 
+                match tokio::task::spawn_blocking(service::fix_thumbnails)
+                    .await {
+                Ok(res) => res,
+                // Convert join error
+                Err(e) => Err(e.into())
+            },
+            ControlRequest::RetryImports => 
+                STORAGE.unmark_failed_imports().await,
+            ControlRequest::FetchWikis => 
+                service::update_danbooru_wikis().await,
+        };
+
+        match res {
+            Ok(_) => info!("Control request {req:?} finished successfully"),
+            Err(e) => error!("Control request {req:?} failed: {e}")
         }
     });
-    
-    ""
-}
 
-/// Update count of elements with tag
-#[get("/api/write/update_tag_counts")]
-pub async fn update_tag_count() -> impl Responder {
-    match STORAGE.update_tag_count().await {
-        Ok(_) => log_n_ok!("updated tag counts (manually)"),
-        Err(e) => log_n_bail!("failed to update tag counts", ?e)
-    }
-}
-
-/// Remove all internal grouping data
-#[get("/api/write/clear_group_data")]
-pub async fn clear_group_data() -> impl Responder {
-    match STORAGE.clear_groups().await {
-        Ok(_) => log_n_ok!("cleared group data"),
-        Err(e) => log_n_bail!("failed to clear groups", ?e)
-    }
-}
-
-/// Scan thumbnails folder and mark elements without thumbnail
-#[get("/api/write/fix_thumbnails")]
-pub async fn fix_thumbnails() -> impl Responder {
-    match tokio::task::spawn_blocking(service::fix_thumbnails).await {
-        Ok(_) => log_n_ok!("fixed thumbnails"),
-        Err(e) => log_n_bail!("failed to fix thumbnails", ?e)
-    }
-}
-
-/// Retry failed imports
-#[get("/api/write/retry_imports")]
-pub async fn retry_imports() -> impl Responder {
-    match STORAGE.unmark_failed_imports().await {
-        Ok(_) => log_n_ok!("cleared failed imports state"),
-        Err(e) => log_n_bail!("failed to retry imports", ?e)
-    }
-}
-
-/// Fetch fresh tag data from danbooru 
-#[get("/api/write/fetch_wikis")]
-pub async fn fetch_wikis() -> impl Responder {
-    match service::update_danbooru_wikis().await {
-        Ok(_) => log_n_ok!("fetched fresh danbooru wikis"),
-        Err(e) => log_n_bail!("failed to fetch wikis", ?e)
-    }
+    "null"
 }

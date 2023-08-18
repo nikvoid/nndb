@@ -106,12 +106,7 @@ async fn main() -> anyhow::Result<()> {
             // .service(api::delete_tag)
             .service(api::read_log)
             .service(api::import_status)
-            // .service(api::start_import)
-            // .service(api::update_tag_count)
-            // .service(api::clear_group_data)
-            // .service(api::fix_thumbnails)
-            // .service(api::retry_imports)
-            // .service(api::fetch_wikis)
+            .service(api::control)
         ;
 
         // Serve static folders if needed

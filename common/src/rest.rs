@@ -73,3 +73,19 @@ pub struct StatusResponse {
     pub wiki_fetch: TaskStatus,
 }
 
+/// Reqquest that will activate one of backend services
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Copy)]
+pub enum ControlRequest {
+    /// Manually start import task in strict sequence
+    StartImport,
+    /// Update count of elements with tag
+    UpdateTagCount,
+    /// Remove all internal grouping data
+    ClearGroupData,
+    /// Scan thumbnails folder and mark elements without thumbnail
+    FixThumbnails,
+    /// Retry failed external source metadata imports
+    RetryImports,
+    /// Fetch fresh tag data from danbooru 
+    FetchWikis
+}
