@@ -80,6 +80,20 @@ pub struct AIMetadata {
     pub noise: f32,
 }
 
+/// Struct that represent state of some procedure, 
+/// where there are many similar operations that can be counted
+#[derive(Serialize, Deserialize, PartialEq, Clone, Default)]
+pub enum TaskStatus {
+    Running {
+        /// Task done actions
+        done: u32,
+        /// Task overall actions
+        actions: u32,
+    },
+    #[default]
+    Sleep
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Clone, Copy, Sequence, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum TagType {

@@ -6,3 +6,4 @@ pub mod prelude {
 pub mod index;
 pub mod element;
 pub mod tag;
+pub mod dashboard;

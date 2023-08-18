@@ -3,8 +3,8 @@ use anyhow::{Context, bail};
 use atomic::Atomic;
 use futures::Future;
 use md5::{Md5, Digest};
+use nndb_common::TaskStatus;
 use once_cell::sync::OnceCell;
-use serde::Serialize;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tracing::error;
 use itertools::Itertools;
@@ -47,10 +47,14 @@ impl Procedure {
     }
 
     /// Get procedure state
-    pub fn state(&self) -> ProcedureState {
-        let (processed, actions) = self.state.load(Ordering::Relaxed);
-        let running = self.running.load(Ordering::Relaxed);
-        ProcedureState { running, actions, processed }
+    pub fn state(&self) -> TaskStatus {
+        match self.running.load(Ordering::Relaxed) {
+            true => {
+            let (done, actions) = self.state.load(Ordering::Relaxed);
+                TaskStatus::Running { actions, done }
+            }
+            false => TaskStatus::Sleep
+        }
     }
 }
 
@@ -99,15 +103,6 @@ impl ProcedureUpdater<'_> {
     }
 }
 
-
-/// Struct that represent state of some procedure, 
-/// where there are many similar operations that can be counted
-#[derive(Serialize)]
-pub struct ProcedureState {
-    running: bool,
-    actions: u32,
-    processed: u32,    
-}    
 
 /// Wrapper for writing [u8] slice as continious hex string
 pub struct AsHex<'a>(pub &'a [u8]);
@@ -262,12 +257,15 @@ pub fn make_thumbnail_anim(
     Ok(())
 }
 
-/// Read log tail to buf
-pub async fn get_log_tail(buf: &mut [u8]) -> anyhow::Result<usize> {
+/// Read log tail to buf.
+/// Note that due to log could become bigger during read or even be smaller than `bytes`, 
+/// read bytes count won't always correspond to requested `bytes`.
+pub async fn get_log_tail(buf: &mut Vec<u8>, bytes: u64) -> anyhow::Result<usize> {
     let mut f = tokio::fs::File::open(&CONFIG.log_file).await?;
     let size = f.seek(SeekFrom::End(0)).await?;
-    f.seek(SeekFrom::Start(size.saturating_sub(buf.len() as u64))).await?;
-    let read = f.read(buf).await?;
+    let offset = SeekFrom::Start(size.saturating_sub(bytes));
+    f.seek(offset).await?;
+    let read = f.read_buf(buf).await?;
     Ok(read)
 }
 

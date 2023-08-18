@@ -1,13 +1,13 @@
 use actix_web::{Responder, get, web::{self, Json}, post};
 use itertools::Itertools;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use nndb_common::*;
 use tracing::{info, error};
 
 use crate::{
     dao::STORAGE, 
     model::{write, TagType}, 
-    util::{self, ProcedureState}, 
+    util, 
     service::{
         SCAN_FILES_LOCK, UPDATE_METADATA_LOCK, GROUP_ELEMENTS_LOCK, 
         MAKE_THUMBNAILS_LOCK, self, FETCH_WIKI_LOCK
@@ -24,10 +24,6 @@ use convert::IntoVec;
 /// Tag autocompletion max tags
 const TAG_LIMIT: u32 = 15;
 
-/// Max size of log tail to send
-const LOG_TAIL_SIZE: usize = 20_000;
-
-
 #[derive(Deserialize)]
 pub struct AddTagsRequest {
     element_id: u32,
@@ -38,15 +34,6 @@ pub struct AddTagsRequest {
 pub struct DeleteTagRequest {
     element_id: u32,
     tag_name: String 
-}
-
-#[derive(Serialize)]
-pub struct ImportTasksStatus {
-    scan_files: ProcedureState,
-    update_metadata: ProcedureState,
-    group_elements: ProcedureState,
-    make_thumbnails: ProcedureState,
-    wiki_fetch: ProcedureState
 }
 
 /// Element search
@@ -196,23 +183,22 @@ pub async fn tag_alias(req: Json<TagAliasRequest>) -> impl Responder {
 }
 
 /// Get recent log
-#[get("/api/read/log")]
-pub async fn read_log() -> impl Responder {    
-    
-    let mut buf = vec![0; LOG_TAIL_SIZE];
-    match util::get_log_tail(&mut buf).await {
-        Ok(len) => {
-            buf.truncate(len);
-            Ok(buf)
+#[post("/v1/log")]
+pub async fn read_log(req: Json<LogRequest>) -> impl Responder {    
+    let mut buf = Vec::with_capacity(req.read_size as _);
+    match util::get_log_tail(&mut buf, req.read_size as _).await {
+        Ok(_) => {
+            let data = String::from_utf8_lossy(&buf).into_owned();
+            Ok(Json(LogResponse{ data }))
         },
         Err(e) => log_n_bail!("failed to fetch log", ?e)
     }    
 }
 
 /// Get import tasks status 
-#[get("/api/read/import")]
+#[get("/v1/status")]
 pub async fn import_status() -> impl Responder {
-    let status = ImportTasksStatus {
+    let status = StatusResponse {
         scan_files: SCAN_FILES_LOCK.state(),
         update_metadata: UPDATE_METADATA_LOCK.state(),
         group_elements: GROUP_ELEMENTS_LOCK.state(),

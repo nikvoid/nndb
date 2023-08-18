@@ -301,13 +301,24 @@ a.label {
 // Pages
 main {
   @include grid-gap($gap-big); 
-  @include layout-col(1, 1, ".search-box", ".page-content");
-  // Little gap at top and bigger at bottom
+  @include layout-col(
+    1, 
+    1, 
+    "> .search-box", 
+    "> .page-content",
+  );
+  // Little gap at top and bottom
   padding: 1em 0.5em 5em 0.5em; 
 
-  .search-box {
+  > .search-box {
     @include grid-gap;
-    @include layout-row(1, 1, ".button", ".input-autocomplete");
+    @include layout-row(
+      1, 
+      1, 
+      ".index-button", 
+      ".input-autocomplete"
+      ".dashboard-button"
+    );
     grid-template-columns: auto minmax(200px, 1000px) auto;
     
     .input-autocomplete {
@@ -315,9 +326,16 @@ main {
       justify-self: center;
     }
 
-    .button {
+    .index-button {
+      @extend .button;
       width: max-content;
       justify-self: start;
+    }
+
+    .dashboard-button {
+      @extend .button;
+      width: max-content;
+      justify-self: end;
     }
   }
 }
@@ -472,6 +490,33 @@ main {
       option {
         background-color: $aux-darker;
       }
+    }
+  }
+}
+
+.dashboard-page {
+  @include grid-gap($gap-big);
+  align-items: start;
+  width: 100%;
+  grid-template-columns: 300px auto;
+
+  @include layout-row(1, 1, "> .control-panel", "> .log-window");
+
+  > .control-panel {
+    @extend %info-section;
+    grid-template-columns: max-content auto;
+  }
+
+  > .log-window {
+    background-color: $aux-darker;
+    border-radius: $border-rdef;
+    padding: 0.2em 1em 0.2em 1em;
+    
+    pre {
+      height: 85vh;
+      word-wrap: anywhere;
+      white-space: pre-wrap;
+      overflow-y: scroll;
     }
   }
 }

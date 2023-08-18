@@ -53,3 +53,23 @@ pub struct TagAliasRequest {
     pub tag_name: String,
     pub query: String,   
 }
+
+#[derive(Serialize, Deserialize, PartialEq)]
+pub struct LogRequest {
+    pub read_size: u32
+}
+
+#[derive(Serialize, Deserialize, PartialEq)]
+pub struct LogResponse {
+    pub data: String
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Default)]
+pub struct StatusResponse {
+    pub scan_files: TaskStatus,
+    pub update_metadata: TaskStatus,
+    pub group_elements: TaskStatus,
+    pub make_thumbnails: TaskStatus,
+    pub wiki_fetch: TaskStatus,
+}
+
