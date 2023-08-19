@@ -52,11 +52,7 @@ pub fn ElementPage(props: &Props) -> Html {
     });
 
     match &*resp {
-        State::Loading => html! {
-            <div class="label">
-                { "Loading..." }
-            </div>
-        },
+        State::Loading => html! { },
         State::Found(MetadataResponse { element, metadata, associated }) => {
             let associated = associated
                 .iter()

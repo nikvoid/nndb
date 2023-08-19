@@ -49,9 +49,7 @@ impl Component for TagPage {
     fn view(&self, ctx: &Context<Self>) -> Html {
 
         match &self.tag_data {
-            TagState::Loading => html! {
-                
-            },
+            TagState::Loading => html! { },
             TagState::Found(TagResponse { tag, aliases }) => {
                 let options = enum_iterator::all::<TagType>()
                     .map(|ty| {
@@ -177,7 +175,7 @@ impl Component for TagPage {
                 }
             },
             TagState::NotFound => html! {
-                
+                <Redirect<Route> to={Route::NotFound} />
             },
         }
     }
