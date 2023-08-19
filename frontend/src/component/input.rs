@@ -145,7 +145,7 @@ impl Component for InputAutocomplete {
                     .find(|(idx, _)| idx >= &cursor)
                     .map(|(idx, _)| idx)
                     .unwrap_or(text.len());
-               
+
                 if !self.input_locked {
                     self.selected = start..end;
                     self.text = text.clone();
@@ -157,6 +157,11 @@ impl Component for InputAutocomplete {
                 false
             },
             Msg::Term(term) => {
+                // Return if too short
+                if term.is_empty() {
+                    ctx.link().send_message(Msg::Completions(vec![]));
+                    return true;
+                }
                 // On select request completions from backend
                 ctx.link().send_future(async move {
                     let req = AutocompleteRequest {
