@@ -35,6 +35,9 @@ $gap-big: 2em;
 $element-container-width: 195px;
 $element-container-height: 185px;
 
+// Left aside block on all pages
+$aside-block-width: 400px;
+
 // Fonts
 @font-face {
   font-family: 'JetMonoMedium';
@@ -376,7 +379,7 @@ main {
 .index-page {
   @include grid-gap($gap-big);
   width: 100%;
-  grid-template-columns: 300px auto;
+  grid-template-columns: $aside-block-width auto;
 
   > .elements {
     grid-row: 1;
@@ -406,16 +409,13 @@ main {
 }
 
 .element-page {
-  // Constrain associated to 4 items in row
-  $associated-width:
-    calc($element-container-width * 4 + $font-size-def * ($gap-def / 1em) * 3);
-  
   @include grid-gap($gap-big);
   width: 100%;
 
-  // Clamp associated to from 1 to 4 elements
   grid-template-columns: 
-    300px auto minmax($element-container-width, $associated-width);
+    $aside-block-width 
+    1fr
+    minmax($element-container-width, 1.2fr);
 
   @include layout-row(
     1, 
@@ -436,10 +436,6 @@ main {
     }
   }
 
-  > #element-container {
-  
-  }
-
   // Constrain element size by default
   .element-constrained {
     width: inherit;
@@ -448,24 +444,30 @@ main {
     max-width: 100%;
   }
 
+  #element-container {
+    justify-self: center;
+  }
+
   > .associated {
-    justify-self: end;
-    
     @include grid-gap;
     grid-template-columns: 1fr;    
     align-content: start;
     justify-items: start;
 
+    max-height: 90vh;
+    overflow-y: scroll;
+    
     .group-label {
       @extend %label-shared
     }
+
   }
 }
 
 .tag-page {
   @include grid-gap($gap-big);
   width: 100%;
-  grid-template-columns: 300px minmax(200px, 1000px);
+  grid-template-columns: $aside-block-width minmax(200px, 1000px);
   
   @include layout-row(
     1, 
@@ -531,7 +533,7 @@ main {
   @include grid-gap($gap-big);
   align-items: start;
   width: 100%;
-  grid-template-columns: 300px auto;
+  grid-template-columns: $aside-block-width auto;
 
   @include layout-row(1, 1, "> .control-panel", "> .log-window");
 
