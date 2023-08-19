@@ -268,3 +268,14 @@ pub async fn control(Json(req): Json<ControlRequest>) -> impl Responder {
 
     "null"
 }
+
+#[get("/v1/summary")]
+pub async fn summary() -> impl Responder {
+    match STORAGE.get_summary().await {
+        Ok(s) => Ok(Json(SummaryResponse {
+            tag_count: s.tag_count,
+            element_count: s.element_count
+        })),
+        Err(e) => log_n_bail!("failed to get DB summary: {e}")
+    }
+}

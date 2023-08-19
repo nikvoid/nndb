@@ -89,3 +89,9 @@ pub enum ControlRequest {
     /// Fetch fresh tag data from danbooru 
     FetchWikis
 }
+
+#[derive(Serialize, Deserialize, PartialEq, Default)]
+pub struct SummaryResponse {
+    pub tag_count: u32,
+    pub element_count: u32
+}

@@ -1,33 +1,24 @@
 use futures::future::join;
-use gloo::timers::callback::Timeout;
+use gloo::timers::callback::Interval;
 use web_sys::HtmlElement;
 use crate::component::ProgressBar;
 
 use super::prelude::*;
 
-/// Status of a link between frontend and backend
-#[derive(Default)]
-pub enum LinkStatus {
-    #[default]
-    Pending,
-    Ok,
-    Error(String)
-}
-
 /// Dashboard page that displays backend tasks status and can send control commands
 #[derive(Default)]
 pub struct Dashboard {
     status: StatusResponse,
-    link_status: LinkStatus,
+    summary: SummaryResponse,
     log_ref: NodeRef,
     /// False if log wasn't scrolled to the end
     init_scroll: bool,
 }
 
 pub enum Msg {
-    Reload,
+    Tick,
     Update(StatusResponse, String),
-    LinkStatus(LinkStatus),
+    Summary(SummaryResponse),
     Control(ControlRequest)
 }
 
@@ -40,7 +31,23 @@ impl Component for Dashboard {
     type Properties = Props;
 
     fn create(ctx: &Context<Self>) -> Self {
-        ctx.link().send_message(Msg::Reload);
+        // Send initial tick immediately
+        ctx.link().send_message(Msg::Tick);
+        // Create ticker interval
+        let link = ctx.link().clone();
+        Interval::new(
+            1000, 
+            move || link.send_message(Msg::Tick)
+        )
+        .forget();
+        // Ask for summary only on page reload, 
+        // frequently making this request may impact DB performance 
+        ctx.link().send_future(async move {
+            let resp = backend_get!("/v1/summary")
+                .await
+                .expect("failed to fetch summary");
+            Msg::Summary(resp)
+        });
         Self::default()
     }
 
@@ -74,12 +81,6 @@ impl Component for Dashboard {
             </>
         });
 
-        let link_stat = match self.link_status {
-            LinkStatus::Pending => "pending",
-            LinkStatus::Ok => "ok",
-            LinkStatus::Error(_) => "error",
-        };
-
         let controls = [
             (ControlRequest::StartImport, "Start import"),
             (ControlRequest::UpdateTagCount, "Update tag counts"),
@@ -105,10 +106,16 @@ impl Component for Dashboard {
                         { "Status" }
                     </div>
                     <div class="param-name">
-                        { "Last update" }
+                        { "Elements in DB" }
                     </div>
                     <div class="param-value">
-                        { link_stat }
+                        { self.summary.element_count }
+                    </div>
+                    <div class="param-name">
+                        { "Tags in DB" }
+                    </div>
+                    <div class="param-value">
+                        { self.summary.tag_count }
                     </div>
                     { for tasks }
                     <div class="section-label">
@@ -126,7 +133,7 @@ impl Component for Dashboard {
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
-            Msg::Reload => {
+            Msg::Tick => {
                 ctx.link().send_future(async move {
                     let req = LogRequest {
                         // TODO: Adjustable log size
@@ -139,10 +146,10 @@ impl Component for Dashboard {
                     ).await {
                         // If both requests suceeded, send update
                         (Ok(stat), Ok(LogResponse { data })) => Msg::Update(stat, data),
-                        // Otherwise send error
+                        // Otherwise throw error
                         (_, Err(e))
                         | (Err(e), _) => 
-                            Msg::LinkStatus(LinkStatus::Error(e.to_string())),
+                            panic!("failed to update status: {e}")
                     }
                 });
                 false
@@ -157,30 +164,18 @@ impl Component for Dashboard {
                     log.set_scroll_top(i32::MAX);
                     self.init_scroll = true;
                 }
-                
-                ctx.link().send_message(Msg::LinkStatus(LinkStatus::Ok));
                 true
             },
-            Msg::LinkStatus(stat) => {
-                match stat {
-                    LinkStatus::Pending
-                    | LinkStatus::Ok =>  {
-                        // If previous connect suceeded, update
-                        let link = ctx.link().clone();
-                        Timeout::new(1000, move || link.send_message(Msg::Reload))
-                            .forget();
-                    },
-                    LinkStatus::Error(e) => todo!("Make global error slot: {e}"),
-                }
-                self.link_status = stat;
+            Msg::Summary(summary) => {
+                self.summary = summary;
                 true
-            },
+            }
             Msg::Control(req) => {
                 ctx.link().send_future(async move {
-                    match backend_post!(&req, "/v1/control").await {
-                        Ok(()) => Msg::Reload,
-                        Err(e) => Msg::LinkStatus(LinkStatus::Error(e.to_string()))
-                    }
+                    let _: () = backend_post!(&req, "/v1/control")
+                        .await
+                        .expect("failed to send control request");
+                    Msg::Tick
                 });
                 false
             }

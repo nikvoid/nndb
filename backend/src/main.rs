@@ -107,6 +107,7 @@ async fn main() -> anyhow::Result<()> {
             .service(api::read_log)
             .service(api::import_status)
             .service(api::control)
+            .service(api::summary)
         ;
 
         // Serve static folders if needed
