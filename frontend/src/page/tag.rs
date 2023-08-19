@@ -1,6 +1,6 @@
 use web_sys::{HtmlInputElement, HtmlSelectElement};
 
-use crate::component::{metadata::TagList, input::InputAutocomplete};
+use crate::component::{tag::TagList, input::InputAutocomplete};
 
 use super::prelude::*;
 

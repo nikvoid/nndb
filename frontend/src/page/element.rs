@@ -1,6 +1,6 @@
 use web_sys::HtmlElement;
 
-use crate::component::{metadata::{TagList, Metadata}, element::ElementList};
+use crate::component::{metadata::Metadata, element::ElementList, tag::TagList};
 
 use super::prelude::*;
 

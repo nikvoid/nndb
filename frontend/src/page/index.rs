@@ -1,6 +1,6 @@
 use serde::{Serialize, Deserialize};
 
-use crate::{backend_post, component::{element::{ElementList, Route}, paginator::Paginator, metadata::TagList}};
+use crate::{backend_post, component::{element::{ElementList, Route}, paginator::Paginator, tag::TagList}};
 
 use super::prelude::*;
 

@@ -14,6 +14,7 @@ pub mod paginator;
 pub mod input;
 pub mod metadata;
 pub mod link;
+pub mod tag;
 
 use prelude::*;
 
