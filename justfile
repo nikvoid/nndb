@@ -2,6 +2,7 @@ set shell := ["powershell.exe", "-c"]
 
 export DATABASE_URL := "sqlite:schema.db"
 export BACKEND_URL := "/api"
+export RUST_BACKTRACE := "1"
 
 run-back:
 	cargo run --bin nndb-backend -- config-dev.toml
