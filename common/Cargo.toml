@@ -9,3 +9,7 @@ edition = "2021"
 enum-iterator = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
 serde = { workspace = true, features = ["derive"] } 
+sqlx = { workspace = true, optional = true }
+
+[features]
+backend = ["dep:sqlx"]

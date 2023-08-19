@@ -175,7 +175,7 @@ impl Sqlite {
             let t = t.as_ref();
             let name = t.name();
             let alt_name = t.alt_name();
-            let typ: u8 = t.tag_type().into();
+            let typ = t.tag_type();
             
             if let Some(id) = element_id {
                 // Update count if tag already exists

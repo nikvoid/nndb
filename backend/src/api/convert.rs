@@ -12,39 +12,13 @@ impl StaticFolder {
     }
 }
 
-impl From<model::TagType> for api::TagType {
-    fn from(value: model::TagType) -> Self {
-        match value {
-            model::TagType::Service => Self::Service,
-            model::TagType::Artist => Self::Artist,
-            model::TagType::Character => Self::Character,
-            model::TagType::Title => Self::Title,
-            model::TagType::Metadata => Self::Metadata,
-            model::TagType::Tag => Self::Tag,
-        }
-    }
-}
-
-impl From<api::TagType> for model::TagType {
-    fn from(value: api::TagType) -> Self {
-        match value {
-            api::TagType::Service => Self::Service,
-            api::TagType::Artist => Self::Artist,
-            api::TagType::Character => Self::Character,
-            api::TagType::Title => Self::Title,
-            api::TagType::Metadata => Self::Metadata,
-            api::TagType::Tag => Self::Tag,
-        }
-    }
-}
-
 impl From<model::read::Tag> for api::Tag {
     fn from(value: model::read::Tag) -> Self {
         Self {
             id: value.id,
             name: value.name,
             alt_name: value.alt_name,
-            tag_type: value.tag_type.into(),
+            tag_type: value.tag_type,
             count: value.count,
             hidden: value.hidden,
         }
@@ -71,28 +45,13 @@ impl From<model::read::Element> for api::Element {
     }
 }
 
-impl From<model::AIMetadata> for api::AIMetadata {
-    fn from(value: model::AIMetadata) -> Self {
-        Self {
-            positive_prompt: value.positive_prompt,
-            negative_prompt: value.negative_prompt,
-            steps: value.steps,
-            scale: value.scale,
-            sampler: value.sampler,
-            seed: value.seed,
-            strength: value.strength,
-            noise: value.noise,
-        }
-    }
-}
-
 impl From<model::read::ElementMetadata> for api::ElementMetadata {
     fn from(value: model::read::ElementMetadata) -> Self {
         Self {
             src_links: (&value.src_links).into_vec(),
             src_times: (&value.src_times).into_vec(),
             add_time: value.add_time,
-            ai_meta: value.ai_meta.map(|m| m.into()),
+            ai_meta: value.ai_meta,
             tags: value.tags.into_vec(),
         }
     }

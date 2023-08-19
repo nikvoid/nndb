@@ -60,7 +60,9 @@ pub struct Associated {
     pub elements: Vec<Element>
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Clone)]
+/// Generative Neural Network (SD primarily) metadata
+#[cfg_attr(feature = "backend", derive(sqlx::FromRow))]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Default)]
 pub struct AIMetadata {
     /// Positive prompt
     pub positive_prompt: String,
@@ -94,16 +96,27 @@ pub enum TaskStatus {
     Sleep
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Clone, Copy, Sequence, Default)]
+/// Gelbooru-like types
+#[cfg_attr(feature = "backend", derive(sqlx::Type))]
+#[derive(
+    Serialize, 
+    Deserialize, 
+    PartialEq, 
+    Clone, 
+    Copy, 
+    Sequence, 
+    Default,
+)]
 #[serde(rename_all = "lowercase")]
+#[repr(u8)]
 pub enum TagType {
-    Service,
-    Artist,
-    Character,
-    Title,
-    Metadata,
+    Service   = 0,
+    Artist    = 1,
+    Character = 2,
+    Title     = 3,
+    Metadata  = 4,
     #[default]
-    Tag,
+    Tag       = 5,
 }
 
 impl Tag {

@@ -142,7 +142,7 @@ pub async fn tag_data(id: web::Path<u32>) -> impl Responder {
 /// Edit tag
 #[post("/v1/tag_edit")]
 pub async fn tag_edit(req: Json<TagEditRequest>) -> impl Responder {
-    let tag = match write::Tag::new(&req.new_name, req.alt_name.clone(), req.tag_type.into()) {
+    let tag = match write::Tag::new(&req.new_name, req.alt_name.clone(), req.tag_type) {
         Some(tag) => tag,
         None => log_n_bail!("failed to create tag struct")
     };
