@@ -73,11 +73,11 @@ impl Component for ElementPage {
                             || assoc.elements[0] != *element
                         )
                     )
-                    .map(|Associated { key, value, elements }| {
+                    .map(|Associated { source, value, elements }| {
                         html! {
                             <>
                                 <div class="group-label">
-                                    { key } { ": " } { value }
+                                    { source.name() } { ": " } { value }
                                 </div>
                                 <ElementList content={elements.clone()} />
                             </>

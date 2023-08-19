@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use crate::model::{write::ElementMetadata, read::PendingImport};
 use async_trait::async_trait;
 use enum_iterator::Sequence;
+use nndb_common::MetadataSource;
 use num_enum::{FromPrimitive, IntoPrimitive};
 
 mod unknown;
@@ -53,14 +54,20 @@ impl Parser {
             Self::Webui => &webui::Webui,
         }
     }
+
+    /// Get metadata source of the parser
+    pub fn metadata_source(&self) -> MetadataSource {
+        match self {
+            Parser::Passthrough => MetadataSource::Passthrough,
+            Parser::NovelAI => MetadataSource::NovelAI,
+            Parser::Webui => MetadataSource::Webui,
+        }
+    }
 }
 
-#[derive(FromPrimitive, IntoPrimitive, Clone, Copy, Debug, PartialEq, sqlx::Type, Sequence)]
+#[derive(Clone, Copy, Debug, PartialEq, sqlx::Type, Sequence)]
 #[repr(u8)]
 pub enum Fetcher {
-    /// Just stub
-    #[default]
-    Unknown = 100,
     /// Pixiv work metadata
     Pixiv   = 101,
 }
@@ -69,16 +76,14 @@ impl Fetcher {
     /// Get singleton for chosen importer
     pub fn get_singleton(self) -> &'static dyn MetadataFetcher {
         match self {
-            Self::Unknown => &unknown::Unknown,
             Self::Pixiv => &*pixiv::PIXIV,
         }
     }
-    
-    /// Gett fetcher name
-    pub fn name(self) -> &'static str {
+
+    /// Get metadata source corresponding to fetcher
+    pub fn metadata_source(&self) -> MetadataSource {
         match self {
-            Self::Unknown => "Unknown",
-            Self::Pixiv => "Pixiv",
+            Fetcher::Pixiv => MetadataSource::Pixiv,
         }
     }
 }

@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use futures::FutureExt;
 use moka::future::Cache;
+use nndb_common::MetadataSource;
 use sqlx::Executor;
 use sqlx::{SqlitePool, migrate::MigrateDatabase, SqliteConnection};
 use tokio::sync::RwLock;
@@ -84,7 +85,7 @@ impl Sqlite {
         Self::add_metadata_tx(
             tx, 
             id as u32, 
-            (*parser).into(),
+            parser.metadata_source(),
             meta
         ).await?;
 
@@ -105,7 +106,7 @@ impl Sqlite {
     async fn add_metadata_tx(
         tx: &mut SqliteConnection,
         element_id: u32, 
-        importer_id: u8,
+        source: MetadataSource,
         meta: &write::ElementMetadata
     ) -> Result<(), StorageError> {
 
@@ -117,7 +118,7 @@ impl Sqlite {
             "INSERT INTO metadata (element_id, importer_id, src_link, src_time, ext_group)
             VALUES (?, ?, ?, ?, ?)",
             element_id, 
-            importer_id,
+            source,
             meta.src_link,
             meta.src_time,
             meta.group
@@ -139,8 +140,6 @@ impl Sqlite {
         status: &FetchStatus
     ) -> Result<(), StorageError> {
         
-        let importer_id: u8 = fetcher.into();
-        
         let query = match status {
             FetchStatus::Success(_) =>
                 "INSERT INTO fetch_status (element_id, importer_id, failed, supported)
@@ -156,7 +155,7 @@ impl Sqlite {
 
         sqlx::query(query)
             .bind(element_id)
-            .bind(importer_id)
+            .bind(fetcher)
             .execute(&mut *tx)
             .await?;
         
@@ -557,9 +556,8 @@ impl Sqlite {
 
     /// Get all possible metadata fetch variants for elements.
     pub async fn get_pending_imports(&self) -> Result<Vec<PendingImport>, StorageError> {
-        let fetchers: Vec<u8> = enum_iterator::all::<Fetcher>()
+        let fetchers: Vec<_> = enum_iterator::all::<Fetcher>()
             .filter(|&f| f.get_singleton().available())
-            .map(|f| f.into())
             .collect();
 
         let mut conn = self.pool.acquire().await?;
@@ -593,7 +591,7 @@ impl Sqlite {
         let mut tx = self.pool.begin().await?;
 
         if let FetchStatus::Success(meta) = &fetch_status {
-            Self::add_metadata_tx(&mut tx, element_id, fetcher.into(), meta).await?;
+            Self::add_metadata_tx(&mut tx, element_id, fetcher.metadata_source(), meta).await?;
         }
 
         Self::add_fetch_status_tx(&mut tx, element_id, fetcher, fetch_status).await?;
@@ -731,37 +729,25 @@ impl Sqlite {
 
         let src_links = sqlx::query!(
             r#"SELECT 
-                m.importer_id as "importer_id: u8", 
+                m.importer_id as "importer_id: MetadataSource", 
                 m.src_link as "src_link!"
             FROM metadata m
             WHERE m.element_id = ? AND m.src_link IS NOT NULL"#,
             id
         )
-        .map(|anon| (anon.importer_id.into(), anon.src_link))
+        .map(|anon| (anon.importer_id, anon.src_link))
         .fetch_all(&self.pool)
         .await?;
         
         let src_times = sqlx::query!(
             r#"SELECT 
-                m.importer_id as "importer_id: u8", 
+                m.importer_id as "importer_id: MetadataSource", 
                 m.src_time as "src_time!: UtcDateTime"
             FROM metadata m
             WHERE m.element_id = ? AND m.src_time IS NOT NULL"#,
             id
         )
-        .map(|anon| (anon.importer_id.into(), anon.src_time))
-        .fetch_all(&self.pool)
-        .await?;
-        
-        let ext_groups = sqlx::query!( // sql
-            r#"SELECT 
-                m.importer_id as "importer_id: u8", 
-                m.ext_group as "ext_group!"
-            FROM metadata m
-            WHERE m.element_id = ? AND m.ext_group IS NOT NULL"#,
-            id
-        )
-        .map(|anon| (anon.importer_id.into(), anon.ext_group))
+        .map(|anon| (anon.importer_id, anon.src_time))
         .fetch_all(&self.pool)
         .await?;
         
@@ -797,10 +783,106 @@ impl Sqlite {
             add_time,
             ai_meta,
             tags,
-            ext_groups
         };
         
         Ok(Some((elem, meta)))
+    }
+
+    /// Get elements associated with this element
+    pub async fn get_associated_elements(
+        &self, 
+        element_id: u32
+    ) -> Result<Vec<read::Associated>, StorageError> {
+        let mut conn = self.pool.acquire().await?;
+        let mut output = vec![];
+
+        // Fetch elements with similar signatures
+        let by_sig: Vec<read::Element> = sqlx::query_as( //sql
+            "SELECT e2.*, gm2.group_id
+            FROM element e1
+            JOIN group_metadata gm1 ON gm1.element_id = e1.id
+            JOIN group_metadata gm2 ON gm2.group_id = gm1.group_id
+            JOIN element e2 ON e2.id = gm2.element_id
+            WHERE gm2.group_id IS NOT NULL AND e1.id = ?",
+        )
+        .bind(element_id)
+        .fetch_all(&mut *conn)
+        .await?;
+
+        if !by_sig.is_empty() {
+            output.push(read::Associated {
+                source: MetadataSource::Signature,
+                // Fine if group is not empty
+                id: by_sig[0].group_id.unwrap() as i64,
+                elements: by_sig,
+            })
+        }
+        
+        // Fetch element ids with grouping data
+        let groups: Vec<(u32, MetadataSource, i64)> = sqlx::query!( //sql
+            r#"
+            SELECT 
+                m2.element_id as "element_id!: u32",
+                m2.importer_id as "source!: MetadataSource",
+                m2.ext_group as "ext_group!: i64"
+            FROM metadata m2
+            JOIN metadata m1 ON m1.ext_group = m2.ext_group
+            WHERE m1.element_id = ? AND m2.ext_group IS NOT NULL
+            ORDER BY m2.importer_id, m2.ext_group"#,
+            element_id
+        )
+        .map(|anon| (anon.element_id, anon.source, anon.ext_group))
+        .fetch_all(&mut *conn)
+        .await?;
+        
+        let mut subgroups: Vec<((MetadataSource, i64), Vec<u32>)> = vec![];
+
+        if let Some((_, src, group)) = groups.first().copied() {
+            let mut prev_key = (src, group);
+            
+            for (elem_id, src, group_id) in groups {
+                let new_key = (src, group_id);
+                if prev_key != new_key || subgroups.is_empty() {
+                    // Push new subgroup
+                    subgroups.push(((src, group_id), vec![elem_id]));
+                    
+                    // Replace comparison key
+                    prev_key = new_key;
+                } else {
+                    // Push next id
+                    subgroups.last_mut().unwrap().1.push(elem_id)
+                }
+            }
+        }
+
+        // Fetch elements data
+        for ((source, group_id), ids) in subgroups {
+            let elements = Self::with_temp_array_tx(
+                &mut conn, 
+                "mem", 
+                &[("ids", &ids)], 
+                |tx| async {
+                    let elems: Vec<read::Element> = sqlx::query_as(
+                        "SELECT e.*, gm.group_id 
+                        FROM element e
+                        LEFT JOIN group_metadata gm ON gm.element_id = e.id
+                        WHERE e.id IN mem.ids"
+                    )
+                    .fetch_all(&mut *tx)
+                    .await?;
+                    
+                    Ok(elems)
+                }.boxed()
+            ).await?;
+
+            output.push(read::Associated {
+                source,
+                id: group_id,
+                elements,
+            });
+        }
+        
+        Ok(output)
     }
 
     /// Update count of elements with tag for each tag.

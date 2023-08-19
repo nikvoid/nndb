@@ -62,59 +62,20 @@ pub async fn tag_autocomplete(query: web::Json<AutocompleteRequest>) -> impl Res
 pub async fn element(id: web::Path<u32>) -> impl Responder {
     match STORAGE.get_element_data(*id).await {
         Ok(Some((element, meta))) => {
-            let mut associated = vec![];
-            // Get associated by signature
-            if let Some(group) = element.group_id {
-                match STORAGE.search_elements(
-                    &format!("group:{group}"), 
-                    0, 
-                    None, 
-                    0
-                ).await {
-                    Ok((by_sig, ..)) => {
-                        associated.push(Associated {
-                            key: "Signature".into(),
-                            value: group as i64,
-                            elements: by_sig.into_vec()
-                        })
-                    },
-                    Err(e) => {
-                        log_n_bail!("failed to fetch associted by signature: {e}")
-                    }
-                }
-            }
-
-            // Get associated by external source
-            for (fetcher, group) in &meta.ext_groups {
-                match STORAGE.search_elements(
-                    &format!("extgroup:{group}"), 
-                    0, 
-                    None, 
-                    0
-                ).await {
-                    Ok((by_ext, ..)) => {
-                        associated.push(Associated {
-                            key: fetcher.name().into(),
-                            value: *group,
-                            elements: by_ext.into_vec()
-                        })
-                    },
-                    Err(e) => {
-                        log_n_bail!("failed to fetch associted by external source: {e}")
-                    }
-                }
-                
-            }
+            let associated = match STORAGE.get_associated_elements(*id).await {
+                Ok(v) => v,
+                Err(e) => log_n_bail!("failed to fetch associated elements", ?e)  
+            };
             
             Ok(Some(Json(MetadataResponse {
                 element: element.into(),
-                metadata: meta.into(),
-                associated
+                metadata: meta,
+                associated: associated.into_vec()
             })))
         },
         Ok(None) => Ok(None),
         Err(e) => {
-            log_n_bail!("failed to fetch element data: {e}");
+            log_n_bail!("failed to fetch element data", ?e);
         }
     }
 }
@@ -125,17 +86,17 @@ pub async fn tag_data(id: web::Path<u32>) -> impl Responder {
     let tag = match STORAGE.get_tag_data_by_id(*id).await {
         Ok(Some(t)) => t,
         Ok(None) => return Ok(Json(None)),
-        Err(e) => log_n_bail!("failed to get tag data: {e}")
+        Err(e) => log_n_bail!("failed to get tag data", ?e)
     };
 
     let aliases = match STORAGE.get_tag_aliases(&tag.name).await {
         Ok(v) => v,
-        Err(e) => log_n_bail!("failed to get tag aliases: {e}")  
+        Err(e) => log_n_bail!("failed to get tag aliases", ?e)  
     };
     
     Ok(Json(Some(TagResponse {
-        tag: tag.into(),
-        aliases: aliases.into_vec()
+        tag,
+        aliases
     })))
 }
 
@@ -206,12 +167,12 @@ pub async fn tags_edit(Json(req): Json<EditTagsRequest>) -> impl Responder {
         .collect_vec();
     
     if let Err(e) = STORAGE.add_tags(Some(req.element_id), &add_tags).await {
-        log_n_bail!("failed to add tags: {e}");      
+        log_n_bail!("failed to add tags", ?e);      
     }
 
     for tag in &req.remove {
         if let Err(e) = STORAGE.remove_tag_from_element(req.element_id, tag).await {
-            log_n_bail!("failed to remove tag: {e}");
+            log_n_bail!("failed to remove tag", ?e);
         }
     }
 
@@ -261,6 +222,6 @@ pub async fn summary() -> impl Responder {
             tag_count: s.tag_count,
             element_count: s.element_count
         })),
-        Err(e) => log_n_bail!("failed to get DB summary: {e}")
+        Err(e) => log_n_bail!("failed to get DB summary", ?e)
     }
 }

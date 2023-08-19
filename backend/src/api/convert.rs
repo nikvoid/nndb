@@ -1,4 +1,4 @@
-use crate::{model, CONFIG, config::StaticFolder, import};
+use crate::{model, CONFIG, config::StaticFolder};
 use nndb_common::model as api;
 
 impl StaticFolder {
@@ -8,19 +8,6 @@ impl StaticFolder {
             format!("http://{}:{}{}{}", CONFIG.bind_address, CONFIG.port, self.url, tail)
         } else {
             self.url.clone() + tail
-        }
-    }
-}
-
-impl From<model::read::Tag> for api::Tag {
-    fn from(value: model::read::Tag) -> Self {
-        Self {
-            id: value.id,
-            name: value.name,
-            alt_name: value.alt_name,
-            tag_type: value.tag_type,
-            count: value.count,
-            hidden: value.hidden,
         }
     }
 }
@@ -45,14 +32,12 @@ impl From<model::read::Element> for api::Element {
     }
 }
 
-impl From<model::read::ElementMetadata> for api::ElementMetadata {
-    fn from(value: model::read::ElementMetadata) -> Self {
+impl From<model::read::Associated> for api::Associated {
+    fn from(value: model::read::Associated) -> Self {
         Self {
-            src_links: (&value.src_links).into_vec(),
-            src_times: (&value.src_times).into_vec(),
-            add_time: value.add_time,
-            ai_meta: value.ai_meta,
-            tags: value.tags.into_vec(),
+            source: value.source,
+            value: value.id,
+            elements: value.elements.into_vec(),
         }
     }
 }
@@ -65,11 +50,5 @@ pub trait IntoVec<T> {
 impl<T, U> IntoVec<T> for Vec<U> where T: From<U> {
     fn into_vec(self) -> Vec<T> {
         self.into_iter().map(|x| x.into()).collect()
-    }
-}
-
-impl<T> IntoVec<(String, T)> for &Vec<(import::Fetcher, T)> where T: Clone {
-    fn into_vec(self) -> Vec<(String, T)> {
-        self.iter().map(|x| (x.0.name().into(), x.1.clone())).collect()
     }
 }

@@ -13,7 +13,7 @@ pub fn Metadata(props: &MetadataProps) -> Html {
         .iter()
         .map(|(src, href)| html! {
             <a class="section-part" href={href.clone()}>
-                { src }{ ": " }{ href }
+                { src.name() }{ ": " }{ href }
             </a>
         });
 
@@ -21,7 +21,7 @@ pub fn Metadata(props: &MetadataProps) -> Html {
         .iter()
         .map(|(src, time)| html! {
             <div class="section-part">
-                { src }{ ": " }{ time }
+                { src.name() }{ ": " }{ time }
             </div>
         });
     

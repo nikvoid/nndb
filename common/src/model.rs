@@ -6,11 +6,13 @@ use serde::{Serialize, Deserialize};
 
 pub type UtcDateTime = DateTime<Utc>;
 
+#[cfg_attr(feature = "backend", derive(sqlx::FromRow))]
 #[derive(Serialize, Deserialize, PartialEq, Clone)]
 pub struct Tag {
     /// Tag id
     pub id: u32,
     /// Primary name
+    #[cfg_attr(feature = "backend", sqlx(rename = "tag_name"))]
     pub name: String,
     /// Alternative name
     pub alt_name: Option<String>,
@@ -18,6 +20,8 @@ pub struct Tag {
     pub tag_type: TagType,
     /// Count of elements with this tag
     pub count: u32,
+    /// Group id of similar tags/aliases
+    pub group_id: Option<u32>,
     /// Is tag hidden
     pub hidden: bool,
 }
@@ -39,9 +43,9 @@ pub struct Element {
 #[derive(Serialize, Deserialize, PartialEq, Clone)]
 pub struct ElementMetadata {
     /// Link to source (if was imported from other sources)
-    pub src_links: Vec<(String, String)>,
+    pub src_links: Vec<(MetadataSource, String)>,
     /// Time when element was added to other source (if present)
-    pub src_times: Vec<(String, UtcDateTime)>,
+    pub src_times: Vec<(MetadataSource, UtcDateTime)>,
     /// Time when element was added to db
     pub add_time: UtcDateTime,
     /// Stable Diffusion/etc metadata
@@ -52,9 +56,9 @@ pub struct ElementMetadata {
 
 #[derive(Serialize, Deserialize, PartialEq, Clone)]
 pub struct Associated {
-    /// Associated by this key
-    pub key: String,
-    /// Key value
+    /// Source of grouping data
+    pub source: MetadataSource,
+    /// Group id
     pub value: i64,
     /// Associated elements
     pub elements: Vec<Element>
@@ -119,6 +123,34 @@ pub enum TagType {
     Tag       = 5,
 }
 
+/// Source of grouping data and/or metadata
+#[cfg_attr(feature = "backend", derive(sqlx::Type))]
+#[derive(
+    Clone, 
+    Copy, 
+    Debug,
+    PartialEq,
+    Sequence,
+    Serialize,
+    Deserialize,
+    PartialOrd,
+    Ord,
+    Eq,
+)]
+#[repr(u8)]
+pub enum MetadataSource {
+    /// Stub value
+    Passthrough = 0,
+    /// Stable diffusion seed
+    NovelAI     = 1,
+    /// Stable diffusion seed
+    Webui       = 2,
+    /// Image signature (id doesn't recorded to db)
+    Signature   = 100,
+    /// Pixiv illust id
+    Pixiv       = 101
+}
+
 impl Tag {
     /// Name with spaces as word separators
     pub fn pretty_name(&self) -> String {
@@ -165,6 +197,18 @@ impl TagType {
             TagType::Title => "Title",
             TagType::Metadata => "Metadata",
             TagType::Tag => "Tag",
+        }
+    }
+}
+
+impl MetadataSource {
+    pub fn name(&self) -> &'static str {
+        match self {
+            MetadataSource::Passthrough => "Passthrough stub. You should not see this.",
+            MetadataSource::Signature => "Signature",
+            MetadataSource::Webui => "Webui eneration seed",
+            MetadataSource::NovelAI => "NovelAI generation seed",
+            MetadataSource::Pixiv => "Pixiv illust",
         }
     }
 }
