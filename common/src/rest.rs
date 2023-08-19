@@ -95,3 +95,10 @@ pub struct SummaryResponse {
     pub tag_count: u32,
     pub element_count: u32
 }
+
+#[derive(Serialize, Deserialize, PartialEq)]
+pub struct EditTagsRequest {
+    pub element_id: u32,
+    pub add: Vec<String>,
+    pub remove: Vec<String>,
+}

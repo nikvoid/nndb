@@ -1,6 +1,5 @@
 use actix_web::{Responder, get, web::{self, Json}, post};
 use itertools::Itertools;
-use serde::Deserialize;
 use nndb_common::*;
 use tracing::{info, error};
 
@@ -23,18 +22,6 @@ use convert::IntoVec;
 
 /// Tag autocompletion max tags
 const TAG_LIMIT: u32 = 15;
-
-#[derive(Deserialize)]
-pub struct AddTagsRequest {
-    element_id: u32,
-    tags: String,
-}
-
-#[derive(Deserialize)]
-pub struct DeleteTagRequest {
-    element_id: u32,
-    tag_name: String 
-}
 
 /// Element search
 #[post("/v1/search")]
@@ -209,30 +196,28 @@ pub async fn import_status() -> impl Responder {
     Json(status)
 }
 
-/// Add tag(s) to element
-#[post("/api/write/add_tags")]
-pub async fn add_tags(query: Json<AddTagsRequest>) -> impl Responder {    
-    let tags = query.tags
-        .split_whitespace()
+/// Add and remove tag(s) to element
+#[post("/v1/tags_edit")]
+pub async fn tags_edit(Json(req): Json<EditTagsRequest>) -> impl Responder {    
+    let add_tags = req.add
+        .iter()
         // New tags will be created with Tag type, existing won't be changed
         .filter_map(|t| write::Tag::new(t, None, TagType::Tag))
         .collect_vec();
     
-    match STORAGE.add_tags(Some(query.element_id), &tags).await {
-        Ok(_) => log_n_ok!("added tags to element"),
-        Err(e) => log_n_bail!("failed to add tags", ?e)        
+    if let Err(e) = STORAGE.add_tags(Some(req.element_id), &add_tags).await {
+        log_n_bail!("failed to add tags: {e}");      
     }
-}
 
-/// Delete tag from element
-#[post("/api/write/delete_tag")]
-pub async fn delete_tag(req: Json<DeleteTagRequest>) -> impl Responder {
-    match STORAGE
-        .remove_tag_from_element(req.element_id, &req.tag_name)
-        .await {
-        Ok(_) => log_n_ok!("removed tag from element"),
-        Err(e) => log_n_bail!("failed to remove tag", ?e)
+    for tag in &req.remove {
+        if let Err(e) = STORAGE.remove_tag_from_element(req.element_id, tag).await {
+            log_n_bail!("failed to remove tag: {e}");
+        }
     }
+
+    info!("Changed element tags:\n  added: {:?}\n  removed: {:?}", req.add, req.remove);
+
+    Ok("null")
 }
 
 /// Joined backend control endpoint
