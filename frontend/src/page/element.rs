@@ -160,5 +160,11 @@ impl Component for ElementPage {
             },
         }
     }
+
+    fn changed(&mut self, ctx: &Context<Self>, _old_props: &Self::Properties) -> bool {
+        // Reload on prop change
+        ctx.link().send_message(Msg::Reload);
+        true
+    }
 }
 

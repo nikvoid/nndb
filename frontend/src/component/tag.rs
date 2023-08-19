@@ -224,6 +224,7 @@ impl Component for TagList {
             Msg::Reset => {
                 // Just drop edit list
                 self.edit_list.take();
+                self.input_visible = false;
             }
         }
 
@@ -231,11 +232,9 @@ impl Component for TagList {
         true
     }
 
-    fn changed(&mut self, _: &Context<Self>, _old_props: &Self::Properties) -> bool {
-
+    fn changed(&mut self, ctx: &Context<Self>, _old_props: &Self::Properties) -> bool {
         // We do not want edit list to be silently de-synced from props
-        self.edit_list.take();
-
+        ctx.link().send_message(Msg::Reset);
         true
     }
 }
