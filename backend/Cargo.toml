@@ -18,11 +18,9 @@ image = { version = "0.24.6" }
 image-match = { git = "https://github.com/alt-text-org/image-match-rs", rev = "2788c49387ac95d25b0d9b7d6123f185eb917e19", features = ["img", "image", "num"] }
 itertools = "0.10.5"
 kakasi = "0.1.0"
-maud = { git = "https://github.com/nikvoid/maud", features = ["actix-web", "actix-web-dep"] }
 md-5 = "0.10.5"
 moka = { version = "0.11.1", default-features = false, features = ["future"] }
 nndb-common = { workspace = true, features = ["backend"] }
-num_enum = "0.6.0"
 once_cell = "1.17.1"
 parking_lot = "0.12.1"
 pixivcrab = "0.5.1"

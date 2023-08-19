@@ -4,7 +4,6 @@ use crate::model::{write::ElementMetadata, read::PendingImport};
 use async_trait::async_trait;
 use enum_iterator::Sequence;
 use nndb_common::MetadataSource;
-use num_enum::{FromPrimitive, IntoPrimitive};
 
 mod unknown;
 mod novelai;
@@ -24,11 +23,10 @@ pub struct ElementPrefab {
     pub data: Vec<u8>,
 }
 
-#[derive(FromPrimitive, IntoPrimitive, Clone, Copy, Debug, PartialEq, sqlx::Type)]
+#[derive(Clone, Copy, Debug, PartialEq, sqlx::Type)]
 #[repr(u8)]
 pub enum Parser {
     /// No specific metadata
-    #[default]
     Passthrough = 0,
     // Novel AI generations
     NovelAI     = 1,
