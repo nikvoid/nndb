@@ -1,11 +1,8 @@
-use chrono::{DateTime, Utc};
-
-pub use nndb_common::{TagType, AIMetadata};
+pub use nndb_common::{TagType, AIMetadata, Summary, UtcDateTime};
 
 pub const SIGNATURE_LEN: usize = 544;
 pub const MD5_LEN: usize = 16;
 
-pub type UtcDateTime = DateTime<Utc>;
 pub type Md5Hash = [u8; MD5_LEN];
 pub type Signature = [i8; SIGNATURE_LEN];
 
@@ -27,11 +24,3 @@ pub struct GroupMetadata {
     pub group_id: Option<u32>,
 }
 
-/// Database summary
-#[derive(sqlx::FromRow)]
-pub struct Summary {
-    /// Count of tags in DB
-    pub tag_count: u32,
-    /// Count of elements in DB
-    pub element_count: u32,
-}

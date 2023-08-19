@@ -109,13 +109,13 @@ impl Component for Dashboard {
                         { "Elements in DB" }
                     </div>
                     <div class="param-value">
-                        { self.summary.element_count }
+                        { self.summary.summary.element_count }
                     </div>
                     <div class="param-name">
                         { "Tags in DB" }
                     </div>
                     <div class="param-value">
-                        { self.summary.tag_count }
+                        { self.summary.summary.tag_count }
                     </div>
                     { for tasks }
                     <div class="section-label">

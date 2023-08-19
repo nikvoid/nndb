@@ -151,6 +151,16 @@ pub enum MetadataSource {
     Pixiv       = 101
 }
 
+/// Database summary
+#[cfg_attr(feature = "backend", derive(sqlx::FromRow))]
+#[derive(Serialize, Deserialize, PartialEq, Default)]
+pub struct Summary {
+    /// Count of tags in DB
+    pub tag_count: u32,
+    /// Count of elements in DB
+    pub element_count: u32,
+}
+
 impl Tag {
     /// Name with spaces as word separators
     pub fn pretty_name(&self) -> String {

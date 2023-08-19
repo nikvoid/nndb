@@ -92,8 +92,7 @@ pub enum ControlRequest {
 
 #[derive(Serialize, Deserialize, PartialEq, Default)]
 pub struct SummaryResponse {
-    pub tag_count: u32,
-    pub element_count: u32
+    pub summary: Summary
 }
 
 #[derive(Serialize, Deserialize, PartialEq)]
