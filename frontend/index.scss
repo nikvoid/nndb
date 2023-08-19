@@ -23,6 +23,7 @@ $padding-def: 0.05em 0.3em 0.05em 0.3em;
 $border-small: 0.1em;
 $border-def: 0.18em;
 $border-rdef: 0.3em;
+$border-rbig: 1em;                
 
 $margin-def: 0.3em;
 $margin-big: 1em;
@@ -112,7 +113,7 @@ $element-container-height: 185px;
   color: inherit;
   background-color: inherit;
   padding: $padding-def;
-  border-radius: 1em;
+  border-radius: $border-rbig;
   border: $border-def solid $aux-lighter; 
 }
 
@@ -285,9 +286,27 @@ a.label {
   @extend %info-section;
   align-items: start;
 
-  .tag-page-link {
+  // Tag page link or delete button
+  .tag-aside {
     @extend .param-name;
     text-decoration: none;
+    cursor: pointer;
+  }
+
+  .header {
+    @extend .section-label;
+    @include grid-gap;
+    @include layout-row(1, 1, "*", ".tags-label", ".edit-controls"); 
+    grid-template-columns: 2fr 1fr 2fr;
+    
+    // Buttons aside of "Tags"
+    .edit-controls {
+      @include flex-wrap($gap-small, $gap-small);
+      flex-wrap: nowrap;
+      font-size: $font-size-small;
+      justify-self: end;
+      align-self: center;
+    }
   }
   
   .tag-info {
@@ -296,6 +315,14 @@ a.label {
     @include layout-row(1, 1, ".tag-name", ".tag-count"); 
     justify-self: start;
     text-decoration: none;
+  }
+
+  .tag-input {
+    background: $aux-darker;
+    border-radius: $border-rbig;
+    padding: 0.3em;
+    position: absolute;
+    margin-top: 2em;
   }
   
   .tag-count {
