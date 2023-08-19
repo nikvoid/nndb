@@ -39,14 +39,14 @@ fn Root() -> Html {
     html! {
         <main>
             <div class="search-box">
+                <InputAutocomplete 
+                    {onsubmit} 
+                    value={search.query.clone()}/>
                 <AppLink<()> 
                     class="index-button" 
                     route={Route::Index} >
                     { "To Index" }
                 </AppLink<()>>
-                <InputAutocomplete 
-                    {onsubmit} 
-                    value={search.query.clone()}/>
                 <AppLink<SearchQuery> 
                     class="dashboard-button" 
                     route={Route::Dashboard} 

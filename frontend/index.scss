@@ -355,31 +355,18 @@ main {
   padding: 1em 0.5em 5em 0.5em; 
 
   > .search-box {
-    @include grid-gap;
-    @include layout-row(
-      1, 
-      1, 
-      ".index-button", 
-      ".input-autocomplete"
-      ".dashboard-button"
-    );
-    grid-template-columns: auto minmax(200px, 1000px) auto;
+    @include flex-wrap;
+    justify-content: center;
     
     .input-autocomplete {
+      max-width: 1000px;
+      min-width: 200px;
       width: 100%;
-      justify-self: center;
     }
 
-    .index-button {
-      @extend .button;
-      width: max-content;
-      justify-self: start;
-    }
-
-    .dashboard-button {
-      @extend .button;
-      width: max-content;
-      justify-self: end;
+    .index-button, .dashboard-button {
+      @extend .outlined;
+      text-decoration: none;
     }
   }
 }
