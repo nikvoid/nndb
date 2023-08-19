@@ -118,7 +118,11 @@ impl Component for InputAutocomplete {
                 self.content = vec![];
                 
                 // WARN: cursor is offset in characters, not bytes
-                let cursor = input.selection_start().unwrap().unwrap() as usize;
+                let Some(cursor) = input.selection_start()
+                    .expect("cannot get selection start") else {
+                    return false;
+                };
+                let cursor = cursor as usize;
 
                 let text = input.value();
                 
@@ -161,7 +165,7 @@ impl Component for InputAutocomplete {
                     let resp: AutocompleteResponse = 
                         backend_post!(&req, "/v1/autocomplete")
                         .await
-                        .unwrap();
+                        .expect("failed to fetch completions");
                     Msg::Completions(resp.completions)
                 });
                 false

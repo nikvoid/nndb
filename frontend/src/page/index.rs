@@ -19,7 +19,8 @@ pub struct IndexQuery {
 #[function_component]
 pub fn Index() -> Html {
     let query: IndexQuery = use_location()
-        .unwrap()
+        .expect("cannot access location")
+        // If location has been found, this should be infallible due to Options
         .query()
         .unwrap();
 
@@ -40,7 +41,7 @@ pub fn Index() -> Html {
             wasm_bindgen_futures::spawn_local(async move {
                 let data = backend_post!(&req, "/v1/search")
                     .await
-                    .unwrap();
+                    .expect("failed to fetch elements");
                 resp.set(data);
             });
         }, query.clone());
@@ -48,12 +49,14 @@ pub fn Index() -> Html {
     
     let current = query.page.unwrap_or(1);
     let onpage = {
-        let nav = use_navigator().unwrap();
+        let nav = use_navigator()
+            .expect("failed to access navigator");
         Callback::from(move |new_page| {
             nav.push_with_query(&Route::Index, &IndexQuery {
                 page: Some(new_page),
                 ..query.clone()
-            }).unwrap();
+            })
+            .expect("failed to push index route");
         })
     };
 

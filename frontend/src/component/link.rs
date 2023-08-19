@@ -19,17 +19,20 @@ where T: PartialEq + Default {
 #[function_component]
 pub fn AppLink<T>(props: &LinkProps<T>) -> Html
 where T: PartialEq + Serialize + Clone + Default + 'static {
-    let nav = use_navigator().unwrap();
+    let nav = use_navigator()
+        .expect("failed to access navigator");
 
     let route = props.route.clone();
     let query = props.query.clone();
     let onclick = Callback::from(move |ev: MouseEvent| {
         // Prevent redirect on click
         ev.prevent_default();
-        nav.push_with_query(&route, &query).unwrap();
+        nav.push_with_query(&route, &query)
+            .expect("failed to push route");
     });
     
-    let query = serde_urlencoded::to_string(&props.query).unwrap();
+    let query = serde_urlencoded::to_string(&props.query)
+        .expect("failed to serialize query");
     let href = format!("{}?{}", props.route.to_path(), query);
         
     html! {

@@ -1,5 +1,4 @@
 use actix_web::{Responder, get, web::{self, Json}, post};
-use anyhow::Context;
 use itertools::Itertools;
 use serde::Deserialize;
 use nndb_common::*;

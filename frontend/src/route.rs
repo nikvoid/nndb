@@ -11,7 +11,8 @@ pub struct SearchQuery {
 /// Retrieve search query from location url
 #[hook]
 pub fn use_search_query() -> SearchQuery {
-    let location = use_location().unwrap();
+    let location = use_location()
+        .expect("cannot access location");
     // Try to seed context from current url -- if opened in new tab
     let context: SearchQuery = location
         .query()

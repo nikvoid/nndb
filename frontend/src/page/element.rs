@@ -31,7 +31,7 @@ pub fn ElementPage(props: &Props) -> Html {
             wasm_bindgen_futures::spawn_local(async move {
                 let opt: Option<MetadataResponse> = backend_get!("/v1/element/{}", id)
                     .await
-                    .unwrap();
+                    .expect("failed to fetch element data");
                 resp.set(match opt {
                     Some(resp) => State::Found(resp),
                     None => State::NotFound

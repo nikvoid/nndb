@@ -18,7 +18,8 @@ pub struct Props {
 
 #[function_component]
 pub fn Paginator(props: &Props) -> Html {
-    let window = window().unwrap();
+    let window = window()
+        .expect("cannot access window");
     
     let pages = {
         let left = props.current

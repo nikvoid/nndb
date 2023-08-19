@@ -189,7 +189,7 @@ impl Component for TagPage {
                 ctx.link().send_future(async move {
                     let resp: Option<TagResponse> = backend_get!("/v1/tag/{}", id)
                         .await
-                        .unwrap();
+                        .expect("failed to fetch tag data");
 
                     if let Some(r) = resp {
                         Msg::Update(TagState::Found(r))
@@ -213,7 +213,7 @@ impl Component for TagPage {
                     };
                     let _: () = backend_post!(&req, "/v1/tag_alias")
                         .await
-                        .unwrap();
+                        .expect("failed to alias tag");
                     Msg::Reload
                 });
                 false
@@ -251,7 +251,7 @@ impl Component for TagPage {
                     // TODO: We may respond with updated tag state
                     let _: () = backend_post!(&req, "/v1/tag_edit")
                         .await
-                        .unwrap();
+                        .expect("failed to edit tag");
                     Msg::Reload
                 });
                 false

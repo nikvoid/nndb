@@ -23,14 +23,16 @@ pub fn switch(route: Route) -> Html {
 /// A shim to access location inside BrowserRouter -- and page root
 #[function_component]
 fn Root() -> Html {
-    let nav = use_navigator().unwrap();
+    let nav = use_navigator()
+        .expect("failed to access navigator");
     let search = use_search_query();
 
     // On submit change query and push index page
     let onsubmit = {
         Callback::from(move |query: String| {
             let search = SearchQuery { query };
-            nav.push_with_query(&Route::Index, &search).unwrap();
+            nav.push_with_query(&Route::Index, &search)
+                .expect("failed to push route");
         })
     };
   
@@ -63,12 +65,18 @@ fn Root() -> Html {
 pub fn App() -> Html {
     // On panic display alert
     set_custom_panic_hook(Box::new(|info| {
-        web_sys::window()
-            .expect("where is the window()?")
-            .alert_with_message(
-                &format!("{info}")
-            )
-            .unwrap();
+        let info = format!("{info}");
+        if let Some(window) = web_sys::window() {
+            if let Err(e) = window.alert_with_message(&info) {
+                web_sys::console::log_3(
+                    &"failed to send alert".into(), 
+                    &e, 
+                    &info.into()
+                );
+            }
+        } else {
+            web_sys::console::log_1(&info.into());
+        }
     }));
 
     html! {
