@@ -63,30 +63,36 @@ pub fn Index() -> Html {
     let max_page = resp.count / ELEMENTS_ON_PAGE + 1;   
     html! {
         <div class="index-page">
-            <div class="metadata">
-                <div class="element-count">
-                    { "Elements found: " } { resp.count }
+            if resp.count > 0 {
+                <div class="metadata">
+                    <div class="element-count">
+                        { "Elements found: " } { resp.count }
+                    </div>
+                    <TagList content={resp.tags.clone()}/>
                 </div>
-                <TagList content={resp.tags.clone()}/>
-            </div>
-            <div class="elements">
-                <div class="paginator-top">
-                    <Paginator 
-                        {current}
-                        {max_page}
-                        onclick={onpage.clone()}
-                    />
+                <div class="elements">
+                    <div class="paginator-top">
+                        <Paginator 
+                            {current}
+                            {max_page}
+                            onclick={onpage.clone()}
+                        />
+                    </div>
+                    <ElementList content={resp.elements.clone()} />
+                    <div class="paginator-bottom">
+                        <Paginator 
+                            {current}
+                            {max_page}
+                            onclick={onpage}
+                            scroll_to_x={0.}
+                        />
+                    </div>
                 </div>
-                <ElementList content={resp.elements.clone()} />
-                <div class="paginator-bottom">
-                    <Paginator 
-                        {current}
-                        {max_page}
-                        onclick={onpage}
-                        scroll_to_x={0.}
-                    />
+            } else {
+                <div class="placeholder">
+                    { "Not a single element has been found" }
                 </div>
-            </div>
+            }
         </div>
     }
 }

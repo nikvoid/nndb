@@ -406,6 +406,11 @@ main {
       font-weight: bold;
     }
   }
+
+  > .placeholder {
+    grid-column: 1/4;
+    justify-self: center;
+  }
 }
 
 .element-page {
