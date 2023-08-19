@@ -1,3 +1,5 @@
+use yew::set_custom_panic_hook;
+
 use crate::component::prelude::*;
 use crate::component::input::InputAutocomplete;
 use crate::component::link::AppLink;
@@ -59,6 +61,16 @@ fn Root() -> Html {
 
 #[function_component]
 pub fn App() -> Html {
+    // On panic display alert
+    set_custom_panic_hook(Box::new(|info| {
+        web_sys::window()
+            .expect("where is the window()?")
+            .alert_with_message(
+                &format!("{info}")
+            )
+            .unwrap();
+    }));
+
     html! {
         <BrowserRouter>
             <Root />
