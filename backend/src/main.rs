@@ -17,7 +17,6 @@ mod service;
 mod config; 
 mod util;
 mod api;
-mod search;
 
 /// Spawn periodic import tasks
 async fn import_spawner() {

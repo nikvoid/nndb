@@ -16,7 +16,7 @@ enum-iterator = { workspace = true }
 futures = "0.3.28"
 image = { version = "0.24.6" }
 image-match = { git = "https://github.com/alt-text-org/image-match-rs", rev = "2788c49387ac95d25b0d9b7d6123f185eb917e19", features = ["img", "image", "num"] }
-itertools = "0.10.5"
+itertools = { workspace = true }
 kakasi = "0.1.0"
 md-5 = "0.10.5"
 moka = { version = "0.11.1", default-features = false, features = ["future"] }

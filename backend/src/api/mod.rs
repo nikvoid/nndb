@@ -11,7 +11,6 @@ use crate::{
         SCAN_FILES_LOCK, UPDATE_METADATA_LOCK, GROUP_ELEMENTS_LOCK, 
         MAKE_THUMBNAILS_LOCK, self, FETCH_WIKI_LOCK
     }, 
-    search::{self, Term}, 
     log_n_ok, 
     log_n_bail, 
 };
@@ -118,7 +117,7 @@ pub async fn tag_edit(req: Json<TagEditRequest>) -> impl Responder {
 #[post("/v1/tag_alias")]
 pub async fn tag_alias(req: Json<TagAliasRequest>) -> impl Responder {
     match search::parse_query(&req.query)
-        .filter_map(|t| if let Term::Tag(true, tag) = t { Some(tag) } else { None })
+        .filter_map(|t| if let search::Term::Tag(true, tag) = t { Some(tag) } else { None })
         .next() {
         Some(to) => match STORAGE
             .alias_tag(&req.tag_name, to)

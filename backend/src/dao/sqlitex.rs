@@ -4,13 +4,13 @@ use std::sync::Arc;
 
 use futures::FutureExt;
 use moka::future::Cache;
-use nndb_common::MetadataSource;
+use nndb_common::search::Term;
+use nndb_common::{MetadataSource, search};
 use sqlx::Executor;
 use sqlx::{SqlitePool, migrate::MigrateDatabase, SqliteConnection};
 use tokio::sync::RwLock;
 
 use crate::import::{Fetcher, FetchStatus};
-use crate::search::{self, Term};
 use crate::util;
 use crate::{
     model::{
