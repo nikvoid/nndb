@@ -11,3 +11,7 @@ serve-front *args:
 
 hx:
 	hx
+
+[no-cd]
+run *args:
+	{{args}}
