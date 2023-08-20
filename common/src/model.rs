@@ -216,7 +216,7 @@ impl MetadataSource {
         match self {
             MetadataSource::Passthrough => "Passthrough stub. You should not see this.",
             MetadataSource::Signature => "Signature",
-            MetadataSource::Webui => "Webui eneration seed",
+            MetadataSource::Webui => "Webui generation seed",
             MetadataSource::NovelAI => "NovelAI generation seed",
             MetadataSource::Pixiv => "Pixiv illust",
         }
