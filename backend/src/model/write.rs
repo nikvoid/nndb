@@ -1,16 +1,9 @@
 use std::path::PathBuf;
 
-use once_cell::sync::Lazy;
-use regex::Regex;
-
-use crate::import::{Parser};
+use nndb_common::search::TAG_REX;
+use crate::import::Parser;
 
 use super::*;
-
-/// Tag excape regex
-pub static TAG_REX: Lazy<Regex> = Lazy::new(|| 
-    Regex::new(r#"[\s:,.@#$*'"`|%{}\[\]]+"#).unwrap()
-);
 
 /// Tag to write
 pub struct Tag {

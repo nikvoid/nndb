@@ -9,8 +9,10 @@ edition = "2021"
 enum-iterator = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
 itertools = { workspace = true }
+regex = { workspace = true }
 serde = { workspace = true, features = ["derive"] } 
 sqlx = { workspace = true, optional = true }
+once_cell = { workspace = true }
 
 [features]
 backend = ["dep:sqlx"]

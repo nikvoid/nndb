@@ -2026,6 +2026,8 @@ dependencies = [
  "chrono",
  "enum-iterator",
  "itertools",
+ "once_cell",
+ "regex",
  "serde",
  "sqlx",
 ]

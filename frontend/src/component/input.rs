@@ -1,6 +1,7 @@
 use super::prelude::*;
 use std::ops::Range;
 
+use nndb_common::search::{parse_query_with_span, Term};
 use web_sys::{HtmlInputElement, KeyboardEvent};
 
 #[derive(Properties, PartialEq)]
@@ -34,7 +35,6 @@ pub struct InputAutocomplete {
 pub enum Msg {
     Set(String),
     Parse,
-    Term(String),
     Completions(Vec<Tag>),
     Selected(String),
     Submit,
@@ -115,8 +115,6 @@ impl Component for InputAutocomplete {
                 true
             }
             Msg::Parse => {
-                self.content = vec![];
-                
                 // WARN: cursor is offset in characters, not bytes
                 let Some(cursor) = input.selection_start()
                     .expect("cannot get selection start") else {
@@ -125,54 +123,45 @@ impl Component for InputAutocomplete {
                 let cursor = cursor as usize;
 
                 let text = input.value();
-                
-                let cursor = text
-                    .char_indices()
-                    // Trailing cursor case
-                    .chain(Some((text.len(), '>')))
-                    .nth(cursor)
-                    .map(|(idx, _)| idx)
-                    .unwrap_or(0);
-                
-                let start = text
-                    .rmatch_indices(' ')
-                    .find(|(idx, _)| idx < &cursor)
-                    .map(|(idx, _)| idx + 1)
-                    .unwrap_or(0);
 
-                let end = text
-                    .match_indices(' ')
-                    .find(|(idx, _)| idx >= &cursor)
-                    .map(|(idx, _)| idx)
-                    .unwrap_or(text.len());
+                let Some((mut span, Term::Tag(pos, slice))) = 
+                    parse_query_with_span(&text)
+                    .find(|(_, char_span, term)| 
+                        matches!(term, Term::Tag(..)) 
+                            && (char_span.contains(&cursor) 
+                                // Trailing cursor
+                                || char_span.contains(&(cursor - 1)))
+                    )
+                    .map(|(span, _, term)| (span, term)) else {
+                    // Clear completions
+                    self.content = vec![];
+                    return true
+                };
 
+                // Do not change the ! prefix
+                if !pos {
+                    span.start += 1;
+                }
+                
                 if !self.input_locked {
-                    self.selected = start..end;
+                    self.selected = span;
                     self.text = text.clone();
                     // Lock input until response from backend
                     self.input_locked = true;
+                    
+                    // Request completions from backend
+                    let input = slice.to_string();
+                    ctx.link().send_future(async move {
+                        let req = AutocompleteRequest {
+                            input
+                        };
+                        let resp: AutocompleteResponse = 
+                            backend_post!(&req, "/v1/autocomplete")
+                            .await
+                            .expect("failed to fetch completions");
+                        Msg::Completions(resp.completions)
+                    });
                 }
-
-                ctx.link().send_message(Msg::Term(text[start..end].into()));
-                false
-            },
-            Msg::Term(term) => {
-                // Return if too short
-                if term.is_empty() {
-                    ctx.link().send_message(Msg::Completions(vec![]));
-                    return true;
-                }
-                // On select request completions from backend
-                ctx.link().send_future(async move {
-                    let req = AutocompleteRequest {
-                        input: term
-                    };
-                    let resp: AutocompleteResponse = 
-                        backend_post!(&req, "/v1/autocomplete")
-                        .await
-                        .expect("failed to fetch completions");
-                    Msg::Completions(resp.completions)
-                });
                 false
             },
             Msg::Completions(cont) => {

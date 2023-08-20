@@ -21,12 +21,12 @@ kakasi = "0.1.0"
 md-5 = "0.10.5"
 moka = { version = "0.11.1", default-features = false, features = ["future"] }
 nndb-common = { workspace = true, features = ["backend"] }
-once_cell = "1.17.1"
+once_cell = { workspace = true }
 parking_lot = "0.12.1"
 pixivcrab = "0.5.1"
 png = "0.17.8"
 rayon = "1.7.0"
-regex = "1.7.3"
+regex = { workspace = true }
 reqwest = { version = "0.11.18", features = ["json", "gzip", "deflate", "cookies"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
