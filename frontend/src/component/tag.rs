@@ -1,3 +1,5 @@
+use nndb_common::search::{parse_query, Term};
+
 use crate::component::{link::AppLink, input::InputAutocomplete};
 
 use super::prelude::*;
@@ -179,11 +181,15 @@ impl Component for TagList {
                 self.input_visible = true;
             }
             Msg::Add(tags) => {
-                let tags = tags
-                    .split_whitespace()
-                    // TODO: Filter only valid and transform to the right form
-                    .map(|tag| tag.to_string());
-                
+                let tags = parse_query(&tags)
+                    .filter_map(|t| 
+                        if let Term::Tag(true, slice) = t {
+                            Some(slice.to_string())
+                        } else {
+                            None
+                        }
+                    );
+                    
                 // Add tags to list and preserve alphabetic order
                 if let Some(list) = &mut self.edit_list {
                     list.extend(tags);    
