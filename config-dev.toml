@@ -1,7 +1,7 @@
 # Default application config
 
 # Url to database
-db_url = "test.db"
+db_url = "dev.db"
 
 # Testing mode: copy files from input to element pool instead of deleting
 testing_mode = true
@@ -40,7 +40,7 @@ read_files = "sequential"
 # Max number of files stored in memory at the same time.
 # Files data are read first to memory, then hashed and freed.
 # Bigger values can speed up file scanning, but may use more memory.
-max_files_in_memory = 24
+max_files_in_memory = 192
 
 # Path to ffmpeg.
 # Required to generate thumbnails for animation
@@ -75,6 +75,6 @@ serve = true
 # Folder with miscellaneous static files  
 [static_folder]
 url = "/static/"
-path = "static"
+path = "target/dist"
 serve = true
 
