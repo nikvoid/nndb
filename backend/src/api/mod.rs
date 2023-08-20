@@ -200,7 +200,10 @@ pub async fn control(Json(req): Json<ControlRequest>) -> impl Responder {
                 Err(e) => Err(e.into())
             },
             ControlRequest::RetryImports => 
-                STORAGE.unmark_failed_imports().await,
+                match STORAGE.unmark_failed_imports().await {
+                    e @ Err(_) => e,
+                    Ok(_) => service::update_metadata().await
+                },
             ControlRequest::FetchWikis => 
                 service::update_danbooru_wikis().await,
         };
