@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use futures::FutureExt;
+use itertools::Itertools;
 use moka::future::Cache;
 use nndb_common::search::Term;
 use nndb_common::{MetadataSource, search};
@@ -837,22 +838,14 @@ impl Sqlite {
         
         let mut subgroups: Vec<((MetadataSource, i64), Vec<u32>)> = vec![];
 
-        if let Some((_, src, group)) = groups.first().copied() {
-            let mut prev_key = (src, group);
-            
-            for (elem_id, src, group_id) in groups {
-                let new_key = (src, group_id);
-                if prev_key != new_key || subgroups.is_empty() {
-                    // Push new subgroup
-                    subgroups.push(((src, group_id), vec![elem_id]));
-                    
-                    // Replace comparison key
-                    prev_key = new_key;
-                } else {
-                    // Push next id
-                    subgroups.last_mut().unwrap().1.push(elem_id)
-                }
-            }
+        for (key, group) in &groups
+            .into_iter()
+            .group_by(|(_, src, group)| (*src, *group))
+        {
+            let group = group
+                .map(|g| g.0)
+                .collect();
+            subgroups.push((key, group));
         }
 
         // Fetch elements data
