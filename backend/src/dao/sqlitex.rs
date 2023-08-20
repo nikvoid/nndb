@@ -362,32 +362,31 @@ impl Sqlite {
                 JOIN tag t ON t.id = et.tag_id
                 {join_group_meta}
                 {join_metadata}
-                -- When no pos tags: exclude hidden (by clearing group)
-                -- When hidden pos tag explicitly requested: include only elements with this hidden tag
-                -- Exclude elements that have any neg tag
                 WHERE 
-                    CASE ?1
-                    WHEN 0 THEN 1
-                    ELSE   
-                        et.tag_id IN mem.pos_tags OR t.group_id IN mem.pos_aliases 
-                        -- Pass this to HAVING       
-                        OR et.tag_id IN mem.neg_tags OR t.hidden = 1
-                    END 
+                    1
                     {cond_group}
                     {cond_ext_group}
                 GROUP BY e.id
                 HAVING 
                     CASE ?1
+                    -- Just exclude hidden
                     WHEN 0 THEN
                         sum(t.hidden) = 0
                     ELSE 
+                        -- Include requested tags 
                         sum(
-                            et.tag_id IN mem.pos_tags 
-                            OR t.group_id IN mem.pos_aliases AND t.hidden = 0
+                            t.id IN mem.pos_tags OR t.group_id IN mem.pos_aliases
                         ) >= ?1
+                        AND 
+                        -- Exclude hidden and not requested tags
+                        sum(
+                            (t.id NOT IN mem.pos_tags AND t.group_id NOT IN mem.pos_aliases) 
+                            AND t.hidden = 1
+                        ) = 0
                     END
                     AND
-                    sum(et.tag_id IN mem.neg_tags) = 0 
+                    -- Exclude negative tags
+                    sum(t.id IN mem.neg_tags) = 0 
                 ORDER BY e.add_time DESC",
                 // Add joins on demand
                 join_metadata = ext_group.is_some()
@@ -880,21 +879,6 @@ impl Sqlite {
 
     /// Update count of elements with tag for each tag.
     pub async fn update_tag_count(&self) -> Result<(), StorageError> {
-        // FIXME: For some reason it sometimes does not finish, only when using sqlx
-        // Also it seems to take much longer time, compared to other tools 
-        // sqlx::query( // sql
-        //     "WITH tag_count(tag_hash, count) AS (
-        //         SELECT tag_hash, count(tag_hash)
-        //         FROM element_tag
-        //         GROUP BY tag_hash
-        //     )
-        //     UPDATE tag SET count = (
-        //         ifnull((SELECT count FROM tag_count WHERE tag_hash = name_hash), 0)
-        //     )"
-        // )
-        // .execute(&self.pool)
-        // .await?;
-
         let mut tx = self.pool.begin().await?;
         
         let counts = sqlx::query!(
