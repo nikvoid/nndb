@@ -1,7 +1,7 @@
 # Default application config
 
 # Url to database
-db_url = "test.db"
+db_url = "store.db"
 
 # Testing mode: copy files from input to element pool instead of deleting
 testing_mode = true
@@ -23,13 +23,13 @@ log_level = "info"
 bind_address = "127.0.0.1"
 
 # Server port
-port = 8081
+port = 8080
 
 # File to write logs
 log_file = "log.txt"
 
 # Directory that will be scanned to find new element files
-input_folder = "res"
+input_folder = "input"
 
 # How to read files:
 # - sequential: use one thread,
@@ -40,7 +40,7 @@ read_files = "sequential"
 # Max number of files stored in memory at the same time.
 # Files data are read first to memory, then hashed and freed.
 # Bigger values can speed up file scanning, but may use more memory.
-max_files_in_memory = 24
+max_files_in_memory = 64
 
 # Path to ffmpeg.
 # Required to generate thumbnails for animation
@@ -67,8 +67,8 @@ serve = true
 
 # Store and serve thumbnails from this folder
 [thumbnails_folder]
-url = "/thumbs/"   
-path = "thumbs"
+url = "/thumb/"   
+path = "thumb"
 serve = true
 
 
