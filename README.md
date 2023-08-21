@@ -158,3 +158,7 @@ illust_(\d+)_\d+_\d+: e.g. "illust_108651440_20230605_123207.png"
 
 Note the tags with cursive japanese characters and a `Source links` metadata section. 
 There is also a new entry in the `Time` section.
+
+Pixiv metadata fetcher will try to write japanese tags without provided translations in romaji.
+But if danbooru tag database was fetched before ([Dashboard](#dashboard)), 
+these tags could be translated better using aliases from that db.
