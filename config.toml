@@ -72,9 +72,10 @@ path = "thumbs"
 serve = true
 
 
-# Folder with miscellaneous static files  
+# Folder with static frontend files  
 [static_folder]
-url = "/static/"
+# Url of this folder need to be in sync with frontend public url option
+url = "/"
 path = "static"
 serve = true
 

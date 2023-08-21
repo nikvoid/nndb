@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -5,7 +7,7 @@ pub struct StaticFolder {
     /// URL Path to folder (must include trailing slash)
     pub url: String,
     /// Physical path to folder
-    pub path: String,
+    pub path: PathBuf,
     /// Serve folder from nndb
     pub serve: bool,
 }

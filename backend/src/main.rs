@@ -1,7 +1,7 @@
 use std::{time::Duration, path::Path};
 
-use actix_files::Files;
-use actix_web::{HttpServer, App};
+use actix_files::{Files, NamedFile};
+use actix_web::{HttpServer, App, dev::{fn_service, ServiceRequest, ServiceResponse}};
 use config::Config;
 use tracing::{info, error};
 use tracing_actix_web::TracingLogger;
@@ -108,13 +108,6 @@ async fn main() -> anyhow::Result<()> {
             .service(api::summary)
         ;
 
-        // Serve static folders if needed
-        app = if CONFIG.static_folder.serve {
-            app.service(Files::new(
-                &CONFIG.static_folder.url,
-                &CONFIG.static_folder.path
-            ))
-        } else { app };
         app = if CONFIG.element_pool.serve {
             app.service(Files::new(
                 &CONFIG.element_pool.url, 
@@ -126,6 +119,30 @@ async fn main() -> anyhow::Result<()> {
                 &CONFIG.thumbnails_folder.url,
                 &CONFIG.thumbnails_folder.path
             ))
+        } else { app };
+        
+        // Serve static folder if needed
+        app = if CONFIG.static_folder.serve {
+            app.service(
+                Files::new(
+                    &CONFIG.static_folder.url,
+                    &CONFIG.static_folder.path
+                )
+                .index_file("index.html")
+                // Redirect all another requests to root to the same index.html
+                // to save frontend location state on page reload
+                .default_handler(
+                    fn_service(|req: ServiceRequest| async {
+                        let (req, _)  = req.into_parts();
+                        let file = CONFIG.static_folder.path
+                            .join("index.html");
+                        let file = NamedFile::open_async(file)
+                            .await?;
+                        let res = file.into_response(&req);
+                        Ok(ServiceResponse::new(req, res))
+                    })
+                )
+            )
         } else { app };
 
         app

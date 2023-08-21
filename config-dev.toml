@@ -29,7 +29,7 @@ port = 8081
 log_file = "log.txt"
 
 # Directory that will be scanned to find new element files
-input_folder = "res"
+input_folder = "res/res-cur"
 
 # How to read files:
 # - sequential: use one thread,
@@ -72,9 +72,10 @@ path = "thumbs"
 serve = true
 
 
-# Folder with miscellaneous static files  
+# Folder with static frontend files  
 [static_folder]
-url = "/static/"
+# Url of this folder need to be in sync with frontend public url option
+url = "/"
 path = "target/dist"
 serve = true
 
