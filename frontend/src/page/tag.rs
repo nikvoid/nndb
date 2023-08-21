@@ -256,4 +256,10 @@ impl Component for TagPage {
             },
         }
     }
+
+    fn changed(&mut self, ctx: &Context<Self>, _old_props: &Self::Properties) -> bool {
+        // Reload on tag id change
+        ctx.link().send_message(Msg::Reload);
+        true
+    }
 }
