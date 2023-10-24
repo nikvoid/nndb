@@ -131,8 +131,11 @@ pub fn get_sig_distance(sig1: &Signature, sig2: &Signature) -> f32 {
 pub fn get_tags_from_path(path: &Path) -> Vec<write::Tag> {
     path.iter()
         .filter_map(|p| p.to_str())
-        .filter(|seg| seg.starts_with(TAG_TRIGGER))
-        .flat_map(|seg| seg.strip_prefix(TAG_TRIGGER).unwrap().split('.'))
+        .filter(|seg| seg
+            .get(0..TAG_TRIGGER.len())
+            .is_some_and(|pref| pref.eq_ignore_ascii_case(TAG_TRIGGER))
+        )
+        .flat_map(|seg| seg[TAG_TRIGGER.len()..].split('.'))
         .tuples()
         .filter(|(_, tag)| !tag.is_empty())
         .map(|(tag_type, tag)| write::Tag::new(tag, None, tag_type.parse().unwrap()).unwrap())
