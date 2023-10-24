@@ -25,6 +25,8 @@ use futures::{StreamExt, future::BoxFuture};
 
 use tracing::{error, warn};
 
+mod migrate;
+
 pub struct Sqlite {
     pool: SqlitePool,
     id_cache: Cache<String, Arc<Vec<u32>>>,
@@ -68,14 +70,13 @@ impl Sqlite {
     ) -> Result<u32, StorageError> {
         let ElementWithMetadata(e, meta, parser) = element; 
 
-        // Try to get file modification time, this will fall back to 
-        // CURRENT_TIMESTAMP in case of error
+        // Try to get file modification time 
         let time = util::get_file_datetime(&e.path).ok();
 
         let hash = e.hash.as_slice();
         let id = sqlx::query!(
             r#"INSERT INTO element (
-                filename, orig_filename, hash, broken, animated, add_time
+                filename, orig_filename, hash, broken, animated, file_time
             )
             VALUES (?, ?, ?, ?, ?, ?)"#,
             e.filename,
@@ -394,7 +395,7 @@ impl Sqlite {
                     AND
                     -- Exclude negative tags
                     sum(t.id IN mem.neg_tags) = 0 
-                ORDER BY e.add_time DESC",
+                ORDER BY e.file_time DESC",
                 // Add joins on demand
                 join_metadata = ext_group.is_some()
                     .then_some("JOIN metadata m ON m.element_id = e.id")
@@ -459,7 +460,8 @@ impl Sqlite {
         }
         let pool = SqlitePool::connect(url).await?;
         // Apply migrations if needed
-        sqlx::migrate!().run(&pool).await?;
+        migrate::run_migrations(&pool).await?;
+        
         Ok(Self {
             pool,
             id_cache: Cache::new(64),

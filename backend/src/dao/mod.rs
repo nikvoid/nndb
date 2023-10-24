@@ -1,9 +1,9 @@
 //! Module with database interfaces
 
-mod sqlitex;
+mod sqlite;
 
 use futures::Future;
-pub use sqlitex::Sqlite;
+pub use sqlite::Sqlite;
 
 use crate::util::LateInit;
 
