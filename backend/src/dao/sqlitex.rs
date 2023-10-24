@@ -68,15 +68,22 @@ impl Sqlite {
     ) -> Result<u32, StorageError> {
         let ElementWithMetadata(e, meta, parser) = element; 
 
+        // Try to get file modification time, this will fall back to 
+        // CURRENT_TIMESTAMP in case of error
+        let time = util::get_file_datetime(&e.path).ok();
+
         let hash = e.hash.as_slice();
         let id = sqlx::query!(
-            "INSERT INTO element (filename, orig_filename, hash, broken, animated)
-            VALUES (?, ?, ?, ?, ?)",
+            r#"INSERT INTO element (
+                filename, orig_filename, hash, broken, animated, add_time
+            )
+            VALUES (?, ?, ?, ?, ?, ?)"#,
             e.filename,
             e.orig_filename,
             hash,
             e.broken,
-            e.animated
+            e.animated,
+            time
         )
         .execute(&mut *tx)
         .await?

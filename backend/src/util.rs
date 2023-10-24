@@ -1,9 +1,9 @@
-use std::{path::Path, io::SeekFrom, sync::atomic::Ordering, time::Duration, fmt::Display, process::Command};
+use std::{path::Path, io::SeekFrom, sync::atomic::Ordering, time::{Duration, UNIX_EPOCH}, fmt::Display, process::Command};
 use anyhow::{Context, bail};
 use atomic::Atomic;
 use futures::Future;
 use md5::{Md5, Digest};
-use nndb_common::TaskStatus;
+use nndb_common::{TaskStatus, UtcDateTime};
 use once_cell::sync::OnceCell;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tracing::error;
@@ -138,6 +138,16 @@ pub fn get_tags_from_path(path: &Path) -> Vec<write::Tag> {
         .map(|(tag_type, tag)| write::Tag::new(tag, None, tag_type.parse().unwrap()).unwrap())
         .collect()
 } 
+
+/// Get last file modification date as [chrono::DateTime]
+pub fn get_file_datetime(path: &Path) -> anyhow::Result<UtcDateTime> {
+    let dur = path.metadata()?
+        .modified()?
+        .duration_since(UNIX_EPOCH)?;
+
+    UtcDateTime::from_timestamp(dur.as_secs() as i64, 0)
+        .context("failed to construct datetime")    
+}
 
 /// Derive file hash, signature, and, if possible, metadata
 pub fn hash_file(prefab: ElementPrefab) -> anyhow::Result<ElementWithMetadata> {
