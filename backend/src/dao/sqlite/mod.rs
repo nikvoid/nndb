@@ -17,7 +17,7 @@ use crate::{
     model::{
         write::{self, ElementWithMetadata}, 
         read::{self, PendingImport}, 
-        Summary, Md5Hash, GroupMetadata, AIMetadata, UtcDateTime
+        Summary, Md5Hash, GroupMetadata, UtcDateTime
     }, 
     CONFIG
 };
@@ -37,33 +37,6 @@ pub type StorageError = anyhow::Error;
 
 /// Private methods and associated functions
 impl Sqlite {
-    async fn add_ai_metadata_tx(
-        tx: &mut SqliteConnection,
-        element_id: u32, 
-        ai_meta: &AIMetadata
-    ) -> Result<(), StorageError> {
-        sqlx::query!(
-            "INSERT INTO ai_metadata 
-            (element_id, positive_prompt, negative_prompt, steps, scale,
-            sampler, seed, strength, noise)
-            VALUES 
-            (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            element_id, 
-            ai_meta.positive_prompt,
-            ai_meta.negative_prompt,
-            ai_meta.steps,
-            ai_meta.scale,
-            ai_meta.sampler,
-            ai_meta.seed,
-            ai_meta.strength,
-            ai_meta.noise
-        )
-        .execute(tx)
-        .await?;
-
-        Ok(())
-    }
-
     async fn add_element_tx(
         tx: &mut SqliteConnection, 
         element: &ElementWithMetadata
@@ -119,26 +92,26 @@ impl Sqlite {
         meta: &write::ElementMetadata
     ) -> Result<(), StorageError> {
 
+        // FIXME: Fix tag aliasing
         if !meta.tags.is_empty() {
             Self::add_tags_tx(tx, Some(element_id), &meta.tags).await?;
         }
        
         sqlx::query!(
-            "INSERT INTO metadata (element_id, importer_id, src_link, src_time, ext_group)
-            VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO metadata (
+                element_id, importer_id, src_link, src_time, 
+                ext_group, raw_meta)
+            VALUES (?, ?, ?, ?, ?, ?)",
             element_id, 
             source,
             meta.src_link,
             meta.src_time,
-            meta.group
+            meta.group,
+            meta.raw_meta
         )
         .execute(&mut *tx)
         .await?;
         
-        if let Some(ai) = &meta.ai_meta {
-            Self::add_ai_metadata_tx(tx, element_id, ai).await?;
-        }
-
         Ok(())
     }
 
@@ -738,30 +711,6 @@ impl Sqlite {
             return Ok(None)
         };
 
-        let src_links = sqlx::query!(
-            r#"SELECT 
-                m.importer_id as "importer_id: MetadataSource", 
-                m.src_link as "src_link!"
-            FROM metadata m
-            WHERE m.element_id = ? AND m.src_link IS NOT NULL"#,
-            id
-        )
-        .map(|anon| (anon.importer_id, anon.src_link))
-        .fetch_all(&self.pool)
-        .await?;
-        
-        let src_times = sqlx::query!(
-            r#"SELECT 
-                m.importer_id as "importer_id: MetadataSource", 
-                m.src_time as "src_time!: UtcDateTime"
-            FROM metadata m
-            WHERE m.element_id = ? AND m.src_time IS NOT NULL"#,
-            id
-        )
-        .map(|anon| (anon.importer_id, anon.src_time))
-        .fetch_all(&self.pool)
-        .await?;
-        
         let (add_time, file_time) = sqlx::query!( // sql
             r#"SELECT 
                 add_time as "add_time!: UtcDateTime", 
@@ -773,15 +722,17 @@ impl Sqlite {
         .map(|anon| (anon.add_time, anon.file_time))
         .fetch_one(&self.pool)
         .await?;
-        
-        let ai_meta = sqlx::query_as( // sql
-            "SELECT * FROM ai_metadata
-            WHERE element_id = ?"    
+
+        let ext_meta = sqlx::query_as( // sql
+            "SELECT importer_id, src_time, src_link, raw_meta
+            FROM metadata
+            WHERE element_id = ?
+            "
         )
         .bind(id)
-        .fetch_optional(&self.pool)
+        .fetch_all(&self.pool)
         .await?;
-
+        
         let tags = sqlx::query_as( // sql
             "SELECT t.*
             FROM tag t, element_tag et
@@ -792,11 +743,9 @@ impl Sqlite {
         .await?;
 
         let meta = read::ElementMetadata {
-            src_links,
-            src_times,
+            ext_meta,
             add_time,
             file_time,
-            ai_meta,
             tags,
         };
         

@@ -101,7 +101,8 @@ impl Pixiv {
                 format!("https://www.pixiv.net/artworks/{}", illust.id)
             ),
             src_time: Some(illust.create_date),
-            ai_meta: None,
+            // TODO: We may stick all remaining metadata here
+            raw_meta: None,
             group: Some(illust.id),
             tags
         }

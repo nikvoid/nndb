@@ -1,4 +1,4 @@
-use std::{str::FromStr, convert::Infallible};
+use std::{str::FromStr, convert::Infallible, borrow::Cow};
 
 use chrono::{DateTime, Utc};
 use enum_iterator::Sequence;
@@ -42,16 +42,12 @@ pub struct Element {
 
 #[derive(Serialize, Deserialize, PartialEq, Clone)]
 pub struct ElementMetadata {
-    /// Link to source (if was imported from other sources)
-    pub src_links: Vec<(MetadataSource, String)>,
-    /// Time when element was added to other source (if present)
-    pub src_times: Vec<(MetadataSource, UtcDateTime)>,
+    /// External metadata
+    pub ext_meta: Vec<ExternalMetadata>,
     /// Time when element was added to db
     pub add_time: UtcDateTime,
     /// Time when element was created/modified
     pub file_time: Option<UtcDateTime>,
-    /// Stable Diffusion/etc metadata
-    pub ai_meta: Option<AIMetadata>,
     /// Tags of the element
     pub tags: Vec<Tag>,
 }
@@ -66,8 +62,22 @@ pub struct Associated {
     pub elements: Vec<Element>
 }
 
-/// Generative Neural Network (SD primarily) metadata
 #[cfg_attr(feature = "backend", derive(sqlx::FromRow))]
+#[derive(Serialize, Deserialize, PartialEq, Clone)]
+pub struct ExternalMetadata {
+    /// Metadata source
+    #[cfg_attr(feature = "backend", sqlx(rename = "importer_id"))]
+    pub source: MetadataSource,
+    /// Link to source (if was imported from other sources)
+    pub src_link: Option<String>,
+    /// Time when element was added to other source (if present)
+    pub src_time: Option<String>,
+    /// Raw Stable Diffusion/etc metadata
+    pub raw_meta: Option<String>
+}
+
+/// TODO: Move this to frontend? 
+/// Generative Neural Network (SD primarily) metadata
 #[derive(Serialize, Deserialize, PartialEq, Clone, Default)]
 pub struct AIMetadata {
     /// Positive prompt
@@ -86,6 +96,21 @@ pub struct AIMetadata {
     pub strength: f32,
     /// Noise
     pub noise: f32,
+}
+
+/// Novel AI image metadata, Comment section
+#[derive(Serialize, Deserialize)]
+pub struct NovelAIMetadata<'a> {
+    pub steps: u32,
+    pub sampler: &'a str,
+    pub seed: i64,
+    pub strength: Option<f32>,
+    pub noise: Option<f32>,
+    pub scale: f32,
+    pub uc: Cow<'a, String>,
+    // This field is merged from Description PNG metadata
+    #[serde(default)]
+    pub prompt: Cow<'a, String>,
 }
 
 /// Struct that represent state of some procedure, 

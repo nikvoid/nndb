@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use anyhow::bail;
 use sqlx::{SqlitePool, SqliteConnection, migrate::{Migrate, MigrationType}};
 use tracing::info;
-use crate::CONFIG;
+use crate::{CONFIG, import::{ElementPrefab, Parser}};
 
 /// Run migrations with ability to call rust procedures.
 ///
@@ -54,30 +54,59 @@ pub fn get_procs(sql: &str) -> Vec<&str> {
 }
 
 async fn run_proc(name: &str, tx: &mut SqliteConnection) -> anyhow::Result<()> {
-match name {
-    "add_file_time" => {
-        let files: Vec<String> = sqlx::query_scalar!(
-            "SELECT filename FROM element"  
-        )
-        .fetch_all(&mut *tx)
-        .await?;
-
-        for file in files {
-            let path = CONFIG.element_pool.path.join(&file);
-            if let Ok(time) = crate::util::get_file_datetime(&path) {
-                sqlx::query!(
-                    "UPDATE element SET file_time = ? WHERE filename = ?",
-                    time, 
-                    file
-                )
-                .execute(&mut *tx)
-                .await?;
+    let files: Vec<String> = sqlx::query_scalar!(
+        "SELECT filename FROM element"  
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+    
+    match name {
+        "add_file_time" => {
+            for file in files {
+                let path = CONFIG.element_pool.path.join(&file);
+                if let Ok(time) = crate::util::get_file_datetime(&path) {
+                    sqlx::query!(
+                        "UPDATE element SET file_time = ? WHERE filename = ?",
+                        time, 
+                        file
+                    )
+                    .execute(&mut *tx)
+                    .await?;
+                }
             }
+        
+            Ok(())
+        }    
+
+        "add_raw_sd_meta" => {
+            for file in files {
+                let path = CONFIG.element_pool.path.join(&file);
+                let prefab = ElementPrefab {
+                    data: std::fs::read(&path)?,
+                    path,
+                };
+
+                let parser = Parser::scan(&prefab);
+                if parser != Parser::Passthrough {
+                    let meta = parser.extract_metadata(&prefab)?;
+                    let raw_meta = meta.raw_meta;
+
+                    sqlx::query!(
+                        "UPDATE metadata
+                        SET raw_meta = ? 
+                        FROM (SELECT id FROM element WHERE filename = ?)
+                        WHERE metadata.element_id = id",
+                        raw_meta, 
+                        file
+                    )
+                    .execute(&mut *tx)
+                    .await?;
+                }
+            }
+            
+            Ok(())
         }
         
-        Ok(())
-    }    
-        
-    _ => bail!("no such procedure: `{}`", name)
-}
+        _ => bail!("no such procedure: `{}`", name)
+    }
 } 

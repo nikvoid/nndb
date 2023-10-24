@@ -188,7 +188,7 @@ pub fn hash_file(prefab: ElementPrefab) -> anyhow::Result<ElementWithMetadata> {
         true => (None, false),
     };
 
-    let metadata = parser_id.parse_metadata(&prefab)?;
+    let metadata = parser_id.extract_metadata(&prefab)?;
      
     let element = ElementToParse {
         filename: new_name,
