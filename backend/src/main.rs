@@ -8,7 +8,7 @@ use tracing_actix_web::TracingLogger;
 use tracing_subscriber::fmt::writer::Tee;
 use util::LateInit;
 
-use crate::dao::STORAGE;
+use crate::dao::{STORAGE, StorageBackend};
 
 mod model;
 mod dao;
@@ -89,6 +89,7 @@ async fn main() -> anyhow::Result<()> {
 
     info!("File reads are done {:?}ly", CONFIG.read_files);
 
+    STORAGE.init(StorageBackend::init(&CONFIG.db_url).await?);
     STORAGE.reload_tag_aliases_index().await?;
 
     info!(addr=CONFIG.bind_address, port=CONFIG.port, "Starting server");
