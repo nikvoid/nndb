@@ -77,7 +77,7 @@ impl Component for ElementPage {
                         html! {
                             <>
                                 <div class="group-label">
-                                    { source.name() } { ": " } { value }
+                                    { source.group_name() } { ": " } { value }
                                 </div>
                                 <ElementList content={elements.clone()} />
                             </>

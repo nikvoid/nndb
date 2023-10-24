@@ -1,6 +1,6 @@
 use std::{io::Cursor, borrow::Cow};
 use anyhow::Context;
-use nndb_common::NovelAIMetadata;
+use nndb_common::metadata::novelai::Metadata;
 
 use crate::{model::{write::{ElementMetadata, Tag}, TagType}, dao::STORAGE};
 
@@ -59,7 +59,7 @@ pub fn extract_metadata(
     // Prompt can be in iTXt entry or tEXt entry with key "Description"
     let prompt = reader.info().uncompressed_latin1_text.iter().find_map(|e| {
         match e.keyword.as_str() {
-            "Description" => Some(Cow::Borrowed(&e.text)),
+            "Description" => Some(Cow::Borrowed(e.text.as_str())),
             _ => None
         }
     }).or_else(|| reader.info().utf8_text.iter().find_map(|e| {
@@ -84,7 +84,7 @@ pub fn extract_metadata(
         .chain(Tag::new("novelai_generated", None, TagType::Metadata))
         .collect();
     
-    let mut meta: NovelAIMetadata = serde_json::from_str(others)?;
+    let mut meta: Metadata = serde_json::from_str(others)?;
     
     // Merge prompt
     meta.prompt = prompt;

@@ -2,10 +2,10 @@
 //!
 //! https://github.com/AUTOMATIC1111/stable-diffusion-webui
 //! TODO: Support non-png/EXIF?
-use std::{io::Cursor, borrow::Cow, iter::once};
+use std::io::Cursor;
 
 use anyhow::bail;
-use itertools::Itertools;
+use nndb_common::webui::iter_metadata;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
@@ -74,36 +74,6 @@ pub fn can_parse(element: &ElementPrefab) -> bool {
     }
     
     false
-}
-
-/// Layout:
-/// <prompt>
-/// ...
-/// Negative prompt: <neg_prompt>
-/// ...
-/// Steps: <steps>, Sampler: <sampler>, CFG Scale: ...
-pub fn iter_metadata(raw: &str) -> impl Iterator<Item = (&str, Cow<'_, str>)> {
-    let mut line_iter = raw.lines().peekable();
-    
-    let prompt = line_iter
-        .peeking_take_while(|l| !l.starts_with("Negative prompt:"))
-        .join(" ");
-    
-    let neg_prompt = line_iter
-        .peeking_take_while(|l| !l.starts_with("Steps")) 
-        .map(|l| l.trim_start_matches("Negative prompt: "))
-        .join(" ");
-    
-    // Parse other metadata
-    let ai_meta = line_iter.next().into_iter().flat_map(|other| other
-        .split(',')
-        .filter_map(|m| m.split(':').collect_tuple())
-        .map(|(k, v)| (k.trim(), Cow::Borrowed(v.trim())))
-    );
-    
-    once(("Prompt", Cow::Owned(prompt)))
-        .chain(once(("Negative prompt", Cow::Owned(neg_prompt))))
-        .chain(ai_meta)
 }
 
 pub fn extract_metadata(

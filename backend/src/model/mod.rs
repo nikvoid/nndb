@@ -1,4 +1,4 @@
-pub use nndb_common::{TagType, AIMetadata, Summary, UtcDateTime};
+pub use nndb_common::{TagType, Summary, UtcDateTime};
 
 pub const SIGNATURE_LEN: usize = 544;
 pub const MD5_LEN: usize = 16;

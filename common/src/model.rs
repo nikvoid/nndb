@@ -1,8 +1,10 @@
-use std::{str::FromStr, convert::Infallible, borrow::Cow};
+use std::{str::FromStr, convert::Infallible};
 
 use chrono::{DateTime, Utc};
 use enum_iterator::Sequence;
 use serde::{Serialize, Deserialize};
+
+use crate::metadata::MetadataSource;
 
 pub type UtcDateTime = DateTime<Utc>;
 
@@ -76,43 +78,6 @@ pub struct ExternalMetadata {
     pub raw_meta: Option<String>
 }
 
-/// TODO: Move this to frontend? 
-/// Generative Neural Network (SD primarily) metadata
-#[derive(Serialize, Deserialize, PartialEq, Clone, Default)]
-pub struct AIMetadata {
-    /// Positive prompt
-    pub positive_prompt: String,
-    /// Negative prompt
-    pub negative_prompt: Option<String>,
-    /// Step count
-    pub steps: u32,
-    /// CFG scale
-    pub scale: f32,
-    /// Used sampler
-    pub sampler: String,
-    /// Generation seed
-    pub seed: i64,
-    /// Denoising strength
-    pub strength: f32,
-    /// Noise
-    pub noise: f32,
-}
-
-/// Novel AI image metadata, Comment section
-#[derive(Serialize, Deserialize)]
-pub struct NovelAIMetadata<'a> {
-    pub steps: u32,
-    pub sampler: &'a str,
-    pub seed: i64,
-    pub strength: Option<f32>,
-    pub noise: Option<f32>,
-    pub scale: f32,
-    pub uc: Cow<'a, String>,
-    // This field is merged from Description PNG metadata
-    #[serde(default)]
-    pub prompt: Cow<'a, String>,
-}
-
 /// Struct that represent state of some procedure, 
 /// where there are many similar operations that can be counted
 #[derive(Serialize, Deserialize, PartialEq, Clone, Default)]
@@ -148,34 +113,6 @@ pub enum TagType {
     Metadata  = 4,
     #[default]
     Tag       = 5,
-}
-
-/// Source of grouping data and/or metadata
-#[cfg_attr(feature = "backend", derive(sqlx::Type))]
-#[derive(
-    Clone, 
-    Copy, 
-    Debug,
-    PartialEq,
-    Sequence,
-    Serialize,
-    Deserialize,
-    PartialOrd,
-    Ord,
-    Eq,
-)]
-#[repr(u8)]
-pub enum MetadataSource {
-    /// Stub value
-    Passthrough = 0,
-    /// Stable diffusion seed
-    NovelAI     = 1,
-    /// Stable diffusion seed
-    Webui       = 2,
-    /// Image signature (id doesn't recorded to db)
-    Signature   = 100,
-    /// Pixiv illust id
-    Pixiv       = 101
 }
 
 /// Database summary
@@ -234,18 +171,6 @@ impl TagType {
             TagType::Title => "Title",
             TagType::Metadata => "Metadata",
             TagType::Tag => "Tag",
-        }
-    }
-}
-
-impl MetadataSource {
-    pub fn name(&self) -> &'static str {
-        match self {
-            MetadataSource::Passthrough => "Passthrough stub. You should not see this.",
-            MetadataSource::Signature => "Signature",
-            MetadataSource::Webui => "Webui generation seed",
-            MetadataSource::NovelAI => "NovelAI generation seed",
-            MetadataSource::Pixiv => "Pixiv illust",
         }
     }
 }
