@@ -762,12 +762,15 @@ impl Sqlite {
         .fetch_all(&self.pool)
         .await?;
         
-        let add_time = sqlx::query_scalar( // sql
-            "SELECT add_time
+        let (add_time, file_time) = sqlx::query!( // sql
+            r#"SELECT 
+                add_time as "add_time!: UtcDateTime", 
+                file_time as "file_time?: UtcDateTime"
             FROM element
-            WHERE id = ?"
+            WHERE id = ?"#,
+            id
         )
-        .bind(id)
+        .map(|anon| (anon.add_time, anon.file_time))
         .fetch_one(&self.pool)
         .await?;
         
@@ -792,6 +795,7 @@ impl Sqlite {
             src_links,
             src_times,
             add_time,
+            file_time,
             ai_meta,
             tags,
         };

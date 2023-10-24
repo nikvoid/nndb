@@ -40,6 +40,9 @@ pub fn Metadata(props: &MetadataProps) -> Html {
             <div class="section-part">
                 { "Added at: " }{ props.meta.add_time }
             </div>
+            <div class="section-part">
+                { "Created at: " }{ props.meta.file_time }
+            </div>
             { for times }
 
             // Various SD parameters

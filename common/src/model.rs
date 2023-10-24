@@ -48,6 +48,8 @@ pub struct ElementMetadata {
     pub src_times: Vec<(MetadataSource, UtcDateTime)>,
     /// Time when element was added to db
     pub add_time: UtcDateTime,
+    /// Time when element was created/modified
+    pub file_time: Option<UtcDateTime>,
     /// Stable Diffusion/etc metadata
     pub ai_meta: Option<AIMetadata>,
     /// Tags of the element
