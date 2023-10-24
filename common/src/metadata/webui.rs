@@ -27,11 +27,36 @@ pub fn iter_metadata(raw: &str) -> impl Iterator<Item = (&str, Cow<'_, str>)> {
         .join(" ");
     
     // Parse other metadata
-    let ai_meta = line_iter.next().into_iter().flat_map(|other| other
-        .split(',')
-        .filter_map(|m| m.split(':').collect_tuple())
-        .map(|(k, v)| (k.trim(), Cow::Borrowed(v.trim())))
-    );
+    let ai_meta = line_iter.next().into_iter().flat_map(|other| {
+        let mut param_slice = other;
+        
+        std::iter::from_fn(move || {
+            let (k, rem) = param_slice.split_once(':')?;
+            let rem = rem.trim();
+            
+            // Complex parameter with commas inside
+            let v = if rem.starts_with('"') {
+                // Find next quote
+                let pos = rem.strip_prefix('"')?.find('"')? + 1;
+                param_slice = &rem[pos..];
+                
+                // Return stripped complex value
+                &rem[1..pos - 1]
+            } else {
+                let pos = rem.find(',').unwrap_or(rem.len());
+                param_slice = &rem[pos..];
+
+                &rem[..pos]
+            };
+
+            // Consume comma
+            if let Some(comma) = param_slice.find(',') {
+                param_slice = &param_slice[comma + 1..];   
+            }
+            
+            Some((k.trim(), Cow::Borrowed(v.trim())))
+        })
+    });
     
     once(("Prompt", Cow::Owned(prompt)))
         .chain(once(("Negative prompt", Cow::Owned(neg_prompt))))
