@@ -92,7 +92,6 @@ impl Sqlite {
         meta: &write::ElementMetadata
     ) -> Result<(), StorageError> {
 
-        // FIXME: Fix tag aliasing
         if !meta.tags.is_empty() {
             Self::add_tags_tx(tx, Some(element_id), &meta.tags).await?;
         }

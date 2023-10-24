@@ -2,7 +2,7 @@ use std::{io::Cursor, borrow::Cow};
 use anyhow::Context;
 use nndb_common::NovelAIMetadata;
 
-use crate::model::{write::{ElementMetadata, Tag}, TagType};
+use crate::{model::{write::{ElementMetadata, Tag}, TagType}, dao::STORAGE};
 
 use super::{ElementPrefab, is_png};
 
@@ -78,7 +78,8 @@ pub fn extract_metadata(
         
     let tags = parse_prompt(&prompt)
         .filter_map(|t| {
-            Tag::new(t, None, TagType::Tag)
+            let name = STORAGE.get().and_then(|s| s.lookup_alias(t));
+            Tag::new(name.as_deref().unwrap_or(t), None, TagType::Tag)
         })
         .chain(Tag::new("novelai_generated", None, TagType::Metadata))
         .collect();

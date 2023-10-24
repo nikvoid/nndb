@@ -323,6 +323,10 @@ impl<T> LateInit<T> {
     pub fn init(&self, value: T) {
         assert!(self.cell.set(value).is_ok())
     }
+
+    pub fn get(&self) -> Option<&T> {
+        self.cell.get()
+    }
 }
 
 impl<T> std::ops::Deref for LateInit<T> {

@@ -9,7 +9,7 @@ use itertools::Itertools;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::model::{write::{ElementMetadata, Tag}, TagType};
+use crate::{model::{write::{ElementMetadata, Tag}, TagType}, dao::STORAGE};
 
 use super::{ElementPrefab, is_png};
 
@@ -125,7 +125,9 @@ pub fn extract_metadata(
 
     let tags = parse_prompt(&meta_iter.next().unwrap().1)
         .filter_map(|t| { 
-            Tag::new(&t, None, TagType::Tag)
+            let name = STORAGE.get().and_then(|s| s.lookup_alias(&t))
+                .unwrap_or(t);
+            Tag::new(&name, None, TagType::Tag)
         })
         // Append source tag 
         .chain(Tag::new("webui_generated", None, TagType::Metadata))
