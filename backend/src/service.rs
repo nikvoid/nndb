@@ -183,7 +183,7 @@ pub async fn update_metadata() -> anyhow::Result<()> {
         .filter(|group| !group.is_empty())
         // Run all importers concurrently 
         .map(|group| async {
-            let importer = group.first().unwrap().importer_id.get_singleton();
+            let importer = group.first().unwrap().importer_id;
 
             for imp in group {
                 if importer.available() {

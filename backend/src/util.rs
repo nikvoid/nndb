@@ -152,7 +152,6 @@ pub fn get_file_datetime(path: &Path) -> anyhow::Result<UtcDateTime> {
 /// Derive file hash, signature, and, if possible, metadata
 pub fn hash_file(prefab: ElementPrefab) -> anyhow::Result<ElementWithMetadata> {
     let parser_id = Parser::scan(&prefab);
-    let parser = parser_id.get_singleton();
 
     let hash: [u8; MD5_LEN] = Md5::digest(&prefab.data).into();    
 
@@ -186,7 +185,7 @@ pub fn hash_file(prefab: ElementPrefab) -> anyhow::Result<ElementWithMetadata> {
         true => (None, false),
     };
 
-    let metadata = parser.parse_metadata(&prefab)?;
+    let metadata = parser_id.parse_metadata(&prefab)?;
      
     let element = ElementToParse {
         filename: new_name,

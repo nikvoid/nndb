@@ -1,11 +1,9 @@
 use std::path::PathBuf;
 
-use crate::model::{write::ElementMetadata, read::PendingImport};
-use async_trait::async_trait;
+use crate::model::{write::{ElementMetadata, Tag}, read::PendingImport};
 use enum_iterator::Sequence;
-use nndb_common::MetadataSource;
+use nndb_common::{MetadataSource, TagType};
 
-mod unknown;
 mod novelai;
 mod webui;
 mod pixiv;
@@ -38,18 +36,9 @@ impl Parser {
     /// Decide which importer to use with file
     pub fn scan(element: &ElementPrefab) -> Self  {
         match () {
-            _ if webui::Webui.can_parse(element) => Self::Webui,
-            _ if novelai::NovelAI.can_parse(element) => Self::NovelAI,
+            _ if webui::can_parse(element) => Self::Webui,
+            _ if novelai::can_parse(element) => Self::NovelAI,
             _ => Self::Passthrough
-        }
-    }
-
-    /// Get singleton for chosen importer
-    pub fn get_singleton(self) -> &'static dyn MetadataParser {
-        match self {
-            Self::Passthrough => &unknown::Passthrough,
-            Self::NovelAI => &novelai::NovelAI,
-            Self::Webui => &webui::Webui,
         }
     }
 
@@ -59,6 +48,24 @@ impl Parser {
             Parser::Passthrough => MetadataSource::Passthrough,
             Parser::NovelAI => MetadataSource::NovelAI,
             Parser::Webui => MetadataSource::Webui,
+        }
+    }
+    
+    /// Parse metadata on hash deriving stage, provided access to file data
+    pub fn parse_metadata(
+        &self, 
+        element: &ElementPrefab
+    ) -> anyhow::Result<ElementMetadata> {
+        match self {
+            Parser::Passthrough => Ok(ElementMetadata {
+                src_link: None,
+                src_time: None,
+                ai_meta: None,
+                group: None,
+                tags: vec![Tag::new("unknown_source", None, TagType::Metadata).unwrap()],
+            }),
+            Parser::NovelAI => novelai::parse_metadata(element),
+            Parser::Webui => webui::parse_metadata(element),
         }
     }
 }
@@ -71,17 +78,34 @@ pub enum Fetcher {
 }
 
 impl Fetcher {
-    /// Get singleton for chosen importer
-    pub fn get_singleton(self) -> &'static dyn MetadataFetcher {
-        match self {
-            Self::Pixiv => &*pixiv::PIXIV,
-        }
-    }
-
     /// Get metadata source corresponding to fetcher
     pub fn metadata_source(&self) -> MetadataSource {
         match self {
             Fetcher::Pixiv => MetadataSource::Pixiv,
+        }
+    }
+    
+    /// Check if importer can get metadata for element
+    pub fn supported(&self, import: &PendingImport) -> bool {
+        match self {
+            Fetcher::Pixiv => pixiv::PIXIV.supported(import),
+        }
+    }
+    
+    /// Check if importer can fetch metadata now
+    pub fn available(&self) -> bool { 
+        match self {
+            Fetcher::Pixiv => pixiv::PIXIV.available(),
+        }    
+    }
+    
+    /// Fetch metadata for pending import (network access implied)
+    pub async fn fetch_metadata(
+        &self,
+        import: &PendingImport
+    ) -> anyhow::Result<Option<ElementMetadata>> {
+        match self {
+            Fetcher::Pixiv => pixiv::PIXIV.fetch_metadata(import).await,
         }
     }
 }
@@ -90,33 +114,6 @@ pub enum FetchStatus {
     Success(ElementMetadata),
     Fail,
     NotSupported,
-}
-
-pub trait MetadataParser: Sync {
-    /// Check if importer can get metadata for element
-    fn can_parse(&self, element: &ElementPrefab) -> bool;
-
-    /// Parse metadata on hash deriving stage, provided access to file data
-    fn parse_metadata(
-        &self, 
-        element: &ElementPrefab
-    ) -> anyhow::Result<ElementMetadata>;
-
-}
-
-#[async_trait]
-pub trait MetadataFetcher: Sync {
-    /// Check if importer can get metadata for element
-    fn supported(&self, import: &PendingImport) -> bool;
-    
-    /// Check if importer can fetch metadata now
-    fn available(&self) -> bool { true }
-    
-    /// Fetch metadata for pending import (network access implied)
-    async fn fetch_metadata(
-        &self,
-        import: &PendingImport
-    ) -> anyhow::Result<Option<ElementMetadata>>;
 }
 
 // Check PNG header

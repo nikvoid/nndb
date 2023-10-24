@@ -1,5 +1,4 @@
 use anyhow::bail;
-use async_trait::async_trait;
 use moka::future::Cache;
 use once_cell::sync::Lazy;
 use pixivcrab::{AppApi, AppApiConfig, AuthMethod, models::illust::Illust};
@@ -8,8 +7,6 @@ use reqwest::{ClientBuilder, Client, StatusCode};
 use serde::Deserialize;
 
 use crate::{model::{read::PendingImport, write::{ElementMetadata, Tag}, TagType}, CONFIG, dao::STORAGE, config::PixivCreds};
-
-use super::MetadataFetcher;
 
 // Pixiv metadata fetcher
 pub struct Pixiv {
@@ -109,29 +106,19 @@ impl Pixiv {
             tags
         }
     }
-}
-
-/// Wrapper for parsing
-#[derive(Deserialize)]
-struct IllustResponse {
-    illust: Illust
-}
-
-#[async_trait]
-impl MetadataFetcher for Pixiv {
     
     /// Check if importer can get metadata for element
     /// Try to match typical web or app filename 
-    fn supported(&self, import: &PendingImport) -> bool {
+    pub fn supported(&self, import: &PendingImport) -> bool {
         APP_REX.is_match(&import.orig_filename) 
         || WEB_REX.is_match(&import.orig_filename)
     }
     
     /// Check if importer can fetch metadata now
-    fn available(&self) -> bool { self.api.is_some() }
+    pub fn available(&self) -> bool { self.api.is_some() }
     
     /// Fetch metadata for pending import (network access implied)
-    async fn fetch_metadata(
+    pub async fn fetch_metadata(
         &self,
         import: &PendingImport
     ) -> anyhow::Result<Option<ElementMetadata>> {
@@ -170,4 +157,10 @@ impl MetadataFetcher for Pixiv {
             _ => bail!(resp.error_for_status().unwrap_err())
         }
     }
+}
+
+/// Wrapper for parsing
+#[derive(Deserialize)]
+struct IllustResponse {
+    illust: Illust
 }

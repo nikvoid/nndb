@@ -566,7 +566,7 @@ impl Sqlite {
     /// Get all possible metadata fetch variants for elements.
     pub async fn get_pending_imports(&self) -> Result<Vec<PendingImport>, StorageError> {
         let fetchers: Vec<_> = enum_iterator::all::<Fetcher>()
-            .filter(|&f| f.get_singleton().available())
+            .filter(|&f| f.available())
             .collect();
 
         let mut conn = self.pool.acquire().await?;

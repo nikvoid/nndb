@@ -5,9 +5,7 @@ use serde::Deserialize;
 
 use crate::{model::{write::{ElementMetadata, Tag}, TagType, AIMetadata}, dao::STORAGE};
 
-use super::{MetadataParser, ElementPrefab, is_png};
-
-pub struct NovelAI;
+use super::{ElementPrefab, is_png};
 
 #[derive(Deserialize)]
 struct Metadata<'a> {
@@ -42,81 +40,78 @@ fn parse_prompt(prompt: &str) -> impl Iterator<Item = &str> + '_ {
         })
 }
 
-impl MetadataParser for NovelAI {
-    /// Check if png contains `Software = NovelAI`
-    fn can_parse(&self, element: &ElementPrefab) -> bool {
-        // PNG header
-        if !is_png(element) {
-            return false
-        }
-        
-        let mut cursor = Cursor::new(&element.data);
-        let dec = png::Decoder::new(&mut cursor);
-        if let Ok(reader) = dec.read_info() {
-            for entry in &reader.info().uncompressed_latin1_text {
-                if let ("Software", "NovelAI") = 
-                    (entry.keyword.as_str(), entry.text.as_str()) {
-                    return true
-                } 
-            }
-        }
-        false
+/// Check if png contains `Software = NovelAI`
+pub fn can_parse(element: &ElementPrefab) -> bool {
+    // PNG header
+    if !is_png(element) {
+        return false
     }
+    
+    let mut cursor = Cursor::new(&element.data);
+    let dec = png::Decoder::new(&mut cursor);
+    if let Ok(reader) = dec.read_info() {
+        for entry in &reader.info().uncompressed_latin1_text {
+            if let ("Software", "NovelAI") = 
+                (entry.keyword.as_str(), entry.text.as_str()) {
+                return true
+            } 
+        }
+    }
+    false
+}
 
-    /// Parse metadata on hash deriving stage, provided access to file data
-    fn parse_metadata(
-        &self, 
-        element: &ElementPrefab
-    ) -> anyhow::Result<ElementMetadata> {
-        let mut cursor = Cursor::new(&element.data);
-        let dec = png::Decoder::new(&mut cursor);
-        let reader = dec.read_info()?;
+/// Parse metadata on hash deriving stage, provided access to file data
+pub fn parse_metadata(
+    element: &ElementPrefab
+) -> anyhow::Result<ElementMetadata> {
+    let mut cursor = Cursor::new(&element.data);
+    let dec = png::Decoder::new(&mut cursor);
+    let reader = dec.read_info()?;
+    
+    // Prompt can be in iTXt entry or tEXt entry with key "Description"
+    let prompt = reader.info().uncompressed_latin1_text.iter().find_map(|e| {
+        match e.keyword.as_str() {
+            "Description" => Some(Cow::Borrowed(&e.text)),
+            _ => None
+        }
+    }).or_else(|| reader.info().utf8_text.iter().find_map(|e| {
+        match e.keyword.as_str() {
+            "Description" => Some(Cow::Owned(e.get_text().ok()?)),
+            _ => None    
+        }   
+    })).context("prompt not found")?;
+    
+    let others = reader.info().uncompressed_latin1_text.iter().find_map(|e| 
+        match e.keyword.as_str() {
+            "Comment" => Some(&e.text),
+            _ => None
+        }
+    ).context("novelai metadata not found")?;
         
-        // Prompt can be in iTXt entry or tEXt entry with key "Description"
-        let prompt = reader.info().uncompressed_latin1_text.iter().find_map(|e| {
-            match e.keyword.as_str() {
-                "Description" => Some(Cow::Borrowed(&e.text)),
-                _ => None
-            }
-        }).or_else(|| reader.info().utf8_text.iter().find_map(|e| {
-            match e.keyword.as_str() {
-                "Description" => Some(Cow::Owned(e.get_text().ok()?)),
-                _ => None    
-            }   
-        })).context("prompt not found")?;
-        
-        let others = reader.info().uncompressed_latin1_text.iter().find_map(|e| 
-            match e.keyword.as_str() {
-                "Comment" => Some(&e.text),
-                _ => None
-            }
-        ).context("novelai metadata not found")?;
-            
-        let meta: Metadata = serde_json::from_str(others)?;
+    let meta: Metadata = serde_json::from_str(others)?;
 
-        let tags = parse_prompt(&prompt)
-            .filter_map(|t| match STORAGE.lookup_alias(t) {
-                Some(name) => Tag::new(&name, None, TagType::Tag),
-                None => Tag::new(t, None, TagType::Tag)
-            })
-            .chain(Tag::new("novelai_generated", None, TagType::Metadata))
-            .collect();
-        
-        Ok(ElementMetadata {
-            src_link: None,
-            src_time: None,
-            group: Some(meta.seed),
-            ai_meta: Some(AIMetadata {
-                positive_prompt: prompt.to_string(),
-                negative_prompt: Some(meta.uc.to_string()),
-                steps: meta.steps,
-                scale: meta.scale,
-                sampler: meta.sampler.to_owned(),
-                seed: meta.seed,
-                strength: meta.strength.unwrap_or_default(),
-                noise: meta.noise.unwrap_or_default()
-            }),
-            tags
+    let tags = parse_prompt(&prompt)
+        .filter_map(|t| match STORAGE.lookup_alias(t) {
+            Some(name) => Tag::new(&name, None, TagType::Tag),
+            None => Tag::new(t, None, TagType::Tag)
         })
-    }
+        .chain(Tag::new("novelai_generated", None, TagType::Metadata))
+        .collect();
+    
+    Ok(ElementMetadata {
+        src_link: None,
+        src_time: None,
+        group: Some(meta.seed),
+        ai_meta: Some(AIMetadata {
+            positive_prompt: prompt.to_string(),
+            negative_prompt: Some(meta.uc.to_string()),
+            steps: meta.steps,
+            scale: meta.scale,
+            sampler: meta.sampler.to_owned(),
+            seed: meta.seed,
+            strength: meta.strength.unwrap_or_default(),
+            noise: meta.noise.unwrap_or_default()
+        }),
+        tags
+    })
 }
