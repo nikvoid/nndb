@@ -35,7 +35,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
                 tx.apply(mig).await?;
                 for proc in get_procs(&mig.sql) {
                     info!("running procedure `{proc}` (part of `{}` migration)", mig.description);
-                    ProcRegistry::run_proc(proc, &mut tx).await?;
+                    run_proc(proc, &mut tx).await?;
                 }
             },
         }
@@ -53,31 +53,9 @@ pub fn get_procs(sql: &str) -> Vec<&str> {
         .collect()
 }
 
-macro_rules! rust_proc {
-    ($registry:ident, $tx:ident; $(
-        $id:ident = $blk:expr;
-    )*) => {        
-        struct $registry;
-        impl $registry {
-            #[allow(clippy::redundant_closure_call)]
-            pub async fn run_proc(
-                name: &str, 
-                $tx: &mut SqliteConnection
-            ) -> anyhow::Result<()> {
-                match name {
-                    $(
-                        stringify!($id) => $blk,
-                    )*
-                    _ => bail!("no such procedure: `{}`", name)
-                }
-            }
-        }
-    };
-}
-
-rust_proc! { ProcRegistry, tx;
-    // Add time when element was last modified
-    add_file_time = {        
+async fn run_proc(name: &str, tx: &mut SqliteConnection) -> anyhow::Result<()> {
+match name {
+    "add_file_time" => {
         let files: Vec<String> = sqlx::query_scalar!(
             "SELECT filename FROM element"  
         )
@@ -98,5 +76,8 @@ rust_proc! { ProcRegistry, tx;
         }
         
         Ok(())
-    };
+    }    
+        
+    _ => bail!("no such procedure: `{}`", name)
 }
+} 
