@@ -23,7 +23,7 @@ use crate::{
 };
 use futures::{StreamExt, future::BoxFuture};
 
-use tracing::error;
+use tracing::{error, warn};
 
 pub struct Sqlite {
     pool: SqlitePool,
@@ -470,28 +470,36 @@ impl Sqlite {
         
         for elem in elements {
             let ElementWithMetadata(e, ..) = elem.as_ref();
-            
+
             // Deduplication
-            match (hashes.contains(&e.hash), &CONFIG.testing_mode) {
-                (true, true) => continue,
-                (true, false) => {
+            if hashes.contains(&e.hash) {
+                warn!(name=e.orig_filename, "duplicate, discarding");
+                
+                // Remove duplicated file if not in testing mode
+                if !CONFIG.testing_mode {
                     std::fs::remove_file(&e.path).ok();
-                },
-                _ => ()
-            };
+                }
+                continue;
+            }
             
             let mut tx = self.pool.begin().await?;
         
-            o_path.push(&e.filename);
-            
             let id = match Self::add_element_tx(&mut tx, elem.as_ref()).await {
-                Ok(id) => Some(id),
+                Ok(id) => id,
                 Err(err) => {
                     error!(?err, name=e.orig_filename, "failed to add element");
-                    None
+                    continue;
                 },
             }; 
+            
+            // Add tags derived from path to file
+            let tags = util::get_tags_from_path(&e.path);
+            if !tags.is_empty() {
+                Self::add_tags_tx(&mut tx, Some(id), tags.as_slice()).await?;
+            }
         
+            o_path.push(&e.filename);
+            
             // Move or copy elements
             if let Err(err) = if CONFIG.testing_mode {
                 std::fs::copy(&e.path, &o_path).map(|_| ())
@@ -499,18 +507,12 @@ impl Sqlite {
                 std::fs::rename(&e.path, &o_path)
             } {
                 error!(?err, name=e.orig_filename, "failed to move file"); 
+                o_path.pop();
+                continue;
             }; 
             
             o_path.pop();
 
-            // Add tags derived from path to file
-            if let Some(id) = id {
-                let tags = util::get_tags_from_path(&e.path);
-                if !tags.is_empty() {
-                    Self::add_tags_tx(&mut tx, Some(id), tags.as_slice()).await?;
-                }
-            }
-            
             tx.commit().await?;
             // Add recently inserted hash
             hashes.push(e.hash);
