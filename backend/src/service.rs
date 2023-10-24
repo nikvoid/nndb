@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc};
+use std::path::PathBuf;
 use anyhow::{Context, anyhow};
 use atomic::{Atomic, Ordering};
 use futures::{stream::FuturesUnordered, StreamExt};
@@ -120,50 +120,20 @@ pub async fn scan_files() -> anyhow::Result<u32> {
                         tx.blocking_send(meta).ok();
                     });
             },
-            // Here number of files in memory is constrained only by relation between
-            // speed of CPU and Disk I/O, so we need a constraint to prevent OOM
+            // This way file data will be pulled from storage lazily according to parallel demand  
             ReadFiles::Sequential => {
-                rayon::scope(|scope| {
-                    // Prevent OOM error
-                    let max_files = CONFIG.max_files_in_memory as usize;
-                    let files_var = Arc::new((
-                        parking_lot::Mutex::new(0usize),
-                        parking_lot::Condvar::new()
-                    ));
-
+                files.into_iter()
                     // Read each file in this thread
+                    .map(|(path, _)| {
+                        let res = std::fs::read(&path);
+                        (path, res)
+                    })
                     // Offload hashing to multiple threads
-                    for (path, _) in files {
-                        let (mtx, var) = &*files_var;
-                        let data = std::fs::read(&path);
-
-                        // Increment file count
-                        {
-                            let mut files = mtx.lock();
-                            *files += 1;
-                        }
-
-                        // Spawn new task for each file
-                        let memory_var2 = files_var.clone();
-                        let sender = tx.clone();
-                        scope.spawn(move |_| {
-                            if let Some(meta) = process_file(path, data) {
-                                sender.blocking_send(meta).ok();
-                            }
-                            // Decrement file count
-                            let (mtx, var) = &*memory_var2;
-                            let mut files = mtx.lock();
-                            *files -= 1;
-                            var.notify_all();
-                        });
-
-                        // Wait for files to be released
-                        let mut files = mtx.lock();
-                        if *files >= max_files {
-                            var.wait_while(&mut files, |files| *files >= max_files);
-                        }
-                    }
-                });
+                    .par_bridge()
+                    .filter_map(|(path, res)| process_file(path, res))
+                    .for_each(|meta| {
+                        tx.blocking_send(meta).ok();
+                    });  
             },
         };
 
@@ -172,8 +142,7 @@ pub async fn scan_files() -> anyhow::Result<u32> {
     });
 
     let mut count = 0;
-    let updater = _guard.updater();
-
+    
     // Add elements in chunks of 1000
     let mut buffer = Vec::with_capacity(1000);
     while let Some(meta) = rx.recv().await {
