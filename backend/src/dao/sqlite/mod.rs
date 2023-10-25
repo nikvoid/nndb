@@ -219,14 +219,14 @@ impl Sqlite {
         tx: &mut SqliteConnection,
         db_name: &str,
         tables: &[(&str, &[T])],
-        mut inner: F
+        inner: F
     ) -> Result<Out, StorageError>
     where 
         for<'a> T: sqlx::Type<sqlx::Sqlite>
             + sqlx::Encode<'a, sqlx::Sqlite>
             + Clone 
             + Send,
-        for<'a> F: FnMut(
+        for<'a> F: FnOnce(
             &'a mut SqliteConnection
         ) -> BoxFuture<'a, Result<Out, StorageError>>,
     {
@@ -303,11 +303,15 @@ impl Sqlite {
         
         let mut group = None;
         let mut ext_group = None;
+        let mut metadata = None;
         for meta in search::parse_query(query) {
             match meta {
                 Term::Tag(..) => continue,
                 Term::Group(id) => group = Some(id),
                 Term::ExtGroup(id) => ext_group = Some(id),
+                Term::Meta(m) => metadata = Some(format!("%{m}%")),
+                // We cannot respond with anything meaningful on this
+                Term::Raw(_) => return Ok(vec![]),
             }
         }
 
@@ -333,7 +337,7 @@ impl Sqlite {
         
         // Count of positive tags
         let pos_tags: i64 = pos_tag_set.len() as i64;
-        let ids = Self::with_temp_array_tx(tx, "mem", &arrays, |tx| async move {
+        let ids = Self::with_temp_array_tx(tx, "mem", &arrays, move |tx| async move {
             let ids: Vec<u32> = sqlx::query_scalar(
                 &format!( // sql
                 "
@@ -346,6 +350,7 @@ impl Sqlite {
                     1
                     {cond_group}
                     {cond_ext_group}
+                    {cond_metadata}
                 GROUP BY e.id
                 HAVING 
                     CASE ?1
@@ -369,7 +374,7 @@ impl Sqlite {
                     sum(t.id IN mem.neg_tags) = 0 
                 ORDER BY e.file_time DESC",
                 // Add joins on demand
-                join_metadata = ext_group.is_some()
+                join_metadata = (ext_group.is_some() || metadata.is_some())
                     .then_some("JOIN metadata m ON m.element_id = e.id")
                     .unwrap_or_default(),
                 join_group_meta = group.is_some()
@@ -382,8 +387,12 @@ impl Sqlite {
                 cond_ext_group = ext_group
                     .map(|id| format!("AND m.ext_group = {id}"))
                     .unwrap_or_default(),
+                cond_metadata = metadata.is_some()
+                    .then_some("AND m.raw_meta LIKE ?2")
+                    .unwrap_or_default()
             ))
             .bind(pos_tags)
+            .bind(metadata)
             .fetch_all(&mut *tx)
             .await?;
             
