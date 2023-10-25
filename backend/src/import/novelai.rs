@@ -89,7 +89,7 @@ pub fn extract_metadata(
     // Merge prompt
     meta.prompt = prompt;
 
-    let raw_meta = serde_json::to_string_pretty(&meta)?;
+    let raw_meta = serde_json::to_string(&meta)?;
     
     Ok(ElementMetadata {
         src_link: None,
