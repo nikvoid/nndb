@@ -130,7 +130,7 @@ impl Component for InputAutocomplete {
                         matches!(term, Term::Tag(..)) 
                             && (char_span.contains(&cursor) 
                                 // Trailing cursor
-                                || char_span.contains(&(cursor - 1)))
+                                || char_span.contains(&(cursor.saturating_sub(1))))
                     )
                     .map(|(span, _, term)| (span, term)) else {
                     // Clear completions
