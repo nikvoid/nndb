@@ -28,7 +28,6 @@ pub fn parse_metadata(raw_meta: &str) -> ParsedMeta {
     // on extracting stage 
     let meta: Metadata = serde_json::from_str(raw_meta)
         .expect("failed to parse metadata");
-
     
     let mut parsed = vec![
         ("Prompt".into(), meta.prompt, true),
@@ -48,4 +47,11 @@ pub fn parse_metadata(raw_meta: &str) -> ParsedMeta {
     }
     
     parsed
+}
+
+pub fn pretty_raw_meta(raw_meta: &str) -> Cow<str> {
+    let meta: Metadata = serde_json::from_str(raw_meta)
+        .expect("failed to parse metadata");
+
+    Cow::Owned(serde_json::to_string_pretty(&meta).unwrap()) 
 }

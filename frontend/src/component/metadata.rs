@@ -3,7 +3,8 @@ use super::prelude::*;
 /// Element metadata props
 #[derive(PartialEq, Properties)]
 pub struct MetadataProps {
-    pub meta: ElementMetadata
+    pub meta: ElementMetadata,
+    pub on_show_raw_meta: Callback<String>
 }
 
 /// Element metadata (excluding tags)
@@ -52,10 +53,25 @@ pub fn Metadata(props: &MetadataProps) -> Html {
                     }
                 });
 
+            let onclick = {
+                let on_show = props.on_show_raw_meta.clone();
+                let raw_meta = meta.to_string();
+                let source = m.source;
+                Callback::from(move |_| {
+                    let pretty = source.pretty_raw_meta(&raw_meta).into_owned();
+                    on_show.emit(pretty)
+                })
+            };
+
             html! {
                 <>
-                    <div class="section-label">
-                        { m.source.metadata_name() }
+                    <div class="external-meta-header">
+                        <div class="meta-label">
+                            { m.source.metadata_name() }
+                        </div>
+                        <div class="show-btn button" {onclick}>
+                            { "Raw" }
+                        </div>
                     </div>
                     { for params }
                 </>

@@ -78,4 +78,12 @@ impl MetadataSource {
             _ => vec![]
         }
     }
+
+    /// Prettify raw metadata
+    pub fn pretty_raw_meta<'m>(&self, raw_meta: &'m str) -> Cow<'m, str> {
+        match self {
+            MetadataSource::NovelAI => novelai::pretty_raw_meta(raw_meta),
+            _ => Cow::Borrowed(raw_meta)
+        }
+    }
 }
