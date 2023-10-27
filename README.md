@@ -62,6 +62,27 @@ set to `true` in your config, files will be imported automatically after some ti
 Otherwise you need to go to [Dashboard](#dashboard) and start import manually.
 Depending on `testing_mode` option files will be copied to `element_pool` folder 
 or just moved and renamed.
+
+You can provide additional tags on this stage, if you place files in folder 
+with certain name pattern:
+```
+tag.<tag type>.<tag name>.<tag2 type>.<tag2 name>...
+
+e.g.
+tag.metadata.highres.tag.simple_background
+^~~~                 ^~~
+|                    \ this is tag type
+|
+\ this part is mandatory and triggers parsing of the remaining part
+```
+Where `<tag type>` is one of the following strings:
+- `service`
+- `artist`
+- `character`
+- `title`
+- `metadata`
+- `tag` - also strings that are not listed will be mapped to this type.
+
 You can track importing progress in Dashboard.
 
 ### Index page
@@ -76,12 +97,14 @@ A search by tag will be performed on tag name click.
 Search field provides tag autocompletion. Start typing and choose from drop-down list.
 You can prefix tags with `!` to exclude them from selection. Search terms are separated with whitespace. 
 A term is considered a meta-tag if it has `:` in it. 
+Right part of meta-tag can be wrapped in `"` to preserve whitespaces and `:` in it. 
 
 There are currently only these meta-tags:
 - `group:<integer>` - to include only images in this group (by similarity).
 - `extgroup:<integer>` - to include only images in this group. While upper meta-tag only includes 
   images in groups formed by image similarity, this one uses groups from external sources 
   (pixiv `illust id` and stable diffusion `seed`).
+- `meta:<string>` - to include only elements that contain `<string>` in their raw metadata.
 
 
 ### Element page
