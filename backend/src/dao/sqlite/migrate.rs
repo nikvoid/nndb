@@ -1,9 +1,9 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::ControlFlow};
 
 use anyhow::bail;
 use sqlx::{SqlitePool, SqliteConnection, migrate::{Migrate, MigrationType}};
-use tracing::info;
-use crate::{CONFIG, import::{ElementPrefab, Parser}};
+use tracing::{info, warn};
+use crate::{CONFIG, import::{ElementPrefab, Parser, Fetcher}, model::read::PendingImport};
 
 /// Run migrations with ability to call rust procedures.
 ///
@@ -35,7 +35,11 @@ pub async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
                 tx.apply(mig).await?;
                 for proc in get_procs(&mig.sql) {
                     info!("running procedure `{proc}` (part of `{}` migration)", mig.description);
-                    run_proc(proc, &mut tx).await?;
+                    if run_proc(proc, &mut tx).await?.is_break() {
+                        // Rollback if Break requested
+                        tx.rollback().await?;
+                        std::process::exit(0);
+                    };
                 }
             },
         }
@@ -53,7 +57,7 @@ pub fn get_procs(sql: &str) -> Vec<&str> {
         .collect()
 }
 
-async fn run_proc(name: &str, tx: &mut SqliteConnection) -> anyhow::Result<()> {
+async fn run_proc(name: &str, tx: &mut SqliteConnection) -> anyhow::Result<ControlFlow<()>> {
     let files: Vec<String> = sqlx::query_scalar!(
         "SELECT filename FROM element"  
     )
@@ -75,7 +79,7 @@ async fn run_proc(name: &str, tx: &mut SqliteConnection) -> anyhow::Result<()> {
                 }
             }
         
-            Ok(())
+            Ok(ControlFlow::Continue(()))
         }    
 
         "add_raw_sd_meta" => {
@@ -104,7 +108,87 @@ async fn run_proc(name: &str, tx: &mut SqliteConnection) -> anyhow::Result<()> {
                 }
             }
             
-            Ok(())
+            Ok(ControlFlow::Continue(()))
+        }
+
+        "add_raw_pixiv_meta" => {
+            let imports: Vec<PendingImport> = sqlx::query_as(
+                "SELECT e.*, m.importer_id
+                FROM element e
+                JOIN metadata m ON m.element_id = e.id
+                WHERE m.importer_id = ?",
+            )
+            .bind(Fetcher::Pixiv)
+            .fetch_all(&mut *tx)
+            .await?;
+
+            if imports.is_empty() {
+                return Ok(ControlFlow::Continue(()))
+            }
+            
+            // Ask for user decision if fetcher is not available
+            if !Fetcher::Pixiv.available() {
+                println!(
+"
+For this migration you need to fill [pixiv_credentials] section in your config file
+Print:
+    `ok` to stop migration and fill credentials, or
+    `skip` to skip this migration and do not reimport pixiv metadata, or
+    `clear` to clear imported pixiv metadata, so you can re-run import manually later 
+"
+                );
+
+                let mut line = String::new();
+
+                loop {
+                    println!("input: ");
+                    std::io::stdin()
+                        .read_line(&mut line)?;
+
+                    match line.trim() {
+                        "ok" => return Ok(ControlFlow::Break(())),
+                        "skip" => return Ok(ControlFlow::Continue(())),
+                        "clear" => break,
+                        _ => println!("unrecognized option, try again")
+                    }
+                }
+
+                // This code can only be reached from `clear` branch
+                sqlx::query!(
+                    "DELETE FROM metadata WHERE importer_id = ?",
+                    Fetcher::Pixiv
+                )
+                .execute(&mut *tx)
+                .await?;
+                sqlx::query!(
+                    "DELETE FROM fetch_status WHERE importer_id = ?",
+                    Fetcher::Pixiv
+                )
+                .execute(&mut *tx)
+                .await?;
+                return Ok(ControlFlow::Continue(()));
+            }
+
+            for (idx, import) in imports.iter().enumerate() {
+                if let Some(meta) = Fetcher::Pixiv.fetch_metadata(import).await? {
+                    sqlx::query!(
+                        "UPDATE metadata
+                        SET raw_meta = ?
+                        WHERE element_id = ?
+                        ",
+                        meta.raw_meta,
+                        import.id
+                    )
+                    .execute(&mut *tx)
+                    .await?;
+                    
+                    info!("processed {}/{}", idx + 1, imports.len());
+                }  else {
+                    warn!(?import, "metadata was not found on server");
+                }
+            }
+            
+            Ok(ControlFlow::Continue(()))
         }
         
         _ => bail!("no such procedure: `{}`", name)
