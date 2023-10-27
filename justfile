@@ -28,6 +28,7 @@ create-dev-db:
 	
 # Override url to root and build frontend in release mode
 build-front $BACKEND_URL="":
+	New-Item target/release/static -ItemType directory -Force
 	trunk build -d target/release/static --release frontend/index.html
 
 # Build backend in release mode
