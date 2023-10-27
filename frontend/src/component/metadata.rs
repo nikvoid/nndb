@@ -31,6 +31,10 @@ pub fn Metadata(props: &MetadataProps) -> Html {
             }
         ));
 
+    let make_html = |html: &str| {
+        Html::from_html_unchecked(format!("<div>{html}</div>").into())
+    };
+    
     let metadata_sections = props.meta.ext_meta
         .iter()
         .filter_map(|m| m.raw_meta.as_deref().map(|meta| {
@@ -41,14 +45,14 @@ pub fn Metadata(props: &MetadataProps) -> Html {
                             { k }
                         </div>
                         <div class="section-part">
-                            { v }
+                            { make_html(&v) }
                         </div>
                     } else {
                         <div class="param-name">
                             { k }
                         </div>
                         <div class="param-value">
-                            { v }
+                            { make_html(&v) }
                         </div>
                     }
                 });
@@ -58,7 +62,7 @@ pub fn Metadata(props: &MetadataProps) -> Html {
                 let raw_meta = meta.to_string();
                 let source = m.source;
                 Callback::from(move |_| {
-                    let pretty = source.pretty_raw_meta(&raw_meta).into_owned();
+                    let pretty = source.pretty_raw_meta(&raw_meta);
                     on_show.emit(pretty)
                 })
             };

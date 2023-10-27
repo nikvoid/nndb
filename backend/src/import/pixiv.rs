@@ -60,6 +60,9 @@ impl Pixiv {
     /// Convert pixiv illust metadata to our metadata
     async fn extract_data(illust: Illust) -> ElementMetadata {
 
+        // This should not fail because it was valid json
+        let raw_meta = Some(serde_json::to_string(&illust).unwrap());
+
         // Aliases can also contain artists
         let artist_name = if let Some(alias) = STORAGE.lookup_alias_async(&illust.user.name).await {
             alias
@@ -101,8 +104,7 @@ impl Pixiv {
                 format!("https://www.pixiv.net/artworks/{}", illust.id)
             ),
             src_time: Some(illust.create_date),
-            // TODO: We may stick all remaining metadata here
-            raw_meta: None,
+            raw_meta,
             group: Some(illust.id),
             tags
         }

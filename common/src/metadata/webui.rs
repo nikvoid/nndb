@@ -67,7 +67,7 @@ pub fn parse_metadata(raw_meta: &str) -> ParsedMeta {
     iter_metadata(raw_meta)
         .map(|(k, v)| {
             let wide = matches!(k, "Prompt" | "Negative prompt");
-            (Cow::Borrowed(k), v, wide)
+            (k.to_string(), v.to_string(), wide)
         })
         .collect()
 }

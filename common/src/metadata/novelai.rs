@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use serde::{Deserialize, Serialize};
 
-use crate::ParsedMeta;
+use super::ParsedMeta;
 
 /// Novel AI image metadata, Comment section
 #[derive(Serialize, Deserialize)]
@@ -19,8 +19,8 @@ pub struct Metadata<'a> {
     pub prompt: Cow<'a, str>,
 }
 
-fn to_cow<T: ToString>(value: &T) -> Cow<'static, str> {
-    Cow::Owned(value.to_string())
+fn kv(key: &str, val: impl ToString, wide: bool) -> (String, String, bool) {
+    (key.to_string(), val.to_string(), wide)
 }
 
 pub fn parse_metadata(raw_meta: &str) -> ParsedMeta {
@@ -30,28 +30,28 @@ pub fn parse_metadata(raw_meta: &str) -> ParsedMeta {
         .expect("failed to parse metadata");
     
     let mut parsed = vec![
-        ("Prompt".into(), meta.prompt, true),
-        ("Negative prompt".into(), meta.uc, true),
-        ("Steps".into(), to_cow(&meta.steps), false),
-        ("CFG Scale".into(), to_cow(&meta.scale), false),
-        ("Sampler".into(), Cow::Borrowed(meta.sampler), false),
-        ("Seed".into(), to_cow(&meta.seed), false),
+        kv("Prompt", meta.prompt, true),
+        kv("Negative prompt", meta.uc, true),
+        kv("Steps", meta.steps, false),
+        kv("CFG Scale", meta.scale, false),
+        kv("Sampler", meta.sampler, false),
+        kv("Seed", meta.seed, false),
     ];
 
     if let Some(v) = meta.strength {
-        parsed.push(("Strength".into(), to_cow(&v), false));
+        parsed.push(kv("Strength", v, false));
     }
     
     if let Some(v) = meta.noise {
-        parsed.push(("Noise".into(), to_cow(&v), false));
+        parsed.push(kv("Noise", v, false));
     }
     
     parsed
 }
 
-pub fn pretty_raw_meta(raw_meta: &str) -> Cow<str> {
+pub fn pretty_raw_meta(raw_meta: &str) -> String {
     let meta: Metadata = serde_json::from_str(raw_meta)
         .expect("failed to parse metadata");
 
-    Cow::Owned(serde_json::to_string_pretty(&meta).unwrap()) 
+    serde_json::to_string_pretty(&meta).unwrap() 
 }

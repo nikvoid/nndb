@@ -1,12 +1,11 @@
 //! Raw metadata parsers and extractors
 
-use std::borrow::Cow;
-
 use enum_iterator::Sequence;
 use serde::{Deserialize, Serialize};
 
 pub mod novelai;
 pub mod webui;
+pub mod pixiv;
 
 /// Source of grouping data and/or metadata
 #[cfg_attr(feature = "backend", derive(sqlx::Type))]
@@ -37,7 +36,7 @@ pub enum MetadataSource {
 }
 
 /// (key, value, should_be_wide)
-pub type ParsedMeta<'a> = Vec<(Cow<'a, str>, Cow<'a, str>, bool)>;
+pub type ParsedMeta = Vec<(String, String, bool)>;
 
 impl MetadataSource {
     pub fn group_name(&self) -> &'static str {
@@ -71,19 +70,21 @@ impl MetadataSource {
     }
 
     /// Extract key-value pairs from raw metadata
-    pub fn additional_info<'m>(&self, raw_meta: &'m str) -> ParsedMeta<'m> {
+    pub fn additional_info(&self, raw_meta: &str) -> ParsedMeta {
         match self {
             MetadataSource::NovelAI => novelai::parse_metadata(raw_meta),
             MetadataSource::Webui => webui::parse_metadata(raw_meta),
+            MetadataSource::Pixiv => pixiv::parse_metadata(raw_meta),
             _ => vec![]
         }
     }
 
     /// Prettify raw metadata
-    pub fn pretty_raw_meta<'m>(&self, raw_meta: &'m str) -> Cow<'m, str> {
+    pub fn pretty_raw_meta(&self, raw_meta: &str) -> String {
         match self {
             MetadataSource::NovelAI => novelai::pretty_raw_meta(raw_meta),
-            _ => Cow::Borrowed(raw_meta)
+            MetadataSource::Pixiv => pixiv::pretty_raw_meta(raw_meta),
+            _ => raw_meta.to_string()
         }
     }
 }
