@@ -1,22 +1,11 @@
 use std::{io::Cursor, borrow::Cow};
-
 use anyhow::Context;
-use serde::Deserialize;
+use nndb_common::metadata::novelai::Metadata;
 
-use crate::{model::{write::{ElementMetadata, Tag}, TagType, AIMetadata}, dao::STORAGE};
+use crate::{model::{write::{ElementMetadata, Tag}, TagType}, dao::STORAGE};
 
 use super::{ElementPrefab, is_png};
 
-#[derive(Deserialize)]
-struct Metadata<'a> {
-    steps: u32,
-    sampler: &'a str,
-    seed: i64,
-    strength: Option<f32>,
-    noise: Option<f32>,
-    scale: f32,
-    uc: Cow<'a, str>
-}
 
 /// Parse NovelAI prompt
 ///
@@ -60,8 +49,7 @@ pub fn can_parse(element: &ElementPrefab) -> bool {
     false
 }
 
-/// Parse metadata on hash deriving stage, provided access to file data
-pub fn parse_metadata(
+pub fn extract_metadata(
     element: &ElementPrefab
 ) -> anyhow::Result<ElementMetadata> {
     let mut cursor = Cursor::new(&element.data);
@@ -71,7 +59,7 @@ pub fn parse_metadata(
     // Prompt can be in iTXt entry or tEXt entry with key "Description"
     let prompt = reader.info().uncompressed_latin1_text.iter().find_map(|e| {
         match e.keyword.as_str() {
-            "Description" => Some(Cow::Borrowed(&e.text)),
+            "Description" => Some(Cow::Borrowed(e.text.as_str())),
             _ => None
         }
     }).or_else(|| reader.info().utf8_text.iter().find_map(|e| {
@@ -88,30 +76,26 @@ pub fn parse_metadata(
         }
     ).context("novelai metadata not found")?;
         
-    let meta: Metadata = serde_json::from_str(others)?;
-
     let tags = parse_prompt(&prompt)
-        .filter_map(|t| match STORAGE.lookup_alias(t) {
-            Some(name) => Tag::new(&name, None, TagType::Tag),
-            None => Tag::new(t, None, TagType::Tag)
+        .filter_map(|t| {
+            let name = STORAGE.get().and_then(|s| s.lookup_alias(t));
+            Tag::new(name.as_deref().unwrap_or(t), None, TagType::Tag)
         })
         .chain(Tag::new("novelai_generated", None, TagType::Metadata))
         .collect();
+    
+    let mut meta: Metadata = serde_json::from_str(others)?;
+    
+    // Merge prompt
+    meta.prompt = prompt;
+
+    let raw_meta = serde_json::to_string(&meta)?;
     
     Ok(ElementMetadata {
         src_link: None,
         src_time: None,
         group: Some(meta.seed),
-        ai_meta: Some(AIMetadata {
-            positive_prompt: prompt.to_string(),
-            negative_prompt: Some(meta.uc.to_string()),
-            steps: meta.steps,
-            scale: meta.scale,
-            sampler: meta.sampler.to_owned(),
-            seed: meta.seed,
-            strength: meta.strength.unwrap_or_default(),
-            noise: meta.noise.unwrap_or_default()
-        }),
+        raw_meta: Some(raw_meta),
         tags
     })
 }

@@ -50,24 +50,24 @@ impl Parser {
             Parser::Webui => MetadataSource::Webui,
         }
     }
-    
-    /// Parse metadata on hash deriving stage, provided access to file data
-    pub fn parse_metadata(
-        &self, 
+
+    /// Extract metadata on hash deriving stage, provided access to file data
+    pub fn extract_metadata(
+        &self,
         element: &ElementPrefab
     ) -> anyhow::Result<ElementMetadata> {
         match self {
             Parser::Passthrough => Ok(ElementMetadata {
                 src_link: None,
                 src_time: None,
-                ai_meta: None,
+                raw_meta: None,
                 group: None,
                 tags: vec![Tag::new("unknown_source", None, TagType::Metadata).unwrap()],
             }),
-            Parser::NovelAI => novelai::parse_metadata(element),
-            Parser::Webui => webui::parse_metadata(element),
+            Parser::NovelAI => novelai::extract_metadata(element),
+            Parser::Webui => webui::extract_metadata(element),
         }
-    }
+    } 
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, sqlx::Type, Sequence)]

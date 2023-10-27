@@ -60,8 +60,16 @@ impl Pixiv {
     /// Convert pixiv illust metadata to our metadata
     async fn extract_data(illust: Illust) -> ElementMetadata {
 
+        // This should not fail because it was valid json
+        let raw_meta = Some(serde_json::to_string(&illust).unwrap());
+
+        async fn lookup_alias(alias: &str) -> Option<String> {
+            let s = STORAGE.get()?;
+            s.lookup_alias_async(alias).await
+        }
+        
         // Aliases can also contain artists
-        let artist_name = if let Some(alias) = STORAGE.lookup_alias_async(&illust.user.name).await {
+        let artist_name = if let Some(alias) = lookup_alias(&illust.user.name).await {
             alias
         } else {
             illust.user.account
@@ -77,7 +85,7 @@ impl Pixiv {
         ];
                 
         for il_tag in illust.tags {
-            let name = if let Some(alias) = STORAGE.lookup_alias_async(&il_tag.name).await {
+            let name = if let Some(alias) = lookup_alias(&il_tag.name).await {
                 // Try to look for alias 
                 alias
             } else if let Some(translation) = il_tag.translated_name {
@@ -101,7 +109,7 @@ impl Pixiv {
                 format!("https://www.pixiv.net/artworks/{}", illust.id)
             ),
             src_time: Some(illust.create_date),
-            ai_meta: None,
+            raw_meta,
             group: Some(illust.id),
             tags
         }

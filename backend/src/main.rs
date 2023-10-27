@@ -82,15 +82,15 @@ async fn main() -> anyhow::Result<()> {
         .with_max_level(CONFIG.log_level)
         .init();
 
-    if CONFIG.auto_scan_files {
-        info!("Spawning import tasks");
-        import_spawner().await;
-    }
-
     info!("File reads are done {:?}ly", CONFIG.read_files);
 
     STORAGE.init(StorageBackend::init(&CONFIG.db_url).await?);
     STORAGE.reload_tag_aliases_index().await?;
+    
+    if CONFIG.auto_scan_files {
+        info!("Spawning import tasks");
+        import_spawner().await;
+    }
 
     info!(addr=CONFIG.bind_address, port=CONFIG.port, "Starting server");
     HttpServer::new(|| {

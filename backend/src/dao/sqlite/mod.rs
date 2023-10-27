@@ -17,13 +17,15 @@ use crate::{
     model::{
         write::{self, ElementWithMetadata}, 
         read::{self, PendingImport}, 
-        Summary, Md5Hash, GroupMetadata, AIMetadata, UtcDateTime
+        Summary, Md5Hash, GroupMetadata, UtcDateTime
     }, 
     CONFIG
 };
 use futures::{StreamExt, future::BoxFuture};
 
 use tracing::{error, warn};
+
+mod migrate;
 
 pub struct Sqlite {
     pool: SqlitePool,
@@ -35,47 +37,19 @@ pub type StorageError = anyhow::Error;
 
 /// Private methods and associated functions
 impl Sqlite {
-    async fn add_ai_metadata_tx(
-        tx: &mut SqliteConnection,
-        element_id: u32, 
-        ai_meta: &AIMetadata
-    ) -> Result<(), StorageError> {
-        sqlx::query!(
-            "INSERT INTO ai_metadata 
-            (element_id, positive_prompt, negative_prompt, steps, scale,
-            sampler, seed, strength, noise)
-            VALUES 
-            (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            element_id, 
-            ai_meta.positive_prompt,
-            ai_meta.negative_prompt,
-            ai_meta.steps,
-            ai_meta.scale,
-            ai_meta.sampler,
-            ai_meta.seed,
-            ai_meta.strength,
-            ai_meta.noise
-        )
-        .execute(tx)
-        .await?;
-
-        Ok(())
-    }
-
     async fn add_element_tx(
         tx: &mut SqliteConnection, 
         element: &ElementWithMetadata
     ) -> Result<u32, StorageError> {
         let ElementWithMetadata(e, meta, parser) = element; 
 
-        // Try to get file modification time, this will fall back to 
-        // CURRENT_TIMESTAMP in case of error
+        // Try to get file modification time 
         let time = util::get_file_datetime(&e.path).ok();
 
         let hash = e.hash.as_slice();
         let id = sqlx::query!(
             r#"INSERT INTO element (
-                filename, orig_filename, hash, broken, animated, add_time
+                filename, orig_filename, hash, broken, animated, file_time
             )
             VALUES (?, ?, ?, ?, ?, ?)"#,
             e.filename,
@@ -123,21 +97,20 @@ impl Sqlite {
         }
        
         sqlx::query!(
-            "INSERT INTO metadata (element_id, importer_id, src_link, src_time, ext_group)
-            VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO metadata (
+                element_id, importer_id, src_link, src_time, 
+                ext_group, raw_meta)
+            VALUES (?, ?, ?, ?, ?, ?)",
             element_id, 
             source,
             meta.src_link,
             meta.src_time,
-            meta.group
+            meta.group,
+            meta.raw_meta
         )
         .execute(&mut *tx)
         .await?;
         
-        if let Some(ai) = &meta.ai_meta {
-            Self::add_ai_metadata_tx(tx, element_id, ai).await?;
-        }
-
         Ok(())
     }
 
@@ -246,14 +219,14 @@ impl Sqlite {
         tx: &mut SqliteConnection,
         db_name: &str,
         tables: &[(&str, &[T])],
-        mut inner: F
+        inner: F
     ) -> Result<Out, StorageError>
     where 
         for<'a> T: sqlx::Type<sqlx::Sqlite>
             + sqlx::Encode<'a, sqlx::Sqlite>
             + Clone 
             + Send,
-        for<'a> F: FnMut(
+        for<'a> F: FnOnce(
             &'a mut SqliteConnection
         ) -> BoxFuture<'a, Result<Out, StorageError>>,
     {
@@ -330,11 +303,15 @@ impl Sqlite {
         
         let mut group = None;
         let mut ext_group = None;
+        let mut metadata = None;
         for meta in search::parse_query(query) {
             match meta {
                 Term::Tag(..) => continue,
                 Term::Group(id) => group = Some(id),
                 Term::ExtGroup(id) => ext_group = Some(id),
+                Term::Meta(m) => metadata = Some(format!("%{m}%")),
+                // We cannot respond with anything meaningful on this
+                Term::Raw(_) => return Ok(vec![]),
             }
         }
 
@@ -360,7 +337,7 @@ impl Sqlite {
         
         // Count of positive tags
         let pos_tags: i64 = pos_tag_set.len() as i64;
-        let ids = Self::with_temp_array_tx(tx, "mem", &arrays, |tx| async move {
+        let ids = Self::with_temp_array_tx(tx, "mem", &arrays, move |tx| async move {
             let ids: Vec<u32> = sqlx::query_scalar(
                 &format!( // sql
                 "
@@ -373,6 +350,7 @@ impl Sqlite {
                     1
                     {cond_group}
                     {cond_ext_group}
+                    {cond_metadata}
                 GROUP BY e.id
                 HAVING 
                     CASE ?1
@@ -394,9 +372,9 @@ impl Sqlite {
                     AND
                     -- Exclude negative tags
                     sum(t.id IN mem.neg_tags) = 0 
-                ORDER BY e.add_time DESC",
+                ORDER BY e.file_time DESC",
                 // Add joins on demand
-                join_metadata = ext_group.is_some()
+                join_metadata = (ext_group.is_some() || metadata.is_some())
                     .then_some("JOIN metadata m ON m.element_id = e.id")
                     .unwrap_or_default(),
                 join_group_meta = group.is_some()
@@ -409,8 +387,12 @@ impl Sqlite {
                 cond_ext_group = ext_group
                     .map(|id| format!("AND m.ext_group = {id}"))
                     .unwrap_or_default(),
+                cond_metadata = metadata.is_some()
+                    .then_some("AND m.raw_meta LIKE ?2")
+                    .unwrap_or_default()
             ))
             .bind(pos_tags)
+            .bind(metadata)
             .fetch_all(&mut *tx)
             .await?;
             
@@ -459,7 +441,8 @@ impl Sqlite {
         }
         let pool = SqlitePool::connect(url).await?;
         // Apply migrations if needed
-        sqlx::migrate!().run(&pool).await?;
+        migrate::run_migrations(&pool).await?;
+        
         Ok(Self {
             pool,
             id_cache: Cache::new(64),
@@ -736,47 +719,28 @@ impl Sqlite {
             return Ok(None)
         };
 
-        let src_links = sqlx::query!(
+        let (add_time, file_time) = sqlx::query!( // sql
             r#"SELECT 
-                m.importer_id as "importer_id: MetadataSource", 
-                m.src_link as "src_link!"
-            FROM metadata m
-            WHERE m.element_id = ? AND m.src_link IS NOT NULL"#,
-            id
-        )
-        .map(|anon| (anon.importer_id, anon.src_link))
-        .fetch_all(&self.pool)
-        .await?;
-        
-        let src_times = sqlx::query!(
-            r#"SELECT 
-                m.importer_id as "importer_id: MetadataSource", 
-                m.src_time as "src_time!: UtcDateTime"
-            FROM metadata m
-            WHERE m.element_id = ? AND m.src_time IS NOT NULL"#,
-            id
-        )
-        .map(|anon| (anon.importer_id, anon.src_time))
-        .fetch_all(&self.pool)
-        .await?;
-        
-        let add_time = sqlx::query_scalar( // sql
-            "SELECT add_time
+                add_time as "add_time!: UtcDateTime", 
+                file_time as "file_time?: UtcDateTime"
             FROM element
-            WHERE id = ?"
+            WHERE id = ?"#,
+            id
         )
-        .bind(id)
+        .map(|anon| (anon.add_time, anon.file_time))
         .fetch_one(&self.pool)
         .await?;
-        
-        let ai_meta = sqlx::query_as( // sql
-            "SELECT * FROM ai_metadata
-            WHERE element_id = ?"    
+
+        let ext_meta = sqlx::query_as( // sql
+            "SELECT importer_id, src_time, src_link, raw_meta
+            FROM metadata
+            WHERE element_id = ?
+            "
         )
         .bind(id)
-        .fetch_optional(&self.pool)
+        .fetch_all(&self.pool)
         .await?;
-
+        
         let tags = sqlx::query_as( // sql
             "SELECT t.*
             FROM tag t, element_tag et
@@ -787,10 +751,9 @@ impl Sqlite {
         .await?;
 
         let meta = read::ElementMetadata {
-            src_links,
-            src_times,
+            ext_meta,
             add_time,
-            ai_meta,
+            file_time,
             tags,
         };
         

@@ -188,7 +188,7 @@ pub fn hash_file(prefab: ElementPrefab) -> anyhow::Result<ElementWithMetadata> {
         true => (None, false),
     };
 
-    let metadata = parser_id.parse_metadata(&prefab)?;
+    let metadata = parser_id.extract_metadata(&prefab)?;
      
     let element = ElementToParse {
         filename: new_name,
@@ -322,6 +322,10 @@ impl<T> LateInit<T> {
     
     pub fn init(&self, value: T) {
         assert!(self.cell.set(value).is_ok())
+    }
+
+    pub fn get(&self) -> Option<&T> {
+        self.cell.get()
     }
 }
 

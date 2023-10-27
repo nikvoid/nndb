@@ -89,8 +89,8 @@ pub struct ElementMetadata {
     pub src_link: Option<String>,
     /// Time when element was added to other source (if present)
     pub src_time: Option<UtcDateTime>,
-    /// Stable Diffusion/etc metadata
-    pub ai_meta: Option<AIMetadata>,
+    /// Raw Stable Diffusion/etc metadata
+    pub raw_meta: Option<String>,
     /// External group info
     pub group: Option<i64>,
     /// Tags of the element

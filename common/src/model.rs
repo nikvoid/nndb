@@ -4,6 +4,8 @@ use chrono::{DateTime, Utc};
 use enum_iterator::Sequence;
 use serde::{Serialize, Deserialize};
 
+use crate::metadata::MetadataSource;
+
 pub type UtcDateTime = DateTime<Utc>;
 
 #[cfg_attr(feature = "backend", derive(sqlx::FromRow))]
@@ -42,14 +44,12 @@ pub struct Element {
 
 #[derive(Serialize, Deserialize, PartialEq, Clone)]
 pub struct ElementMetadata {
-    /// Link to source (if was imported from other sources)
-    pub src_links: Vec<(MetadataSource, String)>,
-    /// Time when element was added to other source (if present)
-    pub src_times: Vec<(MetadataSource, UtcDateTime)>,
+    /// External metadata
+    pub ext_meta: Vec<ExternalMetadata>,
     /// Time when element was added to db
     pub add_time: UtcDateTime,
-    /// Stable Diffusion/etc metadata
-    pub ai_meta: Option<AIMetadata>,
+    /// Time when element was created/modified
+    pub file_time: Option<UtcDateTime>,
     /// Tags of the element
     pub tags: Vec<Tag>,
 }
@@ -64,26 +64,18 @@ pub struct Associated {
     pub elements: Vec<Element>
 }
 
-/// Generative Neural Network (SD primarily) metadata
 #[cfg_attr(feature = "backend", derive(sqlx::FromRow))]
-#[derive(Serialize, Deserialize, PartialEq, Clone, Default)]
-pub struct AIMetadata {
-    /// Positive prompt
-    pub positive_prompt: String,
-    /// Negative prompt
-    pub negative_prompt: Option<String>,
-    /// Step count
-    pub steps: u32,
-    /// CFG scale
-    pub scale: f32,
-    /// Used sampler
-    pub sampler: String,
-    /// Generation seed
-    pub seed: i64,
-    /// Denoising strength
-    pub strength: f32,
-    /// Noise
-    pub noise: f32,
+#[derive(Serialize, Deserialize, PartialEq, Clone)]
+pub struct ExternalMetadata {
+    /// Metadata source
+    #[cfg_attr(feature = "backend", sqlx(rename = "importer_id"))]
+    pub source: MetadataSource,
+    /// Link to source (if was imported from other sources)
+    pub src_link: Option<String>,
+    /// Time when element was added to other source (if present)
+    pub src_time: Option<String>,
+    /// Raw Stable Diffusion/etc metadata
+    pub raw_meta: Option<String>
 }
 
 /// Struct that represent state of some procedure, 
@@ -121,34 +113,6 @@ pub enum TagType {
     Metadata  = 4,
     #[default]
     Tag       = 5,
-}
-
-/// Source of grouping data and/or metadata
-#[cfg_attr(feature = "backend", derive(sqlx::Type))]
-#[derive(
-    Clone, 
-    Copy, 
-    Debug,
-    PartialEq,
-    Sequence,
-    Serialize,
-    Deserialize,
-    PartialOrd,
-    Ord,
-    Eq,
-)]
-#[repr(u8)]
-pub enum MetadataSource {
-    /// Stub value
-    Passthrough = 0,
-    /// Stable diffusion seed
-    NovelAI     = 1,
-    /// Stable diffusion seed
-    Webui       = 2,
-    /// Image signature (id doesn't recorded to db)
-    Signature   = 100,
-    /// Pixiv illust id
-    Pixiv       = 101
 }
 
 /// Database summary
@@ -207,18 +171,6 @@ impl TagType {
             TagType::Title => "Title",
             TagType::Metadata => "Metadata",
             TagType::Tag => "Tag",
-        }
-    }
-}
-
-impl MetadataSource {
-    pub fn name(&self) -> &'static str {
-        match self {
-            MetadataSource::Passthrough => "Passthrough stub. You should not see this.",
-            MetadataSource::Signature => "Signature",
-            MetadataSource::Webui => "Webui generation seed",
-            MetadataSource::NovelAI => "NovelAI generation seed",
-            MetadataSource::Pixiv => "Pixiv illust",
         }
     }
 }

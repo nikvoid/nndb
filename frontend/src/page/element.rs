@@ -22,12 +22,14 @@ pub enum State {
 /// Page that displays element, its metadata and associated/similar elements
 #[derive(Default)]
 pub struct ElementPage {
-    element_data: State
+    element_data: State,
+    raw_meta: Option<String>,
 }
 
 pub enum Msg {
     Reload,
     Update(State),
+    RawMeta(Option<String>),
     ChangeTags(Vec<String>, Vec<String>)
 }
 
@@ -55,6 +57,12 @@ impl Component for ElementPage {
 
         let oncommit = ctx.link()
             .callback(|(add, remove)| Msg::ChangeTags(add, remove));
+
+        let on_show_raw_meta = ctx.link()
+            .callback(|raw_meta| Msg::RawMeta(Some(raw_meta)));
+
+        let hide_raw_meta = ctx.link()
+            .callback(|_| Msg::RawMeta(None));
         
         match &self.element_data {
             State::Loading => html! {},
@@ -77,7 +85,7 @@ impl Component for ElementPage {
                         html! {
                             <>
                                 <div class="group-label">
-                                    { source.name() } { ": " } { value }
+                                    { source.group_name() } { ": " } { value }
                                 </div>
                                 <ElementList content={elements.clone()} />
                             </>
@@ -91,10 +99,20 @@ impl Component for ElementPage {
                                 content={metadata.tags.clone()} 
                                 read_only={false} 
                                 {oncommit} />
-                            <Metadata meta={metadata.clone()} />
+                            <Metadata meta={metadata.clone()} {on_show_raw_meta}/>
                         </div>
                         <div id="element-container">
-                            if element.animated {
+                            if let Some(raw_meta) = &self.raw_meta {
+                                <div class="raw-meta-window">
+                                    <div class="hide-btn button" onclick={hide_raw_meta}>
+                                        { "x" }
+                                    </div>
+                                    <pre>
+                                        {raw_meta}
+                                    </pre>
+                                </div>
+                            }    
+                            else if element.animated {
                                 <video 
                                     class="element-constrained" 
                                     controls=true 
@@ -123,7 +141,10 @@ impl Component for ElementPage {
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
             Msg::Reload => {
-                // Just fetch element data
+                // Reset raw meta state
+                self.raw_meta.take();
+                
+                // Fetch element data
                 let id = ctx.props().id;
                 ctx.link().send_future(async move {
                     let opt: Option<MetadataResponse> = 
@@ -158,6 +179,10 @@ impl Component for ElementPage {
                 self.element_data = state;
                 true
             },
+            Msg::RawMeta(raw_meta) => {
+                self.raw_meta = raw_meta;
+                true
+            }
         }
     }
 

@@ -5,11 +5,11 @@
 use std::io::Cursor;
 
 use anyhow::bail;
-use itertools::Itertools;
+use nndb_common::webui::iter_metadata;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::{model::{write::{ElementMetadata, Tag}, TagType, AIMetadata}, dao::STORAGE};
+use crate::{model::{write::{ElementMetadata, Tag}, TagType}, dao::STORAGE};
 
 use super::{ElementPrefab, is_png};
 
@@ -76,8 +76,7 @@ pub fn can_parse(element: &ElementPrefab) -> bool {
     false
 }
 
-/// Parse metadata on hash deriving stage, provided access to file data
-pub fn parse_metadata(
+pub fn extract_metadata(
     element: &ElementPrefab
 ) -> anyhow::Result<ElementMetadata> {
     let mut cursor = Cursor::new(&element.data);
@@ -87,66 +86,34 @@ pub fn parse_metadata(
         .uncompressed_latin1_text
         .iter()
         .find(|e| e.keyword == "parameters")
-        .map(|e| &e.text)
+        .map(|e| e.text.clone())
     else {
         bail!("`parameters` field not found")
     };
 
-    let mut line_iter = params.lines().peekable();
+    let mut meta_iter = iter_metadata(&params);
 
-    // Layout:
-    // <prompt>
-    // ...
-    // Negative prompt: <neg_prompt>
-    // ...
-    // Steps: <steps>, Sampler: <sampler>, CFG Scale: ...
-     
-    let prompt = line_iter
-        .peeking_take_while(|l| !l.starts_with("Negative prompt:"))
-        .join(" ");
-
-    let tags = parse_prompt(&prompt)
+    let tags = parse_prompt(&meta_iter.next().unwrap().1)
         .filter_map(|t| { 
-            let name = STORAGE.lookup_alias(&t).unwrap_or(t);                
+            let name = STORAGE.get().and_then(|s| s.lookup_alias(&t))
+                .unwrap_or(t);
             Tag::new(&name, None, TagType::Tag)
         })
         // Append source tag 
         .chain(Tag::new("webui_generated", None, TagType::Metadata))
         .collect();        
 
-    let neg_prompt = line_iter
-        .peeking_take_while(|l| !l.starts_with("Steps")) 
-        .map(|l| l.trim_start_matches("Negative prompt: "))
-        .join(" ");
-
-    let Some(other) = line_iter.next() else {
-        bail!("Part of webui metadata is missing")
+    let Some((_, seed)) = meta_iter.find(|kv| kv.0 == "Seed") else {
+        bail!("Seed parameter is missing")
     };
 
-    // Parse other metadata
-    let mut ai_meta = other.split(',')
-        .filter_map(|m| m.split(':').collect_tuple())
-        .fold(AIMetadata::default(), |mut acc, (key, val)| {
-            let val = val.trim();
-            match key.trim() {
-                "Steps" => acc.steps = val.parse().unwrap_or_default(),
-                "Sampler" => acc.sampler = val.to_owned(),
-                "CFG scale" => acc.scale = val.parse().unwrap_or_default(),
-                "Seed" => acc.seed = val.parse().unwrap_or_default(),
-                "Denoising strength" => acc.strength = val.parse().unwrap_or_default(),
-                _ => ()
-            }
-            acc
-        });
+    drop(meta_iter);
     
-    ai_meta.positive_prompt = prompt;
-    ai_meta.negative_prompt = Some(neg_prompt);
-
     Ok(ElementMetadata {
         src_link: None,
         src_time: None,
-        group: Some(ai_meta.seed),
-        ai_meta: Some(ai_meta),
+        group: Some(seed.parse()?),
+        raw_meta: Some(params),
         tags
     })
 }
